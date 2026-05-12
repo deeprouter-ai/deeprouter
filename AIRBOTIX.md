@@ -27,7 +27,11 @@ We aim to **minimise core changes** to keep upstream cherry-picking sustainable.
 
 ## Local development
 
-→ See [`DEV.md`](./DEV.md) for the 5-minute local quickstart + Week-by-week milestones.
+→ See [`DEV.md`](./DEV.md) for the 5-minute local quickstart.
+
+## Development plan
+
+→ See [`PLAN.md`](./PLAN.md) — phase-by-phase Week 0 → V0 launch with acceptance criteria, open decisions, and risk register. **This is the living plan; update it weekly.**
 
 ## V0 12-week plan
 
