@@ -27,8 +27,9 @@ var EligibleModels = map[string]bool{
 	"gpt-image-1":     true,
 	"dall-e-3":        true,
 	// Anthropic
-	"claude-3-5-haiku-latest":  true,
-	"claude-3-5-sonnet-latest": true,
+	// Base names — match both "-latest" and "-YYYYMMDD" version suffixes via HasPrefix.
+	"claude-3-5-haiku":  true,
+	"claude-3-5-sonnet": true,
 	// Image (Fal / Replicate proxies)
 	"flux-schnell":   true,
 	"flux-1.1-pro":   true,
