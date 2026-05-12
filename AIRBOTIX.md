@@ -25,6 +25,10 @@ We aim to **minimise core changes** to keep upstream cherry-picking sustainable.
 
 **Database changes**: extend NewAPI's existing `users` table with 4 columns. No new tables, no schema rewrite.
 
+## Local development
+
+→ See [`DEV.md`](./DEV.md) for the 5-minute local quickstart + Week-by-week milestones.
+
 ## V0 12-week plan
 
 Week-by-week breakdown lives in `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md` §8. P0 deliverable: **OpenAI-compatible `/v1` endpoint working by Week 6** (it blocks `kidsinai/opencode` team).
