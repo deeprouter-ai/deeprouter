@@ -41,5 +41,7 @@ jobs:
       - name: Ensure model still compiles (we extend User in model/user.go)
         run: go build ./model/...
 
-      - name: Run unit tests
-        run: go test ./internal/... -count=1 -race -timeout 60s
+      - name: Run unit tests (internal + Airbotix guard tests in model)
+        run: |
+          go test ./internal/... -count=1 -race -timeout 60s
+          go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
