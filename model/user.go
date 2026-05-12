@@ -52,6 +52,15 @@ type User struct {
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
+
+	// === Airbotix / DeepRouter additions ===
+	// These extend NewAPI's User model so each tenant (= NewAPI user) can carry
+	// per-tenant policy profile + billing webhook + kid-safe hard constraints.
+	// See internal/kids, internal/policy, internal/billing for the consumers.
+	KidsMode          bool   `json:"kids_mode" gorm:"type:boolean;default:false;column:kids_mode"`
+	PolicyProfile     string `json:"policy_profile" gorm:"type:varchar(32);default:'passthrough';column:policy_profile"` // 'kid-safe' | 'adult' | 'passthrough'
+	BillingWebhookURL string `json:"billing_webhook_url,omitempty" gorm:"type:varchar(512);column:billing_webhook_url"`
+	CustomPricingID   string `json:"custom_pricing_id,omitempty" gorm:"type:varchar(64);column:custom_pricing_id"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
