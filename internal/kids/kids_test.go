@@ -9,10 +9,16 @@ func TestIsModelEligible(t *testing.T) {
 	}{
 		{"gpt-4o-mini", true},
 		{"claude-3-5-sonnet-latest", true},
-		{"claude-3-5-sonnet-20241022", true},       // versioned variant of whitelisted base
-		{"gpt-3.5-turbo", false},                    // not on whitelist
+		{"claude-3-5-sonnet-20241022", true}, // versioned variant of whitelisted base
+		{"gpt-3.5-turbo", false},             // not on whitelist
 		{"some-uncensored-model-v2", false},
 		{"", false},
+		// gpt-image-2 lineup (added 2026-04-21, replaced DALL-E on 2026-05-12)
+		{"gpt-image-2", true},
+		{"gpt-image-2-2026-04-21", true}, // snapshot variant via HasPrefix
+		{"gpt-image-1", true},            // kept as fallback for older channels
+		{"dall-e-3", false},              // retired by OpenAI on 2026-05-12
+		{"dall-e-2", false},              // retired same date
 	}
 	for _, tc := range cases {
 		if got := IsModelEligible(tc.model); got != tc.want {

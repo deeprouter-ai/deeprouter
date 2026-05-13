@@ -22,17 +22,20 @@ import (
 // Whitelist must stay narrow; review before extending.
 var EligibleModels = map[string]bool{
 	// OpenAI
-	"gpt-4o-mini":     true,
-	"gpt-4o":          true,
-	"gpt-image-1":     true,
-	"dall-e-3":        true,
-	// Anthropic
-	// Base names — match both "-latest" and "-YYYYMMDD" version suffixes via HasPrefix.
+	"gpt-4o-mini": true,
+	"gpt-4o":      true,
+	// gpt-image-2 (since 2026-04-21) is the primary kids image model: built-in
+	// reasoning "thinking mode" self-audits before output. gpt-image-1 stays as
+	// a fallback for channels still configured against it; dall-e-3 was retired
+	// by OpenAI on 2026-05-12 and is no longer eligible.
+	"gpt-image-2": true,
+	"gpt-image-1": true,
+	// Anthropic — base names match "-latest" and "-YYYYMMDD" via HasPrefix.
 	"claude-3-5-haiku":  true,
 	"claude-3-5-sonnet": true,
 	// Image (Fal / Replicate proxies)
-	"flux-schnell":   true,
-	"flux-1.1-pro":   true,
+	"flux-schnell": true,
+	"flux-1.1-pro": true,
 }
 
 // IsModelEligible returns true if the requested model is on the kids-safe whitelist.

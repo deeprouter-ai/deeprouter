@@ -64,8 +64,9 @@ var ModelList = []string{
 	"omni-moderation-latest", "omni-moderation-2024-09-26",
 	"text-davinci-edit-001",
 	"davinci-002", "babbage-002",
-	"dall-e-2", "dall-e-3",
+	"dall-e-2", "dall-e-3", // retired 2026-05-12 by OpenAI; entries kept for back-compat with already-configured channels
 	"gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5",
+	"gpt-image-2", "gpt-image-2-2026-04-21", // current default image model since 2026-04-21 (thinking-mode + 4K)
 	"chatgpt-image-latest",
 	"whisper-1",
 	"tts-1", "tts-1-1106", "tts-1-hd", "tts-1-hd-1106",
