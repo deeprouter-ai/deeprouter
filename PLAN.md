@@ -4,7 +4,8 @@
 > **Owner**: Lightman (architecture / business / blockers) + 1 Go engineer (full-time, TBH)
 > **Goal**: A production-ready, AGPL-licensed, multi-tenant LLM gateway with `kids_mode` hard-constraint enforcement, serving Airbotix Kids + JR Academy as launch tenants.
 > **Cross-PRD links**:
-> - Full engineering PRD: `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md`
+> - Full engineering PRD: [`docs/PRD.md`](./docs/PRD.md)
+> - UI design system: [`docs/DESIGN.md`](./docs/DESIGN.md)
 > - Fork-intent context: [`AIRBOTIX.md`](./AIRBOTIX.md)
 > - Local dev quickstart: [`DEV.md`](./DEV.md)
 > - Master cross-product plan: `~/Documents/sites/kidsinai/planning/PROJECT.md`

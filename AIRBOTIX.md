@@ -6,7 +6,7 @@
 
 This is the production code repository for **DeepRouter** — an OpenAI-compatible multi-tenant LLM gateway. Forked from `QuantumNous/new-api` (32K stars, AGPL v3, very actively maintained).
 
-DeepRouter is an independent product (not part of Airbotix). See `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md` for the full engineering PRD and `DeepRouter-BP.md` for the business plan.
+DeepRouter is an independent product (not part of Airbotix). See [`docs/PRD.md`](./docs/PRD.md) for the full engineering PRD and [`docs/DESIGN.md`](./docs/DESIGN.md) for the UI design system. The business plan (`DeepRouter-BP.md`) lives outside this repo at `~/Documents/sites/jr-academy-ai/deeprouter-brand/`.
 
 ## License inheritance
 
@@ -35,7 +35,7 @@ We aim to **minimise core changes** to keep upstream cherry-picking sustainable.
 
 ## V0 12-week plan
 
-Week-by-week breakdown lives in `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md` §8. P0 deliverable: **OpenAI-compatible `/v1` endpoint working by Week 6** (it blocks `kidsinai/opencode` team).
+Week-by-week breakdown lives in [`docs/PRD.md`](./docs/PRD.md) §8. P0 deliverable: **OpenAI-compatible `/v1` endpoint working by Week 6** (it blocks `kidsinai/opencode` team).
 
 ## Tenants (V0)
 
@@ -66,6 +66,7 @@ If divergence > 30% triggers D-DR9 (independent fork decision) — see PRD.
 
 ## Sister docs
 
-- `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md` — engineering PRD (real plan)
-- `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-BP.md` — business plan (fundraising; "MVP backend exists" is aspirational)
-- `~/Documents/sites/kidsinai/planning/PROJECT.md` — master plan across all Lightman ventures
+- [`docs/PRD.md`](./docs/PRD.md) — engineering PRD (real plan) **[in-repo]**
+- [`docs/DESIGN.md`](./docs/DESIGN.md) — UI / visual design system (Lovable-inspired) **[in-repo]**
+- `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-BP.md` — business plan **[external, fundraising; "MVP backend exists" is aspirational]**
+- `~/Documents/sites/kidsinai/planning/PROJECT.md` — master plan across all Lightman ventures **[external]**

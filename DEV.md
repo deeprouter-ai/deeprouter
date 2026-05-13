@@ -1,7 +1,7 @@
 # DeepRouter — Local Development Guide
 
 > 本文档不是 upstream NewAPI 的一部分（避免 rebase 冲突）。
-> Airbotix-specific intent 见 `AIRBOTIX.md`，业务 PRD 见 `~/Documents/sites/jr-academy-ai/deeprouter-brand/DeepRouter-PRD.md`。
+> Airbotix-specific intent 见 [`AIRBOTIX.md`](./AIRBOTIX.md)，工程 PRD 见 [`docs/PRD.md`](./docs/PRD.md)，UI 设计系统见 [`docs/DESIGN.md`](./docs/DESIGN.md)。
 
 ---
 
