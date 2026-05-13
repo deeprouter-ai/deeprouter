@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/internal/policy"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -64,6 +65,17 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 	}
 
 	info.ShouldIncludeUsage = includeUsage
+
+	// Airbotix / DeepRouter policy: applied on the typed request BEFORE provider
+	// conversion so kid-safe constraints (model whitelist, system prompt, strip
+	// identifying metadata, OpenAI ZDR) propagate through any downstream adapter.
+	if d, ok := common.GetContextKey(c, constant.ContextKeyPolicyDecision); ok {
+		if decision, castOk := d.(policy.Decision); castOk {
+			if reject := applyAirbotixPolicy(decision, info.ChannelType, request); reject != "" {
+				return types.NewErrorWithStatusCode(fmt.Errorf("%s", reject), types.ErrorCodeChannelModelMappedError, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+			}
+		}
+	}
 
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {

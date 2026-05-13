@@ -54,6 +54,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { createUser, updateUser, getUser, getGroups } from '../api'
 import { BINDING_FIELDS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
@@ -389,6 +390,133 @@ export function UsersMutateDrawer({
                             )}
                             rows={3}
                           />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              {/* Airbotix / DeepRouter tenant fields (update only) */}
+              {isUpdate && (
+                <div className='space-y-4'>
+                  <h3 className='text-sm font-medium'>
+                    {t('Airbotix Tenant Settings')}
+                  </h3>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'Per-tenant policy + billing webhook. kids_mode is a hard constraint that overrides policy_profile.'
+                    )}
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name='kids_mode'
+                    render={({ field }) => (
+                      <FormItem className='flex flex-row items-center gap-2'>
+                        <FormControl>
+                          <Switch
+                            checked={!!field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormLabel className='!mt-0'>
+                          {t('kids_mode (force kid-safe constraints)')}
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='policy_profile'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Policy Profile')}</FormLabel>
+                        <Select
+                          items={[
+                            { value: 'passthrough', label: 'passthrough' },
+                            { value: 'adult', label: 'adult' },
+                            { value: 'kid-safe', label: 'kid-safe' },
+                          ]}
+                          onValueChange={field.onChange}
+                          value={field.value || 'passthrough'}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder={t('Select profile')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent alignItemWithTrigger={false}>
+                            <SelectGroup>
+                              <SelectItem value='passthrough'>
+                                passthrough
+                              </SelectItem>
+                              <SelectItem value='adult'>adult</SelectItem>
+                              <SelectItem value='kid-safe'>kid-safe</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='billing_webhook_url'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Billing Webhook URL')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder='https://platform.example.com/api/billing/deeprouter'
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'POST endpoint for per-request billing events. Leave blank to disable.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='webhook_secret'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Webhook Secret')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='password'
+                            autoComplete='new-password'
+                            {...field}
+                            placeholder={t('HMAC-SHA256 signing secret')}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Used to sign X-DeepRouter-Signature on outbound webhook calls. Share with the receiver.'
+                          )}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='custom_pricing_id'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Custom Pricing ID')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder='V1+ pricing table reference' />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

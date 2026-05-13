@@ -9,11 +9,21 @@ on:
     paths:
       - 'model/user.go'
       - 'internal/**'
+      - 'middleware/policy.go'
+      - 'relay/airbotix_policy.go'
+      - 'relay/airbotix_policy_test.go'
+      - 'service/airbotix_billing.go'
+      - 'constant/context_key.go'
       - '.github/workflows/airbotix-internal.yml'
   pull_request:
     paths:
       - 'model/user.go'
       - 'internal/**'
+      - 'middleware/policy.go'
+      - 'relay/airbotix_policy.go'
+      - 'relay/airbotix_policy_test.go'
+      - 'service/airbotix_billing.go'
+      - 'constant/context_key.go'
       - '.github/workflows/airbotix-internal.yml'
   workflow_dispatch:
 
@@ -32,16 +42,19 @@ jobs:
       - name: Resolve module deps
         run: go mod download
 
-      - name: Vet internal packages
-        run: go vet ./internal/...
+      - name: Vet Airbotix-owned packages
+        # Limited to packages with our additions. Vetting the wider relay tree
+        # pulls in upstream relay/channel/* dependencies that have pre-existing
+        # "unreachable code" diagnostics — we let build/test gate those.
+        run: go vet ./internal/... ./middleware/...
 
-      - name: Build internal packages
-        run: go build ./internal/...
+      - name: Build full tree we wire into
+        run: |
+          go build ./internal/...
+          go build ./model/... ./constant/... ./middleware/... ./service/... ./relay/...
 
-      - name: Ensure model still compiles (we extend User in model/user.go)
-        run: go build ./model/...
-
-      - name: Run unit tests (internal + Airbotix guard tests in model)
+      - name: Run unit tests
         run: |
           go test ./internal/... -count=1 -race -timeout 60s
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
+          go test ./relay/ -run 'TestApplyAirbotixPolicy' -count=1 -race -timeout 60s

@@ -19,12 +19,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // Event is the payload posted to tenant.BillingWebhookURL after each request.
@@ -74,7 +75,7 @@ func (d *Dispatcher) Send(url string, secret []byte, ev *Event) (int, error) {
 	if url == "" {
 		return 0, errors.New("billing.Send: empty webhook url")
 	}
-	payload, err := json.Marshal(ev)
+	payload, err := common.Marshal(ev)
 	if err != nil {
 		return 0, fmt.Errorf("billing.Send: marshal: %w", err)
 	}

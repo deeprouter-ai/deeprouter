@@ -66,4 +66,14 @@ const (
 	// ContextKeyLanguage stores the user's language preference for i18n
 	ContextKeyLanguage ContextKey = "language"
 	ContextKeyIsStream ContextKey = "is_stream"
+
+	// === Airbotix / DeepRouter context keys ===
+	// ContextKeyPolicyDecision stores the policy.Decision computed by middleware/policy.go
+	// from the tenant's KidsMode + PolicyProfile. Read by relay handlers to gate
+	// model whitelist, system-prompt injection, ZDR, and metadata stripping.
+	ContextKeyPolicyDecision ContextKey = "airbotix_policy_decision"
+	// ContextKeyAirbotixUser stores a *model.User pointer for the requesting tenant.
+	// Populated by middleware/policy.go so downstream code (billing dispatch) does
+	// not need a second DB lookup to read BillingWebhookURL / WebhookSecret.
+	ContextKeyAirbotixUser ContextKey = "airbotix_user"
 )

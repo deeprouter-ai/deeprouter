@@ -61,6 +61,9 @@ type User struct {
 	PolicyProfile     string `json:"policy_profile" gorm:"type:varchar(32);default:'passthrough';column:policy_profile"` // 'kid-safe' | 'adult' | 'passthrough'
 	BillingWebhookURL string `json:"billing_webhook_url,omitempty" gorm:"type:varchar(512);column:billing_webhook_url"`
 	CustomPricingID   string `json:"custom_pricing_id,omitempty" gorm:"type:varchar(64);column:custom_pricing_id"`
+	// HMAC-SHA256 secret used to sign billing webhook payloads (header: X-DeepRouter-Signature).
+	// Per-tenant; never logged. Empty disables signing (and effectively the dispatch in V0).
+	WebhookSecret string `json:"webhook_secret,omitempty" gorm:"type:varchar(128);column:webhook_secret"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -535,6 +538,13 @@ func (user *User) Edit(updatePassword bool) error {
 		"display_name": newUser.DisplayName,
 		"group":        newUser.Group,
 		"remark":       newUser.Remark,
+		// Airbotix / DeepRouter fields — kept on the same edit path as `group`
+		// so a Super Admin updating a tenant from the admin UI persists all of them.
+		"kids_mode":           newUser.KidsMode,
+		"policy_profile":      newUser.PolicyProfile,
+		"billing_webhook_url": newUser.BillingWebhookURL,
+		"custom_pricing_id":   newUser.CustomPricingID,
+		"webhook_secret":      newUser.WebhookSecret,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

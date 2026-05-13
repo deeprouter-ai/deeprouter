@@ -33,6 +33,12 @@ export const userFormSchema = z.object({
   quota_dollars: z.number().min(0).optional(),
   group: z.string().optional(),
   remark: z.string().optional(),
+  // Airbotix / DeepRouter tenant fields (update only)
+  kids_mode: z.boolean().optional(),
+  policy_profile: z.enum(['passthrough', 'adult', 'kid-safe']).optional(),
+  billing_webhook_url: z.string().url().or(z.literal('')).optional(),
+  custom_pricing_id: z.string().optional(),
+  webhook_secret: z.string().optional(),
 })
 
 export type UserFormValues = z.infer<typeof userFormSchema>
@@ -49,6 +55,11 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   quota_dollars: 0,
   group: DEFAULT_GROUP,
   remark: '',
+  kids_mode: false,
+  policy_profile: 'passthrough',
+  billing_webhook_url: '',
+  custom_pricing_id: '',
+  webhook_secret: '',
 }
 
 // ============================================================================
@@ -76,6 +87,12 @@ export function transformFormDataToPayload(
     payload.group = data.group
     payload.remark = data.remark || undefined
     payload.id = userId
+    // Airbotix tenant fields — only meaningful on update
+    payload.kids_mode = data.kids_mode ?? false
+    payload.policy_profile = data.policy_profile || 'passthrough'
+    payload.billing_webhook_url = data.billing_webhook_url || ''
+    payload.custom_pricing_id = data.custom_pricing_id || ''
+    payload.webhook_secret = data.webhook_secret || ''
   }
 
   return payload
@@ -85,6 +102,11 @@ export function transformFormDataToPayload(
  * Transform user data to form defaults
  */
 export function transformUserToFormDefaults(user: User): UserFormValues {
+  const profile = user.policy_profile
+  const normalisedProfile =
+    profile === 'kid-safe' || profile === 'adult' || profile === 'passthrough'
+      ? profile
+      : 'passthrough'
   return {
     username: user.username,
     display_name: user.display_name,
@@ -93,5 +115,10 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     quota_dollars: quotaUnitsToDollars(user.quota),
     group: user.group || DEFAULT_GROUP,
     remark: user.remark || '',
+    kids_mode: user.kids_mode ?? false,
+    policy_profile: normalisedProfile,
+    billing_webhook_url: user.billing_webhook_url || '',
+    custom_pricing_id: user.custom_pricing_id || '',
+    webhook_secret: user.webhook_secret || '',
   }
 }

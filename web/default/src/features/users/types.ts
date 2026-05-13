@@ -57,6 +57,12 @@ export const userSchema = z.object({
   last_login_at: z.number().optional(),
   DeletedAt: z.any().nullable().optional(),
   remark: z.string().optional(),
+  // Airbotix / DeepRouter tenant fields
+  kids_mode: z.boolean().optional(),
+  policy_profile: z.string().optional(),
+  billing_webhook_url: z.string().optional(),
+  custom_pricing_id: z.string().optional(),
+  webhook_secret: z.string().optional(),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -104,6 +110,12 @@ export interface UserFormData {
   quota?: number // Only used when updating user
   group?: string // Only used when updating user
   remark?: string // Only used when updating user
+  // Airbotix / DeepRouter tenant fields (update only)
+  kids_mode?: boolean
+  policy_profile?: string
+  billing_webhook_url?: string
+  custom_pricing_id?: string
+  webhook_secret?: string
 }
 
 export type ManageUserAction =
