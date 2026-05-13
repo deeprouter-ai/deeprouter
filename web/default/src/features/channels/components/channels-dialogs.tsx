@@ -24,6 +24,7 @@ import { EditTagDialog } from './dialogs/edit-tag-dialog'
 import { FetchModelsDialog } from './dialogs/fetch-models-dialog'
 import { MultiKeyManageDialog } from './dialogs/multi-key-manage-dialog'
 import { OllamaModelsDialog } from './dialogs/ollama-models-dialog'
+import { QuickImportProvidersDialog } from './dialogs/quick-import-providers-dialog'
 import { TagBatchEditDialog } from './dialogs/tag-batch-edit-dialog'
 import { UpstreamUpdateDialog } from './dialogs/upstream-update-dialog'
 import { ChannelMutateDrawer } from './drawers/channel-mutate-drawer'
@@ -97,6 +98,12 @@ export function ChannelsDialogs() {
         confirmLoading={upstream.applyLoading}
         onConfirm={upstream.applyUpdates}
         onCancel={upstream.closeModal}
+      />
+
+      {/* Quick Import Providers Dialog (Airbotix / DeepRouter addition) */}
+      <QuickImportProvidersDialog
+        open={open === 'quick-import-providers'}
+        onOpenChange={(v) => !v && setOpen(null)}
       />
     </>
   )
