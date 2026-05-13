@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 export function Logo({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
-      id='newapi-logo'
+      id='deeprouter-logo'
       viewBox='0 0 24 24'
       xmlns='http://www.w3.org/2000/svg'
       height='24'
@@ -35,8 +35,10 @@ export function Logo({ className, ...props }: SVGProps<SVGSVGElement>) {
       className={cn('size-6', className)}
       {...props}
     >
-      <title>New API</title>
-      <path d='M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3' />
+      <title>DeepRouter</title>
+      {/* Two nested chevrons — visual metaphor for routing depth */}
+      <path d='M4 6 L12 12 L4 18' />
+      <path d='M12 6 L20 12 L12 18' />
     </svg>
   )
 }
