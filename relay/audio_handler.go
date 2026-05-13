@@ -33,6 +33,12 @@ func AudioHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 
+	// Airbotix / DeepRouter policy: model whitelist (audio has no system/user
+	// fields to mutate; TTS prompt content moderation is Phase 4).
+	if rejErr := checkAirbotixModelWhitelist(c, request.Model); rejErr != nil {
+		return rejErr
+	}
+
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())

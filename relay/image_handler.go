@@ -38,6 +38,14 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 
+	// Airbotix / DeepRouter policy: model whitelist + strip user.
+	if rejErr := checkAirbotixModelWhitelist(c, request.Model); rejErr != nil {
+		return rejErr
+	}
+	if d, ok := policyDecisionFromContext(c); ok && d.StripIdentifying {
+		request.User = nil
+	}
+
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())

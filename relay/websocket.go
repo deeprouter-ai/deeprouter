@@ -15,6 +15,13 @@ import (
 func WssHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types.NewAPIError) {
 	info.InitChannelMeta(c)
 
+	// Airbotix / DeepRouter policy: model whitelist on the upstream model name
+	// resolved by channel selection. Realtime sessions do not have a discrete
+	// post-handshake mutation point, so this gate is the V0 protection.
+	if rejErr := checkAirbotixModelWhitelist(c, info.UpstreamModelName); rejErr != nil {
+		return rejErr
+	}
+
 	adaptor := GetAdaptor(info.ApiType)
 	if adaptor == nil {
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())

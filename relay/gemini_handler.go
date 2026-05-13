@@ -71,6 +71,13 @@ func GeminiHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 
+	// Airbotix / DeepRouter policy: model whitelist + replace SystemInstructions
+	// on kids_mode. Gemini has no User/Store equivalents. Model name lives on
+	// info (Gemini puts it in the URL path), not on the request struct.
+	if rejErr := applyAirbotixPolicyToGemini(c, info.UpstreamModelName, request); rejErr != nil {
+		return rejErr
+	}
+
 	if model_setting.GetGeminiSettings().ThinkingAdapterEnabled {
 		if isNoThinkingRequest(request) {
 			// check is thinking
@@ -239,6 +246,12 @@ func GeminiEmbeddingHandler(c *gin.Context, info *relaycommon.RelayInfo) (newAPI
 	err = helper.ModelMappedHelper(c, info, req)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
+	}
+
+	// Airbotix / DeepRouter policy: model whitelist on the upstream-resolved
+	// Gemini model. Embedding payloads carry no user/system to mutate.
+	if rejErr := checkAirbotixModelWhitelist(c, info.UpstreamModelName); rejErr != nil {
+		return rejErr
 	}
 
 	req.SetModelName("models/" + info.UpstreamModelName)

@@ -1,20 +1,38 @@
 package relay
 
-// Unit tests for the Airbotix policy hooks wired into TextHelper.
-// Focused on the typed-struct mutations of *dto.GeneralOpenAIRequest so the
+// Unit tests for the Airbotix policy hooks wired into each relay handler.
+// Focused on the typed-struct mutations of the various request shapes so the
 // behaviour stays verifiable independent of the rest of the relay machinery
 // (channel selection, token auth, billing settlement). A full end-to-end
 // HTTP-level integration test is tracked as Phase 2.5 follow-up.
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/internal/policy"
+
+	"github.com/gin-gonic/gin"
 )
+
+// newTestContext returns a minimal *gin.Context with an optional
+// policy.Decision pre-stashed under the conventional ContextKey. Used by the
+// multi-format helper tests that take a *gin.Context instead of a Decision.
+func newTestContext(t *testing.T, d *policy.Decision) *gin.Context {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	if d != nil {
+		common.SetContextKey(c, constant.ContextKeyPolicyDecision, *d)
+	}
+	return c
+}
 
 func kidsModeDecision() policy.Decision {
 	return policy.DecisionFor(true, "kid-safe")
@@ -136,5 +154,217 @@ func TestApplyAirbotixPolicy_KidSafeProfileSoftPrepend(t *testing.T) {
 	}
 	if req.Messages[0].StringContent() != "Be playful." {
 		t.Fatalf("kid-safe (non-kids_mode) should leave existing system prompt alone; got %q", req.Messages[0].StringContent())
+	}
+}
+
+// =============================================================================
+// checkAirbotixModelWhitelist — universal model gate
+// =============================================================================
+
+func TestCheckAirbotixModelWhitelist_NoDecisionAllows(t *testing.T) {
+	c := newTestContext(t, nil)
+	if err := checkAirbotixModelWhitelist(c, "anything"); err != nil {
+		t.Fatalf("no decision in context should pass through; got %v", err.Err)
+	}
+}
+
+func TestCheckAirbotixModelWhitelist_PassthroughAllows(t *testing.T) {
+	d := passthroughDecision()
+	c := newTestContext(t, &d)
+	if err := checkAirbotixModelWhitelist(c, "anything"); err != nil {
+		t.Fatalf("passthrough should never reject; got %v", err.Err)
+	}
+}
+
+func TestCheckAirbotixModelWhitelist_KidsModeAllowsListed(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	if err := checkAirbotixModelWhitelist(c, "gpt-4o-mini"); err != nil {
+		t.Fatalf("kids_mode + whitelisted model should pass; got %v", err.Err)
+	}
+}
+
+func TestCheckAirbotixModelWhitelist_KidsModeRejectsUnlisted(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	err := checkAirbotixModelWhitelist(c, "gpt-4")
+	if err == nil {
+		t.Fatal("expected rejection for non-whitelisted model under kids_mode")
+	}
+	if !strings.Contains(err.Err.Error(), "gpt-4") {
+		t.Fatalf("expected error to mention the model; got %q", err.Err.Error())
+	}
+}
+
+// =============================================================================
+// applyAirbotixPolicyToClaude — Anthropic shape
+// =============================================================================
+
+func TestApplyAirbotixPolicyToClaude_Passthrough(t *testing.T) {
+	d := passthroughDecision()
+	c := newTestContext(t, &d)
+	req := &dto.ClaudeRequest{
+		Model:    "claude-3-opus-20240229",
+		System:   "be a pirate",
+		Metadata: json.RawMessage(`{"user_id":"alice"}`),
+	}
+	if err := applyAirbotixPolicyToClaude(c, req); err != nil {
+		t.Fatalf("passthrough should not reject; got %v", err.Err)
+	}
+	if req.System != "be a pirate" {
+		t.Fatalf("System should be untouched under passthrough; got %v", req.System)
+	}
+	if string(req.Metadata) != `{"user_id":"alice"}` {
+		t.Fatalf("Metadata should be untouched; got %s", req.Metadata)
+	}
+}
+
+func TestApplyAirbotixPolicyToClaude_KidsModeRejectsDisallowed(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.ClaudeRequest{Model: "claude-3-opus-20240229"}
+	if err := applyAirbotixPolicyToClaude(c, req); err == nil {
+		t.Fatal("expected reject for non-whitelisted Claude model under kids_mode")
+	}
+}
+
+func TestApplyAirbotixPolicyToClaude_KidsModeReplacesSystemAndClearsMetadata(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.ClaudeRequest{
+		Model:    "claude-3-5-haiku-20241022",
+		System:   "be an evil pirate",
+		Metadata: json.RawMessage(`{"user_id":"alice","family_id":"f-1"}`),
+	}
+	if err := applyAirbotixPolicyToClaude(c, req); err != nil {
+		t.Fatalf("whitelisted model should not be rejected; got %v", err.Err)
+	}
+	sys, isStr := req.System.(string)
+	if !isStr {
+		t.Fatalf("System should be a string under kids_mode; got %T", req.System)
+	}
+	if !strings.Contains(sys, "Refuse adult content") {
+		t.Fatalf("System should be the child-safe prompt; got %q", sys)
+	}
+	if req.Metadata != nil {
+		t.Fatalf("Metadata must be cleared under StripIdentifying; got %s", req.Metadata)
+	}
+}
+
+func TestApplyAirbotixPolicyToClaude_KidSafeSoftFillEmpty(t *testing.T) {
+	d := policy.DecisionFor(false, "kid-safe")
+	c := newTestContext(t, &d)
+	req := &dto.ClaudeRequest{
+		Model:  "claude-3-5-sonnet-20241022",
+		System: "preserve me",
+	}
+	if err := applyAirbotixPolicyToClaude(c, req); err != nil {
+		t.Fatalf("unexpected reject %v", err.Err)
+	}
+	if req.System != "preserve me" {
+		t.Fatalf("kid-safe (non-kids_mode) should leave existing System alone; got %v", req.System)
+	}
+}
+
+func TestApplyAirbotixPolicyToClaude_NoDecisionIsNoOp(t *testing.T) {
+	c := newTestContext(t, nil)
+	req := &dto.ClaudeRequest{Model: "claude-3-opus-20240229", System: "x"}
+	if err := applyAirbotixPolicyToClaude(c, req); err != nil {
+		t.Fatalf("no decision should pass through; got %v", err.Err)
+	}
+	if req.System != "x" {
+		t.Fatalf("System should be untouched; got %v", req.System)
+	}
+}
+
+// =============================================================================
+// applyAirbotixPolicyToResponses — /v1/responses shape
+// =============================================================================
+
+func TestApplyAirbotixPolicyToResponses_KidsModeMutates(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.OpenAIResponsesRequest{
+		Model:            "gpt-4o-mini",
+		User:             json.RawMessage(`"alice"`),
+		SafetyIdentifier: json.RawMessage(`"sid"`),
+	}
+	if err := applyAirbotixPolicyToResponses(c, constant.ChannelTypeOpenAI, req); err != nil {
+		t.Fatalf("whitelisted model should not be rejected; got %v", err.Err)
+	}
+	if req.User != nil || req.SafetyIdentifier != nil {
+		t.Fatalf("user + safety_identifier must be cleared; got user=%s sid=%s", req.User, req.SafetyIdentifier)
+	}
+	if string(req.Store) != "false" {
+		t.Fatalf("store must be forced false on OpenAI family; got %s", req.Store)
+	}
+	if len(req.Instructions) == 0 || !strings.Contains(string(req.Instructions), "Refuse adult content") {
+		t.Fatalf("Instructions should contain child-safe prompt; got %s", req.Instructions)
+	}
+}
+
+func TestApplyAirbotixPolicyToResponses_KidsModeRejectsDisallowed(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.OpenAIResponsesRequest{Model: "gpt-4"}
+	if err := applyAirbotixPolicyToResponses(c, constant.ChannelTypeOpenAI, req); err == nil {
+		t.Fatal("expected reject for non-whitelisted model")
+	}
+}
+
+func TestApplyAirbotixPolicyToResponses_NonOpenAISkipsZDR(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.OpenAIResponsesRequest{Model: "gpt-4o-mini"}
+	if err := applyAirbotixPolicyToResponses(c, constant.ChannelTypeAnthropic, req); err != nil {
+		t.Fatalf("unexpected reject %v", err.Err)
+	}
+	if len(req.Store) != 0 {
+		t.Fatalf("store must be left alone for non-OpenAI channels; got %s", req.Store)
+	}
+}
+
+// =============================================================================
+// applyAirbotixPolicyToGemini
+// =============================================================================
+
+func TestApplyAirbotixPolicyToGemini_KidsModeReplacesSystemInstructions(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.GeminiChatRequest{
+		SystemInstructions: &dto.GeminiChatContent{
+			Parts: []dto.GeminiPart{{Text: "be an evil pirate"}},
+		},
+	}
+	// gemini doesn't whitelist; ensure model arg gates correctly via direct call
+	if err := applyAirbotixPolicyToGemini(c, "gpt-4o-mini", req); err != nil {
+		t.Fatalf("whitelisted model should not be rejected; got %v", err.Err)
+	}
+	if req.SystemInstructions == nil || len(req.SystemInstructions.Parts) != 1 {
+		t.Fatalf("SystemInstructions should be replaced with a single child-safe part; got %+v", req.SystemInstructions)
+	}
+	if !strings.Contains(req.SystemInstructions.Parts[0].Text, "Refuse adult content") {
+		t.Fatalf("expected child-safe text; got %q", req.SystemInstructions.Parts[0].Text)
+	}
+}
+
+func TestApplyAirbotixPolicyToGemini_KidsModeRejectsDisallowedModel(t *testing.T) {
+	d := kidsModeDecision()
+	c := newTestContext(t, &d)
+	req := &dto.GeminiChatRequest{}
+	if err := applyAirbotixPolicyToGemini(c, "gemini-2.0-flash", req); err == nil {
+		t.Fatal("expected reject for non-whitelisted Gemini model")
+	}
+}
+
+func TestApplyAirbotixPolicyToGemini_KidSafeFillsWhenNil(t *testing.T) {
+	d := policy.DecisionFor(false, "kid-safe")
+	c := newTestContext(t, &d)
+	req := &dto.GeminiChatRequest{}
+	if err := applyAirbotixPolicyToGemini(c, "gpt-4o-mini", req); err != nil {
+		t.Fatalf("unexpected reject %v", err.Err)
+	}
+	if req.SystemInstructions == nil {
+		t.Fatal("SystemInstructions should be filled when nil under kid-safe profile")
 	}
 }
