@@ -26,7 +26,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
+        // Primary Dark with Lovable-signature inset shadow (docs/DESIGN.md §4):
+        // 1px top white highlight + 1px inset border + soft 2px drop shadow.
+        // Gives the button a subtle "pressed-in" depth without a heavy shadow.
+        default:
+          'bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.18),inset_0_0_0_1px_rgb(0_0_0/0.2),0_1px_2px_rgb(0_0_0/0.06)] [a]:hover:bg-primary/80 active:opacity-90',
         outline:
           'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
         secondary:
