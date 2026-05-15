@@ -9,19 +9,33 @@ import (
 	"github.com/QuantumNous/new-api/types"
 )
 
+// defaultGroupRatio — DeepRouter pricing ladder (see docs/PRD.md §7).
+//
+//   ratio  = sell_price / upstream_cost
+//   margin = (sell - cost) / sell  = (ratio - 1) / ratio
+//
+// Out-of-the-box defaults target ~70% gross margin on external traffic.
+// Operators override per group at runtime via admin UI System Settings →
+// Operations → 分组倍率, or PUT /api/option key=GroupRatio.
+//
+// Group names align with PLAN.md / AIRBOTIX.md "Tenants (V0)" table —
+// airbotix-kids / jr-academy are the two launch tenants; default / vip /
+// svip / enterprise are the external SaaS tiers.
 var defaultGroupRatio = map[string]float64{
-	"default": 1,
-	"vip":     1,
-	"svip":    1,
+	"default":       3.333, // external baseline       — 70% gross margin
+	"vip":           2.5,   // VIP external (volume)   — 60% margin
+	"svip":          2.0,   // Super VIP (anchor)      — 50% margin
+	"enterprise":    4.0,   // enterprise w/ SLA       — 75% margin
+	"airbotix-kids": 1.0,   // own product Airbotix    — pass-through
+	"jr-academy":    1.5,   // own product JR Academy  — 33% margin internal
 }
 
 var groupRatioMap = types.NewRWMap[string, float64]()
 
-var defaultGroupGroupRatio = map[string]map[string]float64{
-	"vip": {
-		"edit_this": 0.9,
-	},
-}
+// defaultGroupGroupRatio — per (user_group × channel_group) cross-table.
+// Empty out-of-the-box; populate via admin UI when you want patterns like
+// "VIP customer × premium-channel-pool gets 10% off".
+var defaultGroupGroupRatio = map[string]map[string]float64{}
 
 var groupGroupRatioMap = types.NewRWMap[string, map[string]float64]()
 
