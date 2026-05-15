@@ -33,71 +33,55 @@ export function Hero(props: HeroProps) {
   const { systemName } = useSystemConfig()
 
   return (
-    <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-36 md:pb-24'>
-      {/* Radial gradient background */}
+    <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-34 md:pb-24'>
       <div
         aria-hidden
-        className='pointer-events-none absolute inset-0 -z-10 opacity-25 dark:opacity-[0.12]'
-        style={{
-          background: [
-            'radial-gradient(ellipse 60% 50% at 20% 20%, oklch(0.72 0.18 250 / 80%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 50% 40% at 80% 15%, oklch(0.65 0.15 200 / 60%) 0%, transparent 70%)',
-            'radial-gradient(ellipse 40% 35% at 40% 80%, oklch(0.70 0.12 280 / 40%) 0%, transparent 70%)',
-          ].join(', '),
-        }}
-      />
-      {/* Grid pattern */}
-      <div
-        aria-hidden
-        className='absolute inset-0 -z-10 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_30%,black_20%,transparent_100%)] bg-[size:4rem_4rem] opacity-[0.08]'
+        className='pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-[radial-gradient(circle_at_50%_0%,rgb(252_251_248/0.95),transparent_70%)]'
       />
 
-      <div className='flex max-w-3xl flex-col items-center text-center'>
-        <h1
-          className='landing-animate-fade-up text-[clamp(2rem,5.5vw,3.5rem)] leading-[1.15] font-bold tracking-tight'
+      <div className='flex max-w-4xl flex-col items-center text-center'>
+        <div
+          className='landing-animate-fade-up border-border/80 bg-card/70 mb-7 flex h-14 items-center rounded-full border px-5 py-2 shadow-[0_10px_28px_rgb(28_28_28/0.06)]'
           style={{ animationDelay: '0ms' }}
         >
-          {t('Unified API Gateway for')}
+          <img
+            src='/logo-full.png'
+            alt={systemName}
+            className='h-10 w-[220px] rounded-none object-contain object-left sm:w-[270px]'
+          />
+        </div>
+        <h1
+          className='landing-animate-fade-up text-[clamp(2.5rem,6.2vw,4.75rem)] leading-[1.02] font-bold tracking-normal'
+          style={{ animationDelay: '60ms' }}
+        >
+          {t('One account.')}
           <br />
-          <span className='bg-gradient-to-r from-blue-400 via-violet-400 to-purple-500 bg-clip-text text-transparent'>
-            {t('All Your AI Models')}
-          </span>
+          <span className='text-accent'>{t('Every AI model.')}</span>
         </h1>
         <p
-          className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-lg text-base leading-relaxed opacity-0 md:text-lg'
-          style={{ animationDelay: '80ms' }}
+          className='landing-animate-fade-up text-muted-foreground mt-6 max-w-2xl text-base leading-relaxed opacity-0 md:text-lg'
+          style={{ animationDelay: '120ms' }}
         >
-          {systemName}{' '}
           {t(
-            'is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.'
+            "Sign up once, top up in your currency, and you're chatting with GPT-5, Claude, Gemini, and 20+ other models — all from one place. No API keys, no foreign cards, no engineering."
           )}
         </p>
         <div
           className='landing-animate-fade-up mt-8 flex items-center gap-3 opacity-0'
-          style={{ animationDelay: '160ms' }}
+          style={{ animationDelay: '180ms' }}
         >
           {props.isAuthenticated ? (
-            <Button
-              className='group rounded-lg'
-              render={<Link to='/dashboard' />}
-            >
+            <Button className='group' render={<Link to='/dashboard' />}>
               {t('Go to Dashboard')}
               <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
             </Button>
           ) : (
             <>
-              <Button
-                className='group rounded-lg'
-                render={<Link to='/sign-up' />}
-              >
+              <Button className='group' render={<Link to='/sign-up' />}>
                 {t('Get Started')}
                 <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
               </Button>
-              <Button
-                variant='outline'
-                className='border-border/50 hover:border-border hover:bg-muted/50 rounded-lg'
-                render={<Link to='/pricing' />}
-              >
+              <Button variant='outline' render={<Link to='/pricing' />}>
                 {t('View Pricing')}
               </Button>
             </>
@@ -107,7 +91,7 @@ export function Hero(props: HeroProps) {
 
       <div
         className='landing-animate-fade-up w-full opacity-0'
-        style={{ animationDelay: '300ms' }}
+        style={{ animationDelay: '260ms' }}
       >
         <HeroTerminalDemo />
       </div>
