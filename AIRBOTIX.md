@@ -35,7 +35,7 @@ We aim to **minimise core changes** to keep upstream cherry-picking sustainable.
 
 ## V0 12-week plan
 
-Week-by-week breakdown lives in [`docs/PRD.md`](./docs/PRD.md) §8. P0 deliverable: **OpenAI-compatible `/v1` endpoint working by Week 6** (it blocks `kidsinai/opencode` team).
+Week-by-week breakdown lives in [`docs/PRD.md`](./docs/PRD.md) §8. P0 deliverable: **OpenAI-compatible `/v1` endpoint working by Week 6** (it blocks the `kidsinai/kids-opencode` team — product repo, depends on opencode upstream via `@opencode-ai/sdk` + `@opencode-ai/plugin`; the kernel mirror lives at `kidsinai/opencode-kernel`).
 
 ## Tenants (V0)
 
