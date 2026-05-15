@@ -39,6 +39,10 @@ export const userFormSchema = z.object({
   billing_webhook_url: z.string().url().or(z.literal('')).optional(),
   custom_pricing_id: z.string().optional(),
   webhook_secret: z.string().optional(),
+  // Auto top-up — quota units (1 USD = QuotaPerUnit units, default 500000)
+  auto_topup_enabled: z.boolean().optional(),
+  auto_topup_threshold: z.number().int().nonnegative().optional(),
+  auto_topup_amount: z.number().int().nonnegative().optional(),
 })
 
 export type UserFormValues = z.infer<typeof userFormSchema>
@@ -60,6 +64,9 @@ export const USER_FORM_DEFAULT_VALUES: UserFormValues = {
   billing_webhook_url: '',
   custom_pricing_id: '',
   webhook_secret: '',
+  auto_topup_enabled: false,
+  auto_topup_threshold: 0,
+  auto_topup_amount: 0,
 }
 
 // ============================================================================
@@ -93,6 +100,9 @@ export function transformFormDataToPayload(
     payload.billing_webhook_url = data.billing_webhook_url || ''
     payload.custom_pricing_id = data.custom_pricing_id || ''
     payload.webhook_secret = data.webhook_secret || ''
+    payload.auto_topup_enabled = data.auto_topup_enabled ?? false
+    payload.auto_topup_threshold = data.auto_topup_threshold ?? 0
+    payload.auto_topup_amount = data.auto_topup_amount ?? 0
   }
 
   return payload
@@ -120,5 +130,8 @@ export function transformUserToFormDefaults(user: User): UserFormValues {
     billing_webhook_url: user.billing_webhook_url || '',
     custom_pricing_id: user.custom_pricing_id || '',
     webhook_secret: user.webhook_secret || '',
+    auto_topup_enabled: user.auto_topup_enabled ?? false,
+    auto_topup_threshold: user.auto_topup_threshold ?? 0,
+    auto_topup_amount: user.auto_topup_amount ?? 0,
   }
 }

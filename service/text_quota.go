@@ -378,6 +378,15 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	// tenant doesn't have BillingWebhookURL set). Async, never blocks response.
 	dispatchAirbotixBilling(ctx, relayInfo, usage, summary.Quota)
 
+	// DeepRouter auto top-up (OpenAI-style low-balance auto-charge).
+	// Fire-and-forget; the function is internally idempotent via Redis SETNX
+	// and no-ops for users who haven't opted in. Uses c.Copy() because we
+	// cross goroutine boundary.
+	asyncCtxForTopup := ctx.Copy()
+	gopool.Go(func() {
+		MaybeAutoTopup(asyncCtxForTopup, relayInfo.UserId)
+	})
+
 	logModel := summary.ModelName
 	if strings.HasPrefix(logModel, "gpt-4-gizmo") {
 		logModel = "gpt-4-gizmo-*"

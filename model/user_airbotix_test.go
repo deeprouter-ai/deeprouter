@@ -6,14 +6,20 @@ import (
 )
 
 // TestUser_AirbotixFieldsPresent guards against accidental upstream merge
-// removing our 4 Airbotix-specific fields from the User struct.
+// removing our Airbotix-specific fields from the User struct.
 // See AIRBOTIX.md for context.
 func TestUser_AirbotixFieldsPresent(t *testing.T) {
 	required := []string{
+		// Phase 1 tenant fields
 		"KidsMode",
 		"PolicyProfile",
 		"BillingWebhookURL",
 		"CustomPricingID",
+		"WebhookSecret",
+		// Auto top-up (Stripe off-session)
+		"AutoTopupEnabled",
+		"AutoTopupThreshold",
+		"AutoTopupAmount",
 	}
 
 	rt := reflect.TypeOf(User{})
@@ -41,10 +47,14 @@ func TestUser_AirbotixFieldDefaults(t *testing.T) {
 // expected values (compile-time + runtime sanity check).
 func TestUser_AirbotixFieldsRoundTrip(t *testing.T) {
 	u := User{
-		KidsMode:          true,
-		PolicyProfile:     "kid-safe",
-		BillingWebhookURL: "https://api.kidsinai.org/internal/deeprouter/billing",
-		CustomPricingID:   "pricing_kids_v1",
+		KidsMode:           true,
+		PolicyProfile:      "kid-safe",
+		BillingWebhookURL:  "https://api.kidsinai.org/internal/deeprouter/billing",
+		CustomPricingID:    "pricing_kids_v1",
+		WebhookSecret:      "t0p_s3cret_hmac",
+		AutoTopupEnabled:   true,
+		AutoTopupThreshold: 100000,
+		AutoTopupAmount:    5000000,
 	}
 
 	if !u.KidsMode {
@@ -58,5 +68,17 @@ func TestUser_AirbotixFieldsRoundTrip(t *testing.T) {
 	}
 	if u.CustomPricingID != "pricing_kids_v1" {
 		t.Errorf("CustomPricingID mismatch")
+	}
+	if u.WebhookSecret != "t0p_s3cret_hmac" {
+		t.Errorf("WebhookSecret mismatch")
+	}
+	if !u.AutoTopupEnabled {
+		t.Errorf("AutoTopupEnabled should remain true")
+	}
+	if u.AutoTopupThreshold != 100000 {
+		t.Errorf("AutoTopupThreshold mismatch, want 100000 got %d", u.AutoTopupThreshold)
+	}
+	if u.AutoTopupAmount != 5000000 {
+		t.Errorf("AutoTopupAmount mismatch, want 5000000 got %d", u.AutoTopupAmount)
 	}
 }

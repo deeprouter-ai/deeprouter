@@ -525,6 +525,88 @@ export function UsersMutateDrawer({
                 </div>
               )}
 
+              {/* Auto Top-up (Stripe off-session) */}
+              {isUpdate && (
+                <div className='space-y-4'>
+                  <h3 className='text-sm font-medium'>
+                    {t('Auto Top-up')}
+                  </h3>
+                  <p className='text-muted-foreground text-xs'>
+                    {t(
+                      'OpenAI-style low-balance auto-charge via saved Stripe card. Requires the user to complete one regular Stripe checkout first (so we have their customer ID + payment method on file).'
+                    )}
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name='auto_topup_enabled'
+                    render={({ field }) => (
+                      <FormItem className='flex flex-row items-center gap-2'>
+                        <FormControl>
+                          <Switch
+                            checked={!!field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <FormLabel className='!mt-0'>
+                          {t('Enable auto top-up')}
+                        </FormLabel>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='auto_topup_threshold'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Low-balance threshold (quota units)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            min={0}
+                            {...field}
+                            value={field.value ?? 0}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value, 10) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('When quota drops below this value, trigger a charge. 500000 = $1.')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='auto_topup_amount'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Top-up amount (quota units)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            min={0}
+                            {...field}
+                            value={field.value ?? 0}
+                            onChange={(e) =>
+                              field.onChange(parseInt(e.target.value, 10) || 0)
+                            }
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('How much quota to add per charge. 5000000 = $10. Stripe minimum is $0.50.')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
               {/* Binding Information (Read-only) */}
               {isUpdate && (
                 <div className='space-y-4'>

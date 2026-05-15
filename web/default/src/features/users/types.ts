@@ -63,6 +63,10 @@ export const userSchema = z.object({
   billing_webhook_url: z.string().optional(),
   custom_pricing_id: z.string().optional(),
   webhook_secret: z.string().optional(),
+  // Auto top-up
+  auto_topup_enabled: z.boolean().optional(),
+  auto_topup_threshold: z.number().optional(),
+  auto_topup_amount: z.number().optional(),
 })
 export type User = z.infer<typeof userSchema>
 
@@ -116,6 +120,10 @@ export interface UserFormData {
   billing_webhook_url?: string
   custom_pricing_id?: string
   webhook_secret?: string
+  // Auto top-up (OpenAI-style low-balance auto-charge via saved Stripe card)
+  auto_topup_enabled?: boolean
+  auto_topup_threshold?: number
+  auto_topup_amount?: number
 }
 
 export type ManageUserAction =

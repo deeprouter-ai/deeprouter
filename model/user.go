@@ -64,6 +64,15 @@ type User struct {
 	// HMAC-SHA256 secret used to sign billing webhook payloads (header: X-DeepRouter-Signature).
 	// Per-tenant; never logged. Empty disables signing (and effectively the dispatch in V0).
 	WebhookSecret string `json:"webhook_secret,omitempty" gorm:"type:varchar(128);column:webhook_secret"`
+
+	// Auto top-up — OpenAI-style "credit running low, auto-charge saved card" UX.
+	// Requires StripeCustomer set (handled by the regular Stripe checkout flow,
+	// which saves the customer ID + payment method). When AutoTopupEnabled and
+	// Quota < AutoTopupThreshold (in quota units), service.MaybeAutoTopup
+	// charges AutoTopupAmount worth of quota via Stripe PaymentIntent off_session.
+	AutoTopupEnabled   bool `json:"auto_topup_enabled" gorm:"type:boolean;default:false;column:auto_topup_enabled"`
+	AutoTopupThreshold int  `json:"auto_topup_threshold,omitempty" gorm:"type:int;default:0;column:auto_topup_threshold"`
+	AutoTopupAmount    int  `json:"auto_topup_amount,omitempty" gorm:"type:int;default:0;column:auto_topup_amount"`
 }
 
 func (user *User) ToBaseUser() *UserBase {
@@ -540,11 +549,14 @@ func (user *User) Edit(updatePassword bool) error {
 		"remark":       newUser.Remark,
 		// Airbotix / DeepRouter fields — kept on the same edit path as `group`
 		// so a Super Admin updating a tenant from the admin UI persists all of them.
-		"kids_mode":           newUser.KidsMode,
-		"policy_profile":      newUser.PolicyProfile,
-		"billing_webhook_url": newUser.BillingWebhookURL,
-		"custom_pricing_id":   newUser.CustomPricingID,
-		"webhook_secret":      newUser.WebhookSecret,
+		"kids_mode":            newUser.KidsMode,
+		"policy_profile":       newUser.PolicyProfile,
+		"billing_webhook_url":  newUser.BillingWebhookURL,
+		"custom_pricing_id":    newUser.CustomPricingID,
+		"webhook_secret":       newUser.WebhookSecret,
+		"auto_topup_enabled":   newUser.AutoTopupEnabled,
+		"auto_topup_threshold": newUser.AutoTopupThreshold,
+		"auto_topup_amount":    newUser.AutoTopupAmount,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password
