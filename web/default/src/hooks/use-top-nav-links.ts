@@ -113,8 +113,8 @@ export function useTopNavLinks(): TopNavLink[] {
     return parseHeaderNavModules(status?.HeaderNavModules)
   }, [status?.HeaderNavModules])
 
-  // Documentation link (may be external)
-  const docsLink: string | undefined = status?.docs_link as string | undefined
+  // (Docs link removed from top nav — see DeepRouter note further down.
+  // status.docs_link still surfaces via the footer if operator sets it.)
 
   const isAuthed = !!auth?.user
 
@@ -144,14 +144,10 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', disabled })
   }
 
-  // Docs (supports external links)
-  if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
-    } else {
-      links.push({ title: t('Docs'), href: '/docs' })
-    }
-  }
+  // DeepRouter: Docs link removed from top nav (upstream had it pointing at
+  // docs.newapi.pro). When DeepRouter has its own docs site, re-add by
+  // setting HeaderNavModules.docs in admin System Settings → Site, or
+  // restore this block.
 
   // About
   if (modules?.about !== false) {
