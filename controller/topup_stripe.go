@@ -366,6 +366,16 @@ func genStripeLink(referenceId string, customerId string, email string, amount i
 		},
 		Mode:                stripe.String(string(stripe.CheckoutSessionModePayment)),
 		AllowPromotionCodes: stripe.Bool(setting.StripePromotionCodesEnabled),
+		// DeepRouter: save the payment method on the Customer for future
+		// off-session charges (service.MaybeAutoTopup). The PaymentMethod is
+		// only actually used off-session when the operator separately enables
+		// AutoTopupEnabled on the user — so this is a "save for later, opt-in
+		// to use" setup. Stripe surfaces this to the cardholder during
+		// checkout via the standard mandate text required by SCA / regional
+		// regulations; no extra UI work needed on our side.
+		PaymentIntentData: &stripe.CheckoutSessionPaymentIntentDataParams{
+			SetupFutureUsage: stripe.String(string(stripe.PaymentIntentSetupFutureUsageOffSession)),
+		},
 	}
 
 	if "" == customerId {
