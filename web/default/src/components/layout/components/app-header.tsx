@@ -23,6 +23,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationButton } from '@/components/notification-button'
 import { NotificationDialog } from '@/components/notification-dialog'
 import { ProfileDropdown } from '@/components/profile-dropdown'
+import { RoleBadge } from '@/components/role-badge'
 import { Search } from '@/components/search'
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import { type TopNavLink } from '../types'
@@ -114,6 +115,7 @@ export function AppHeader({
     <>
       <Header>
         <SystemBrand variant='inline' />
+        <RoleBadge />
 
         {leftContent ? (
           <div className='ms-2 flex items-center'>{leftContent}</div>
