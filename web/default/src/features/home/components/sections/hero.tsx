@@ -35,10 +35,19 @@ export function Hero(props: HeroProps) {
   return (
     <section className='relative z-10 flex flex-col items-center overflow-hidden px-6 pt-28 pb-16 md:pt-34 md:pb-24'>
       {/* Animated radial bloom — replaces the static gradient. Two layers
-        * (warm cream + faint accent blue) drift slowly on long cycles for a
-        * Hero that feels alive without being distracting. Respects
-        * prefers-reduced-motion (defined in styles/index.css). */}
+       * (warm cream + faint accent blue) drift slowly on long cycles for a
+       * Hero that feels alive without being distracting. Respects
+       * prefers-reduced-motion (defined in styles/index.css). */}
       <div aria-hidden className='landing-hero-bloom top-0 h-80' />
+      <div aria-hidden className='landing-hero-routing-bg'>
+        <span className='landing-hero-route landing-hero-route-a' />
+        <span className='landing-hero-route landing-hero-route-b' />
+        <span className='landing-hero-route landing-hero-route-c' />
+        <span className='landing-hero-node landing-hero-node-a' />
+        <span className='landing-hero-node landing-hero-node-b' />
+        <span className='landing-hero-node landing-hero-node-c' />
+        <span className='landing-hero-node landing-hero-node-d' />
+      </div>
 
       <div className='flex max-w-4xl flex-col items-center text-center'>
         <div

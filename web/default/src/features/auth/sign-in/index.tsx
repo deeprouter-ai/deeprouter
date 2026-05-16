@@ -27,15 +27,17 @@ export function SignIn() {
   const { t } = useTranslation()
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const { status } = useStatus()
+  const registerEnabled =
+    status?.register_enabled ?? status?.data?.register_enabled ?? true
 
   return (
     <AuthLayout>
       <div className='w-full space-y-8'>
         <div className='space-y-2'>
           <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Sign in')}
+            {t('Welcome back')}
           </h2>
-          {!status?.self_use_mode_enabled && (
+          {registerEnabled && (
             <p className='text-muted-foreground text-left text-sm sm:text-base'>
               {t("Don't have an account?")}{' '}
               <Link

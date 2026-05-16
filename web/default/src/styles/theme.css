@@ -19,12 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  /* Public Sans stays primary (already bundled via @fontsource-variable).
-   * Humanist system fonts fronted in fallbacks so the design feels warm even
-   * before web fonts load; matches docs/DESIGN.md §3 intent without shipping
-   * a proprietary Camera Plain woff2.
+  /* DeepRouter brand stack. Plus Jakarta Sans is the preferred brand face;
+   * Public Sans is already bundled and remains the local fallback.
    */
-  --font-sans: 'Public Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans:
+    'Plus Jakarta Sans', 'Public Sans', ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, sans-serif;
   --font-inter:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
@@ -85,54 +85,51 @@ For commercial licensing, please contact support@quantumnous.com
 :root {
   --radius: 0.5rem;
   --app-header-height: 3rem;
-  /* DeepRouter — warm humanist palette (Lovable-inspired; see docs/DESIGN.md §2).
-   * Cream parchment background instead of cold white; charcoal not pure black;
-   * warm neutral borders for tonal coherence. Status colors (destructive /
-   * success / warning / info / chart-*) kept as-is to preserve semantic meaning
-   * across light and dark modes.
+  /* DeepRouter brand palette: cream canvas, soft-white raised surfaces,
+   * charcoal text, and AI blue reserved for routing/action/focus states.
    */
-  --background: oklch(0.968 0.011 85);    /* cream #f7f4ed */
-  --foreground: oklch(0.205 0.003 60);    /* charcoal #1c1c1c */
-  --card: oklch(0.968 0.011 85);          /* same cream — seamless integration */
-  --card-foreground: oklch(0.205 0.003 60);
-  --popover: oklch(0.984 0.008 85);       /* off-white #fcfbf8 */
-  --popover-foreground: oklch(0.205 0.003 60);
-  --primary: oklch(0.205 0.003 60);       /* charcoal */
-  --primary-foreground: oklch(0.984 0.008 85);
-  --secondary: oklch(0.928 0.013 85);     /* light cream #eceae4 */
-  --secondary-foreground: oklch(0.205 0.003 60);
-  --muted: oklch(0.948 0.012 85);
-  --muted-foreground: oklch(0.49 0.005 75); /* warm gray ~#5f5f5d */
-  --accent: oklch(0.928 0.013 85);
-  --accent-foreground: oklch(0.205 0.003 60);
+  --background: #f7f4ed;
+  --foreground: #1c1c1c;
+  --card: #fcfbf8;
+  --card-foreground: #1c1c1c;
+  --popover: #fcfbf8;
+  --popover-foreground: #1c1c1c;
+  --primary: #1c1c1c;
+  --primary-foreground: #fcfbf8;
+  --secondary: #eceae4;
+  --secondary-foreground: #1c1c1c;
+  --muted: #eceae4;
+  --muted-foreground: #5f5f5d;
+  --accent: #2563ff;
+  --accent-foreground: #ffffff;
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.596 0.145 163.225);
+  --success: #148f5f;
   --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.681 0.162 75.834);
+  --warning: #c76812;
   --warning-foreground: oklch(0.145 0 0);
-  --info: oklch(0.588 0.158 241.966);
+  --info: #2563ff;
   --info-foreground: oklch(0.985 0 0);
-  --neutral: oklch(0.708 0.005 75);
-  --neutral-foreground: oklch(0.205 0.003 60);
-  --border: oklch(0.928 0.013 85);        /* warm divider ~#eceae4 */
-  --input: oklch(0.928 0.013 85);
-  --ring: oklch(0.708 0.005 75);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.958 0.014 85);       /* slightly deeper cream tint */
-  --sidebar-foreground: oklch(0.205 0.003 60);
-  --sidebar-primary: oklch(0.205 0.003 60);
-  --sidebar-primary-foreground: oklch(0.984 0.008 85);
-  --sidebar-accent: oklch(0.928 0.013 85);
-  --sidebar-accent-foreground: oklch(0.205 0.003 60);
-  --sidebar-border: oklch(0.928 0.013 85);
-  --sidebar-ring: oklch(0.708 0.005 75);
-  --skeleton-base: oklch(0.948 0.012 85);
-  --skeleton-highlight: oklch(0.968 0.011 85);
+  --neutral: #5f5f5d;
+  --neutral-foreground: #1c1c1c;
+  --border: #eceae4;
+  --input: #eceae4;
+  --ring: #2563ff;
+  --chart-1: #2563ff;
+  --chart-2: #148f5f;
+  --chart-3: #1c1c1c;
+  --chart-4: #c76812;
+  --chart-5: #c9362b;
+  --sidebar: #fcfbf8;
+  --sidebar-foreground: #1c1c1c;
+  --sidebar-primary: #1c1c1c;
+  --sidebar-primary-foreground: #fcfbf8;
+  --sidebar-accent: rgb(37 99 255 / 8%);
+  --sidebar-accent-foreground: #2563ff;
+  --sidebar-border: #eceae4;
+  --sidebar-ring: #2563ff;
+  --skeleton-base: #eceae4;
+  --skeleton-highlight: #fcfbf8;
 }
 
 .dark {

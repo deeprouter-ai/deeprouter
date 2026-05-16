@@ -7,6 +7,7 @@
       "extrasCount": 0,
       "untranslatedCount": 0
     },
+<<<<<<< Updated upstream
     "fr": {
       "file": "fr.json",
       "missingCount": 23,
@@ -31,6 +32,8 @@
       "extrasCount": 0,
       "untranslatedCount": 15
     },
+=======
+>>>>>>> Stashed changes
     "zh": {
       "file": "zh.json",
       "missingCount": 0,

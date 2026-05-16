@@ -62,6 +62,7 @@
     "@lobehub/icons key": "@lobehub/icons key",
     "@lobehub/icons key name": "@lobehub/icons key name",
     "A billing multiplier. Lower ratios mean lower API call costs.": "A billing multiplier. Lower ratios mean lower API call costs.",
+    "A calm control plane for AI API operations.": "A calm control plane for AI API operations.",
     "A focused home for keys, balance, routing, and service health.": "A focused home for keys, balance, routing, and service health.",
     "AGPL v3.0 License": "AGPL v3.0 License",
     "AI Proxy": "AI Proxy",
@@ -216,6 +217,7 @@
     "Administer user accounts and roles.": "Administer user accounts and roles.",
     "Administrator account": "Administrator account",
     "Administrator username": "Administrator username",
+    "Administrators can still replace this page with custom HTML or an external URL from system settings when a deployment needs its own company profile.": "Administrators can still replace this page with custom HTML or an external URL from system settings when a deployment needs its own company profile.",
     "Advanced": "Advanced",
     "Advanced Configuration": "Advanced Configuration",
     "Advanced Options": "Advanced Options",
@@ -397,6 +399,7 @@
     "Auto-discovers endpoints from the provider": "Auto-discovers endpoints from the provider",
     "Auto-fill when one field exists and another is missing": "Auto-fill when one field exists and another is missing",
     "Auto-retry status codes": "Auto-retry status codes",
+    "Automatic fallback": "Automatic fallback",
     "Automatically disable channel on repeated failures": "Automatically disable channel on repeated failures",
     "Automatically disable channels exceeding this response time": "Automatically disable channels exceeding this response time",
     "Automatically disable channels when tests fail": "Automatically disable channels when tests fail",
@@ -406,6 +409,7 @@
     "Automatically sync model list when upstream changes are detected": "Automatically sync model list when upstream changes are detected",
     "Automatically test channels and notify users when limits are hit": "Automatically test channels and notify users when limits are hit",
     "Availability (last 24h)": "Availability (last 24h)",
+    "Availability target": "Availability target",
     "Available": "Available",
     "Available Models": "Available Models",
     "Available Rewards": "Available Rewards",
@@ -413,10 +417,17 @@
     "Average RPM": "Average RPM",
     "Average TPM": "Average TPM",
     "Average TTFT": "Average TTFT",
+<<<<<<< Updated upstream
     "Average latency": "Average latency",
     "Average latency, TTFT, and success rate by group": "Average latency, TTFT, and success rate by group",
     "Average time-to-first-token (TTFT) by group": "Average time-to-first-token (TTFT) by group",
     "Average tokens per second sustained per group": "Average tokens per second sustained per group",
+=======
+    "Avg. latency": "Avg. latency",
+    "AWS": "AWS",
+    "AWS Bedrock Claude Compat": "AWS Bedrock Claude Compat",
+    "AWS Key Format": "AWS Key Format",
+>>>>>>> Stashed changes
     "Azure": "Azure",
     "Back": "Back",
     "Back to Home": "Back to Home",
@@ -517,6 +528,7 @@
     "Budgets": "Budgets",
     "Build on your API gateway in minutes": "Build on your API gateway in minutes",
     "Built for developers,": "Built for developers,",
+    "Built for self-hosted and transparent deployments.": "Built for self-hosted and transparent deployments.",
     "Built-in": "Built-in",
     "Built-in Device": "Built-in Device",
     "Built-in: phone fingerprint/face, or Windows Hello; External: USB security key": "Built-in: phone fingerprint/face, or Windows Hello; External: USB security key",
@@ -832,6 +844,7 @@
     "Confirm your identity with Two-factor Authentication before registering a Passkey.": "Confirm your identity with Two-factor Authentication before registering a Passkey.",
     "Conflict": "Conflict",
     "Connect": "Connect",
+    "Connect OpenAI-compatible APIs, Claude, Gemini, and other upstream services behind one stable gateway.": "Connect OpenAI-compatible APIs, Claude, Gemini, and other upstream services behind one stable gateway.",
     "Connect through OpenAI, Claude, Gemini, and other compatible API routes": "Connect through OpenAI, Claude, Gemini, and other compatible API routes",
     "Connected to io.net service normally.": "Connected to io.net service normally.",
     "Connection error": "Connection error",
@@ -1033,6 +1046,8 @@
     "Day of month": "Day of month",
     "Days to Retain": "Days to Retain",
     "Deducted by subscription": "Deducted by subscription",
+    "DeepRouter focuses on practical API gateway work: unified request handling, provider fallback, account controls, usage logs, and billing workflows for teams operating AI products.": "DeepRouter focuses on practical API gateway work: unified request handling, provider fallback, account controls, usage logs, and billing workflows for teams operating AI products.",
+    "DeepRouter is an AI API gateway for teams that need one reliable control plane across models, providers, keys, quotas, billing, and logs.": "DeepRouter is an AI API gateway for teams that need one reliable control plane across models, providers, keys, quotas, billing, and logs.",
     "DeepSeek": "DeepSeek",
     "Default": "Default",
     "Default (New Frontend)": "Default (New Frontend)",
@@ -1574,6 +1589,7 @@
     "Failed to {{action}} user": "Failed to {{action}} user",
     "Failure keywords": "Failure keywords",
     "Fair": "Fair",
+    "Fallback lane": "Fallback lane",
     "Fallback tier": "Fallback tier",
     "FastGPT": "FastGPT",
     "Feature in development": "Feature in development",
@@ -1684,6 +1700,7 @@
     "Full width": "Full width",
     "Function calling": "Function calling",
     "Functions": "Functions",
+    "Gateway overview": "Gateway overview",
     "GC Count": "GC Count",
     "GC executed": "GC executed",
     "GC execution failed": "GC execution failed",
@@ -1782,6 +1799,7 @@
     "Header Value (supports string or JSON mapping)": "Header Value (supports string or JSON mapping)",
     "Header navigation": "Header navigation",
     "Health": "Health",
+    "Health aware": "Health aware",
     "Hidden — verify to reveal": "Hidden — verify to reveal",
     "Hide": "Hide",
     "Hide API key": "Hide API key",
@@ -1861,6 +1879,7 @@
     "Include Rule Name": "Include Rule Name",
     "Includes request rules": "Includes request rules",
     "Including failed requests, 0 = unlimited": "Including failed requests, 0 = unlimited",
+    "Incoming request": "Incoming request",
     "Index": "Index",
     "Initial quota given to new users": "Initial quota given to new users",
     "Initialization failed, please try again.": "Initialization failed, please try again.",
@@ -1879,6 +1898,7 @@
     "Inspect user prompts": "Inspect user prompts",
     "Instance": "Instance",
     "Integrations": "Integrations",
+    "Intelligent routing for AI.": "Intelligent routing for AI.",
     "Inter-group overrides": "Inter-group overrides",
     "Inter-group ratio overrides": "Inter-group ratio overrides",
     "Interface Language": "Interface Language",
@@ -1915,6 +1935,20 @@
     "Inviter Reward": "Inviter Reward",
     "Invites": "Invites",
     "Invoke developer-defined functions with structured arguments": "Invoke developer-defined functions with structured arguments",
+<<<<<<< Updated upstream
+=======
+    "io.net API Key": "io.net API Key",
+    "io.net Deployments": "io.net Deployments",
+    "IP": "IP",
+    "IP Address": "IP Address",
+    "IP Filter Mode": "IP Filter Mode",
+    "IP Restriction": "IP Restriction",
+    "IP Whitelist (supports CIDR)": "IP Whitelist (supports CIDR)",
+    "is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.": "is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.",
+    "is less than the configured maximum cache size": "is less than the configured maximum cache size",
+    "is the default price; ": "is the default price; ",
+    "Issue API keys, assign groups, enforce quotas, and keep access policies manageable as usage grows.": "Issue API keys, assign groups, enforce quotas, and keep access policies manageable as usage grows.",
+>>>>>>> Stashed changes
     "It seems like the page you're looking for": "It seems like the page you're looking for",
     "Items": "Items",
     "JSON": "JSON",
@@ -1946,6 +1980,7 @@
     "Keep this above 1 minute to avoid heavy database load": "Keep this above 1 minute to avoid heavy database load",
     "Keep-alive Ping": "Keep-alive Ping",
     "Key": "Key",
+    "Key and quota control": "Key and quota control",
     "Key Fingerprint": "Key Fingerprint",
     "Key Sources": "Key Sources",
     "Key Summary": "Key Summary",
@@ -2019,6 +2054,12 @@
     "List of models supported by this channel. Use comma to separate multiple models.": "List of models supported by this channel. Use comma to separate multiple models.",
     "List of origins (one per line) allowed for Passkey registration and authentication.": "List of origins (one per line) allowed for Passkey registration and authentication.",
     "List view": "List view",
+<<<<<<< Updated upstream
+=======
+    "Live policy": "Live policy",
+    "LLM Leaderboard": "LLM Leaderboard",
+    "LLM prompt helper": "LLM prompt helper",
+>>>>>>> Stashed changes
     "Load Balancing": "Load Balancing",
     "Load template...": "Load template...",
     "Loader": "Loader",
@@ -2224,6 +2265,7 @@
     "Month": "Month",
     "Month number": "Month number",
     "Monthly": "Monthly",
+    "Monthly cost visibility": "Monthly cost visibility",
     "Monthly tokens": "Monthly tokens",
     "Moonshot": "Moonshot",
     "More": "More",
@@ -2477,6 +2519,23 @@
     "OAuth Integrations": "OAuth Integrations",
     "OAuth failed": "OAuth failed",
     "OAuth start failed": "OAuth start failed",
+<<<<<<< Updated upstream
+=======
+    "Object Prune Rules": "Object Prune Rules",
+    "Observability": "Observability",
+    "Observed latency": "Observed latency",
+    "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.": "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.",
+    "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook": "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook",
+    "Ocean Breeze": "Ocean Breeze",
+    "of": "of",
+    "of 3:": "of 3:",
+    "off": "off",
+    "Official": "Official",
+    "Official documentation": "Official documentation",
+    "Official Repository": "Official Repository",
+    "Official Sync": "Official Sync",
+    "OhMyGPT": "OhMyGPT",
+>>>>>>> Stashed changes
     "OIDC": "OIDC",
     "OIDC Client ID": "OIDC Client ID",
     "OIDC Client Secret": "OIDC Client Secret",
@@ -2500,8 +2559,13 @@
     "One API": "One API",
     "One IP or CIDR range per line": "One IP or CIDR range per line",
     "One IP per line (empty for no restriction)": "One IP per line (empty for no restriction)",
+<<<<<<< Updated upstream
     "One domain per line": "One domain per line",
     "One domain per line (only used when domain restriction is enabled)": "One domain per line (only used when domain restriction is enabled)",
+=======
+    "one keyword per line": "one keyword per line",
+    "One route, many models": "One route, many models",
+>>>>>>> Stashed changes
     "Online": "Online",
     "Online payment is not enabled. Please contact the administrator.": "Online payment is not enabled. Please contact the administrator.",
     "Online topup is not enabled. Please use redemption code or contact administrator.": "Online topup is not enabled. Please use redemption code or contact administrator.",
@@ -2526,6 +2590,11 @@
     "Open menu": "Open menu",
     "Open release": "Open release",
     "Open source": "Open source",
+<<<<<<< Updated upstream
+=======
+    "Open Source": "Open Source",
+    "Open source attribution": "Open source attribution",
+>>>>>>> Stashed changes
     "Open the io.net console API Keys page": "Open the io.net console API Keys page",
     "Open theme settings": "Open theme settings",
     "Open weights": "Open weights",
@@ -2540,7 +2609,11 @@
     "Opened authorization page": "Opened authorization page",
     "Operation": "Operation",
     "Operation Type": "Operation Type",
+<<<<<<< Updated upstream
     "Operation failed": "Operation failed",
+=======
+    "Operational visibility": "Operational visibility",
+>>>>>>> Stashed changes
     "Operations": "Operations",
     "Operator Admin": "Operator Admin",
     "Optimize system for self-hosted single-user usage": "Optimize system for self-hosted single-user usage",
@@ -2833,6 +2906,12 @@
     "Pricing group example": "Pricing group example",
     "Pricing groups": "Pricing groups",
     "Pricing mode": "Pricing mode",
+<<<<<<< Updated upstream
+=======
+    "Pricing Ratios": "Pricing Ratios",
+    "Pricing Type": "Pricing Type",
+    "Primary lane": "Primary lane",
+>>>>>>> Stashed changes
     "Primary Model": "Primary Model",
     "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)": "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)",
     "Priority": "Priority",
@@ -2855,6 +2934,7 @@
     "Programming": "Programming",
     "Progress": "Progress",
     "Project": "Project",
+    "Project foundation": "Project foundation",
     "Promote": "Promote",
     "Promotion codes": "Promotion codes",
     "Prompt": "Prompt",
@@ -2874,7 +2954,11 @@
     "Provide per-model header overrides as JSON. Useful for enabling beta features such as expanded context windows.": "Provide per-model header overrides as JSON. Useful for enabling beta features such as expanded context windows.",
     "Provider": "Provider",
     "Provider & data privacy": "Provider & data privacy",
+<<<<<<< Updated upstream
     "Provider Name": "Provider Name",
+=======
+    "Provider coverage": "Provider coverage",
+>>>>>>> Stashed changes
     "Provider created successfully": "Provider created successfully",
     "Provider deleted successfully": "Provider deleted successfully",
     "Provider type (OpenAI, Anthropic, etc.)": "Provider type (OpenAI, Anthropic, etc.)",
@@ -2899,6 +2983,7 @@
     "Purchase limit reached": "Purchase limit reached",
     "QR Code Image URL": "QR Code Image URL",
     "QR code is not configured. Please contact support.": "QR code is not configured. Please contact support.",
+    "Quality lane": "Quality lane",
     "Quantity": "Quantity",
     "QuantumNous": "QuantumNous",
     "Query Balance": "Query Balance",
@@ -3145,6 +3230,7 @@
     "Revenue": "Revenue",
     "Review & initialize": "Review & initialize",
     "Review current version and fetch release notes.": "Review current version and fetch release notes.",
+    "Review logs, latency, costs, and channel health so routing decisions stay observable and accountable.": "Review logs, latency, costs, and channel health so routing decisions stay observable and accountable.",
     "Review model rates before scaling traffic": "Review model rates before scaling traffic",
     "Review your payment details": "Review your payment details",
     "Review your purchase details before proceeding.": "Review your purchase details before proceeding.",
@@ -3159,7 +3245,9 @@
     "Route Description": "Route Description",
     "Route active": "Route active",
     "Route is required": "Route is required",
+    "Route requests by policy, cost, health, and availability.": "Route requests by policy, cost, health, and availability.",
     "Route, auth, and balance check in one place": "Route, auth, and balance check in one place",
+    "Router policy": "Router policy",
     "Routing & Overrides": "Routing & Overrides",
     "Routing Strategy": "Routing Strategy",
     "Rows per page": "Rows per page",
@@ -3340,6 +3428,7 @@
     "Selectable groups": "Selectable groups",
     "Selected conflicts were overwritten successfully.": "Selected conflicts were overwritten successfully.",
     "Selected when creating a token and used as the default billing group for API calls.": "Selected when creating a token and used as the default billing group for API calls.",
+    "Self-hosted first": "Self-hosted first",
     "Self-Use Mode": "Self-Use Mode",
     "Send": "Send",
     "Send a request": "Send a request",
@@ -3670,6 +3759,7 @@
     "This channel type does not support fetching models": "This channel type does not support fetching models",
     "This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.": "This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.",
     "This data may be unreliable, use with caution": "This data may be unreliable, use with caution",
+    "This deployment preserves upstream project attribution and licensing information.": "This deployment preserves upstream project attribution and licensing information.",
     "This device does not support Passkey": "This device does not support Passkey",
     "This device does not support Passkey verification.": "This device does not support Passkey verification.",
     "This expression is too complex for the visual editor. Please switch to expression mode to edit.": "This expression is too complex for the visual editor. Please switch to expression mode to edit.",
@@ -3812,6 +3902,7 @@
     "Total tokens": "Total tokens",
     "Total:": "Total:",
     "Track per-request consumption to power usage analytics. Keeping this on increases database writes.": "Track per-request consumption to power usage analytics. Keeping this on increases database writes.",
+    "Track requests, tokens, model pricing, balances, and settlement data from the same operating surface.": "Track requests, tokens, model pricing, balances, and settlement data from the same operating surface.",
     "Track usage, costs and performance with real-time analytics": "Track usage, costs and performance with real-time analytics",
     "Tracked apps": "Tracked apps",
     "Tracks current account base limits and additional metered usage on Codex upstream.": "Tracks current account base limits and additional metered usage on Codex upstream.",
@@ -3825,6 +3916,7 @@
     "Translate `-thinking` suffixes into Anthropic native thinking models while keeping pricing predictable.": "Translate `-thinking` suffixes into Anthropic native thinking models while keeping pricing predictable.",
     "Translation": "Translation",
     "Transparent Billing": "Transparent Billing",
+    "Transparent operations": "Transparent operations",
     "Trend": "Trend",
     "Trending down": "Trending down",
     "Trending up": "Trending up",
@@ -3875,6 +3967,7 @@
     "Understand image inputs alongside text": "Understand image inputs alongside text",
     "Unexpected release payload": "Unexpected release payload",
     "Unified API Gateway for": "Unified API Gateway for",
+    "Unified provider routing": "Unified provider routing",
     "Unique identifier for this group.": "Unique identifier for this group.",
     "Unit price (USD)": "Unit price (USD)",
     "Unit price (local currency / USD)": "Unit price (local currency / USD)",
@@ -3945,7 +4038,11 @@
     "Uptime Kuma groups saved successfully": "Uptime Kuma groups saved successfully",
     "Uptime since": "Uptime since",
     "Usage": "Usage",
+<<<<<<< Updated upstream
     "Usage Logs": "Usage Logs",
+=======
+    "Usage and billing clarity": "Usage and billing clarity",
+>>>>>>> Stashed changes
     "Usage at a glance": "Usage at a glance",
     "Usage guide": "Usage guide",
     "Usage logs": "Usage logs",
@@ -4124,6 +4221,14 @@
     "Webhook secret": "Webhook secret",
     "Webhook signing secret (leave blank unless updating)": "Webhook signing secret (leave blank unless updating)",
     "Website is under maintenance!": "Website is under maintenance!",
+<<<<<<< Updated upstream
+=======
+    "WeChat": "WeChat",
+    "WeChat login QR code": "WeChat login QR code",
+    "WeChat Pay": "WeChat Pay",
+    "WeChat QR code will be displayed here": "WeChat QR code will be displayed here",
+    "WeChat sign in": "WeChat sign in",
+>>>>>>> Stashed changes
     "Week": "Week",
     "Weekday": "Weekday",
     "Weekly": "Weekly",
@@ -4154,7 +4259,12 @@
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.",
     "Whitelist": "Whitelist",
     "Whitelist (Only allow listed IPs)": "Whitelist (Only allow listed IPs)",
+<<<<<<< Updated upstream
     "Whitelist (Only allow listed domains)": "Whitelist (Only allow listed domains)",
+=======
+    "whsec_xxx": "whsec_xxx",
+    "Why DeepRouter": "Why DeepRouter",
+>>>>>>> Stashed changes
     "Window:": "Window:",
     "Wire encoding for the embedding vectors": "Wire encoding for the embedding vectors",
     "Without additional conditions, only the type above is used for pruning.": "Without additional conditions, only the type above is used for pruning.",
@@ -4187,17 +4297,22 @@
     "Your GitHub OAuth Client Secret": "Your GitHub OAuth Client Secret",
     "Your Referral Link": "Your Referral Link",
     "Your Telegram Bot Token": "Your Telegram Bot Token",
+    "Your transaction history will appear here": "Your transaction history will appear here",
     "Your Turnstile secret key": "Your Turnstile secret key",
     "Your Turnstile site key": "Your Turnstile site key",
+<<<<<<< Updated upstream
     "Your new API key is ready": "Your new API key is ready",
     "Your new backup codes are ready": "Your new backup codes are ready",
     "Your setup guide is collapsed so usage stays in focus.": "Your setup guide is collapsed so usage stays in focus.",
     "Your system access token for API authentication. Keep it secure and don't share it with others.": "Your system access token for API authentication. Keep it secure and don't share it with others.",
     "Your transaction history will appear here": "Your transaction history will appear here",
+=======
+>>>>>>> Stashed changes
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
+<<<<<<< Updated upstream
     "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]": "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]",
     "[{\"name\":\"支付宝\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]": "[{\"name\":\"Alipay\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]",
     "_copy": "_copy",
@@ -4434,5 +4549,13 @@
     "{{value}}s": "{{value}}s",
     "| Based on": "| Based on",
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. All rights reserved."
+=======
+    "Welcome back": "Welcome back",
+    "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.": "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.",
+    "GPT-5, Claude, Gemini & 20+ models": "GPT-5, Claude, Gemini & 20+ models",
+    "Pay in your local currency": "Pay in your local currency",
+    "Drop-in OpenAI-compatible API": "Drop-in OpenAI-compatible API",
+    "Trusted by developers shipping production AI features.": "Trusted by developers shipping production AI features."
+>>>>>>> Stashed changes
   }
 }

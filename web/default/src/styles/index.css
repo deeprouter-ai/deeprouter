@@ -529,6 +529,267 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
+/* ── Hero background: routing lines ──
+ * Lightweight CSS-only motion that echoes DeepRouter's route-splitting
+ * visual language. Kept behind content and disabled for reduced motion.
+ */
+@keyframes landing-route-flow {
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.1;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.32;
+  }
+  100% {
+    background-position: 200% 50%;
+    opacity: 0.1;
+  }
+}
+
+@keyframes landing-route-arrow {
+  0% {
+    left: 6%;
+    top: 22px;
+    transform: translateY(-50%) rotate(45deg);
+    opacity: 0;
+  }
+  18% {
+    left: 36%;
+    top: 22px;
+    transform: translateY(-50%) rotate(45deg);
+    opacity: 0.78;
+  }
+  42% {
+    left: 52%;
+    top: 72px;
+    transform: translateY(-50%) rotate(68deg);
+    opacity: 0.78;
+  }
+  82% {
+    left: 86%;
+    top: 75px;
+    transform: translateY(-50%) rotate(45deg);
+    opacity: 0.78;
+  }
+  100% {
+    left: 96%;
+    top: 75px;
+    transform: translateY(-50%) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes landing-node-pulse {
+  0%,
+  100% {
+    transform: scale(0.82);
+    opacity: 0.18;
+    box-shadow: 0 0 0 0 rgb(37 99 255 / 0.16);
+  }
+  45% {
+    transform: scale(1);
+    opacity: 0.72;
+    box-shadow: 0 0 0 12px rgb(37 99 255 / 0);
+  }
+}
+
+@keyframes landing-routing-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, 10px, 0);
+  }
+}
+
+.landing-hero-routing-bg {
+  position: absolute;
+  inset: 4.25rem max(1.5rem, calc((100vw - 1280px) / 2)) auto;
+  z-index: -1;
+  height: min(34rem, 60vh);
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0.95;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 16%,
+    black 78%,
+    transparent 100%
+  );
+  animation: landing-routing-drift 16s ease-in-out infinite;
+}
+
+.landing-hero-routing-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgb(28 28 28 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(28 28 28 / 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 72%);
+}
+
+.landing-hero-route {
+  position: absolute;
+  display: block;
+  left: -14%;
+  width: 128%;
+  height: 118px;
+  opacity: 0.55;
+  transform-origin: center;
+}
+
+.landing-hero-route::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+        90deg,
+        transparent 0%,
+        rgb(37 99 255 / 0.3) 14%,
+        rgb(37 99 255 / 0.22) 100%
+      )
+      0 22px / 42% 2px no-repeat,
+    linear-gradient(
+        130deg,
+        transparent calc(50% - 1px),
+        rgb(37 99 255 / 0.26) calc(50% - 1px),
+        rgb(37 99 255 / 0.26) calc(50% + 1px),
+        transparent calc(50% + 1px)
+      )
+      38% 22px / 22% 54px no-repeat,
+    linear-gradient(
+        90deg,
+        rgb(37 99 255 / 0.24),
+        rgb(28 28 28 / 0.1) 70%,
+        transparent 100%
+      )
+      56% 75px / 44% 2px no-repeat;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    black 14%,
+    black 86%,
+    transparent 100%
+  );
+  animation: landing-route-flow 7s ease-in-out infinite;
+}
+
+.landing-hero-route::after {
+  content: '';
+  position: absolute;
+  top: 22px;
+  left: 6%;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid rgb(37 99 255 / 0.82);
+  border-right: 2px solid rgb(37 99 255 / 0.82);
+  filter: drop-shadow(0 0 10px rgb(37 99 255 / 0.34));
+  animation: landing-route-arrow 7s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+.landing-hero-route-a {
+  top: 10%;
+  transform: rotate(3deg);
+}
+
+.landing-hero-route-b {
+  top: 28%;
+  transform: scaleX(-1) rotate(-4deg);
+  opacity: 0.46;
+}
+
+.landing-hero-route-c {
+  top: 53%;
+  transform: rotate(-3deg);
+  opacity: 0.38;
+}
+
+.landing-hero-route-b::before {
+  animation-duration: 8.2s;
+  animation-delay: -2s;
+}
+
+.landing-hero-route-b::after {
+  animation-duration: 8.2s;
+  animation-delay: -2s;
+}
+
+.landing-hero-route-c::before {
+  animation-duration: 9s;
+  animation-delay: -4s;
+}
+
+.landing-hero-route-c::after {
+  animation-duration: 9s;
+  animation-delay: -4s;
+}
+
+.landing-hero-node {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgb(37 99 255 / 0.28);
+  border-radius: 999px;
+  background: rgb(37 99 255 / 0.72);
+  animation: landing-node-pulse 4.8s ease-in-out infinite;
+}
+
+.landing-hero-node-a {
+  top: 18%;
+  left: 12%;
+}
+
+.landing-hero-node-b {
+  top: 31%;
+  right: 15%;
+  animation-delay: -1.2s;
+}
+
+.landing-hero-node-c {
+  top: 62%;
+  left: 31%;
+  animation-delay: -2.4s;
+}
+
+.landing-hero-node-d {
+  top: 68%;
+  right: 28%;
+  animation-delay: -3.6s;
+}
+
+@media (max-width: 767px) {
+  .landing-hero-routing-bg {
+    inset-inline: 0;
+    height: 26rem;
+    opacity: 0.52;
+  }
+
+  .landing-hero-route {
+    left: -36%;
+    width: 172%;
+  }
+
+  .landing-hero-route-c {
+    top: 66%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero-routing-bg,
+  .landing-hero-route::before,
+  .landing-hero-route::after,
+  .landing-hero-node {
+    animation: none !important;
+  }
+}
+
 /* ── Stats counter "settled" pulse ──
  * Single 380ms tint flash applied via JS class toggle when a count-up
  * finishes. Subtle confirmation that the number has locked to its final

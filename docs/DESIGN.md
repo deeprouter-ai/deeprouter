@@ -1,4 +1,222 @@
-# Design System Inspired by Lovable
+# DeepRouter Design System
+
+This document is the canonical visual system for DeepRouter product surfaces: public pages, dashboard screens, documentation examples, and brand collateral. The accompanying visual board lives at [`docs/brand/index.html`](brand/index.html), and reusable CSS component references live at [`docs/brand/deeprouter-brand.css`](brand/deeprouter-brand.css).
+
+The current brand direction is based on the supplied PNG logo lockup: a rounded black routing container, a white inner surface, and a vivid AI-blue arrow. Do not redraw or reinterpret the logo as SVG for production assets. Use the original PNG exports for logo files and keep SVG only for simple UI icons.
+
+## 0. Brand Foundation
+
+### Personality
+- **Intelligent routing**: the product should feel precise, directional, and operational.
+- **Warm technical**: avoid cold enterprise blue-white dashboards as the default. Use warm cream and soft white surfaces.
+- **Quiet control**: dashboards are dense, clean, and repeatable. Marketing treatment should never overpower operational clarity.
+- **AI-native accent**: blue is the recognizable action and routing color, not a background decoration.
+
+### Logo Usage
+- Primary lockup: PNG horizontal logo with icon and `DeepRouter` wordmark.
+- Icon-only: PNG app icon for favicon, sidebar, mobile tab bar, route node, and compact header.
+- Minimum clear space: at least half the icon width around the logo.
+- Minimum sizes:
+  - Horizontal lockup: `160px` wide in UI, `240px` wide in brand pages.
+  - Icon-only: `24px` minimum in app chrome, `32px` preferred.
+- Do not:
+  - Recreate the logo geometry as approximate SVG.
+  - Change the black container, white face, or AI-blue arrow color.
+  - Add gradients, glows, shadows, outlines, or extra badges to the logo.
+  - Stretch, crop, rotate, or place the mark inside another decorative shape.
+
+### Required Logo Files
+- `web/default/public/logo.png`: default app logo used by the frontend configuration.
+- `docs/brand/logo.png`: horizontal logo used by the brand board.
+- `docs/brand/logo-icon.png`: square icon crop used by compact previews, sidebar examples, routing nodes, and app chrome.
+
+## 1. Color System
+
+### Core Palette
+
+| Token | Hex | Usage |
+|---|---:|---|
+| Cream | `#F7F4ED` | Page background and warm product base |
+| Soft White | `#FCFBF8` | Raised cards, inputs, popovers, modals |
+| Charcoal | `#1C1C1C` | Primary text, dark buttons, logo black |
+| Muted Text | `#5F5F5D` | Secondary text, captions, helper text |
+| Border | `#ECEAE4` | Dividers, card borders, low-emphasis outlines |
+| AI Blue | `#2563FF` | Primary AI action, focus, selected state, routing lines |
+
+### Semantic Palette
+
+| Token | Suggested Hex | Usage |
+|---|---:|---|
+| Active Blue | `#2563FF` | Active route, selected navigation, AI action |
+| Stable Green | `#148F5F` | Healthy status, successful route, positive deltas |
+| Warning Orange | `#C76812` | Warnings, quota pressure, degraded state |
+| Error Red | `#C9362B` | Failed request, destructive state, validation error |
+
+### Color Rules
+- Cream is the default canvas. Avoid pure white full-page backgrounds.
+- Soft white is for raised surfaces and controls, not the entire app.
+- Charcoal is preferred over pure black for text and dark controls.
+- AI Blue should appear in arrows, selected states, focus rings, charts, and action buttons.
+- Avoid large blue-purple gradients, decorative orbs, and glass backgrounds. They dilute the PNG logo direction.
+
+## 2. Typography
+
+### Default Font
+
+Primary font: **Plus Jakarta Sans**
+
+Fallback stack:
+
+```css
+font-family:
+  "Plus Jakarta Sans",
+  "Public Sans",
+  ui-sans-serif,
+  system-ui,
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  sans-serif;
+```
+
+Implementation note: the current frontend already bundles `Public Sans`. If `Plus Jakarta Sans` is added later, put it first in the stack and keep `Public Sans` as the local fallback.
+
+### Type Scale
+
+| Role | Size / Line Height | Weight | Usage |
+|---|---:|---:|---|
+| H1 | `56px / 64px` | `600-700` | Brand hero, major page title |
+| H2 | `40px / 48px` | `600-700` | Section title, landing page block |
+| H3 | `28px / 36px` | `600` | Card group title, modal heading |
+| H4 | `20px / 24px` | `600` | Card title, dashboard panel title |
+| Body | `16px / 24px` | `400` | Paragraphs, form text |
+| Small | `14px / 20px` | `400-500` | Buttons, table cells, nav items |
+| Caption | `12px / 16px` | `400-600` | Labels, metadata, status details |
+
+### Typography Rules
+- Use normal letter spacing. Do not use negative tracking in product UI.
+- Use weight changes sparingly: most hierarchy should come from size, spacing, and placement.
+- Keep dashboard labels at `12px` or `13px`; keep repeated controls compact.
+- Use tabular numbers for metrics, quotas, prices, and latency.
+- Avoid oversized hero typography inside cards, modals, sidebars, and tables.
+
+## 3. Component Specifications
+
+### Buttons
+
+| Variant | Background | Text | Border | Use |
+|---|---|---|---|---|
+| Primary | `#1C1C1C` | `#FCFBF8` | none/inset | Main product action |
+| AI Action | `#2563FF` | white | none | AI-specific action, route execution, selected primary workflow |
+| Secondary | `#FCFBF8` | `#1C1C1C` | `rgba(28,28,28,.18)` | Alternative action |
+| Ghost | transparent | `#5F5F5D` | subtle/none | Low-emphasis action |
+| Disabled | muted surface | muted text | subtle | Disabled state only |
+
+Default button sizing:
+- Height: `40px-42px`
+- Radius: `7px`
+- Padding: `14px-18px` horizontal
+- Font: `14px / 20px`, weight `500-600`
+- Focus: `0 0 0 3px rgba(37,99,255,.14)` plus blue border where appropriate
+
+### Inputs
+- Height: `42px`
+- Radius: `7px`
+- Background: `#FCFBF8` or transparent cream with high opacity
+- Border: `rgba(28,28,28,.14)`
+- Focus border: `#2563FF`
+- Focus ring: `rgba(37,99,255,.14)`
+- Placeholder: muted text at `60%-70%` opacity
+
+### Badges
+- Radius: `999px`
+- Height: `28px-30px`
+- Padding: `12px-16px`
+- Font: `14px`, weight `600`
+- Active: blue tint background + blue text
+- Beta: charcoal `5%-7%` background + charcoal text
+- Stable: green tint background + green text
+- Warning: orange tint background + orange text
+- Error: red tint background + red text
+
+### Cards, Modals, Tables
+- Card radius: `12px`
+- Modal radius: `12px`
+- Control radius: `7px`
+- Border: `1px solid rgba(28,28,28,.10-.14)`
+- Card background: `rgba(252,251,248,.72)` or `#FCFBF8`
+- Shadow: subtle and functional only, e.g. `0 12px 34px rgba(28,28,28,.08)`
+- Tables should use light horizontal dividers and compact row height. Avoid boxed cells unless the content is a dense configuration matrix.
+
+### Icons and Illustrations
+- UI icons should be simple line icons, preferably `lucide-react`.
+- Default icon stroke: `1.5px-2px`.
+- Icon colors: charcoal by default, AI Blue for active/selected states.
+- Product illustrations should reuse the PNG icon, routing lines, model cards, and gateway shapes. Avoid abstract gradients and decorative mascots.
+
+## 4. Layout Patterns
+
+### Dashboard Layout
+- Sidebar width: `150px-240px`, depending on density.
+- Sidebar active item: blue text on subtle blue background.
+- Main canvas: cream background with soft-white panels.
+- Metrics cards: compact, scannable, number-first.
+- Charts: blue routing line as the primary visual signal.
+- Search inputs: pill or rounded control, understated.
+
+### Routing Visualization
+- Use the logo icon as the central route node.
+- Incoming requests appear on the left; provider/model targets on the right.
+- Routing lines use AI Blue.
+- Percent allocation labels should be blue and tabular.
+- Keep the visualization flat and readable; no 3D effects beyond the logo asset itself.
+
+### Mobile
+- Mobile app surfaces should preserve cream canvas and soft-white cards.
+- Bottom navigation icons use charcoal by default and AI Blue when active.
+- Cards should stack with `10px-12px` spacing.
+- Avoid shrinking table layouts directly onto mobile; use list rows with status badges.
+
+## 5. Frontend Token Mapping
+
+The default frontend should map the design system approximately as follows:
+
+```css
+:root {
+  --background: #f7f4ed;
+  --foreground: #1c1c1c;
+  --card: #fcfbf8;
+  --card-foreground: #1c1c1c;
+  --primary: #1c1c1c;
+  --primary-foreground: #fcfbf8;
+  --accent: #2563ff;
+  --muted-foreground: #5f5f5d;
+  --border: #eceae4;
+  --input: #eceae4;
+  --ring: #2563ff;
+}
+```
+
+Use Tailwind/theme tokens rather than one-off hex values in components whenever possible.
+
+### CSS Component Reference
+
+For static prototypes, documentation pages, or quick extraction into frontend components, use:
+
+- `docs/brand/deeprouter-brand.css`
+
+Key classes:
+
+- `.dr-surface`, `.dr-card`, `.dr-panel`
+- `.dr-heading-1`, `.dr-heading-2`, `.dr-heading-3`, `.dr-body`, `.dr-small`, `.dr-caption`
+- `.dr-button`, `.dr-button-primary`, `.dr-button-ai`, `.dr-button-secondary`, `.dr-button-ghost`
+- `.dr-input`, `.dr-select`, `.dr-input-focused`
+- `.dr-badge`, `.dr-badge-active`, `.dr-badge-beta`, `.dr-badge-stable`, `.dr-badge-warning`, `.dr-badge-error`
+- `.dr-metric-card`, `.dr-table`, `.dr-sidebar`, `.dr-nav-item`, `.dr-modal`, `.dr-phone`
+
+## 6. Historical Inspiration Notes
+
+The following sections describe the earlier Lovable-inspired exploration. They are retained as background only. The canonical implementation should follow the DeepRouter brand foundation above, especially the PNG logo usage, Plus Jakarta Sans typography direction, and AI Blue action system.
 
 ## 1. Visual Theme & Atmosphere
 

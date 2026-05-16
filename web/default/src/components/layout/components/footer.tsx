@@ -78,14 +78,14 @@ function ProjectAttribution(props: { currentYear: number }) {
   const { t } = useTranslation()
 
   return (
-    <div className='text-muted-foreground/45 text-center text-xs sm:text-right'>
-      <span className='text-muted-foreground/45'>
+    <div className='text-muted-foreground/35 text-center text-[10px] leading-relaxed sm:text-right'>
+      <span className='text-muted-foreground/35'>
         &copy; {props.currentYear}{' '}
         <a
           href='https://github.com/QuantumNous/new-api'
           target='_blank'
           rel='noopener noreferrer'
-          className='text-foreground/70 hover:text-foreground font-medium transition-colors'
+          className='text-muted-foreground/45 hover:text-muted-foreground font-medium transition-colors'
         >
           {t('New API')}
         </a>
@@ -104,7 +104,10 @@ export function Footer(props: FooterProps) {
     demoSiteEnabled,
   } = useSystemConfig()
 
-  const displayLogo = systemLogo || props.logo || '/logo.png'
+  const displayLogo =
+    systemLogo === '/logo.png'
+      ? '/logo-full.png'
+      : systemLogo || props.logo || '/logo-full.png'
   const displayName = systemName || props.name || 'DeepRouter'
   const isDemoSiteMode = Boolean(demoSiteEnabled)
   const currentYear = new Date().getFullYear()
@@ -171,13 +174,10 @@ export function Footer(props: FooterProps) {
   if (footerHtml) {
     return (
       <footer
-        className={cn(
-          'border-border/40 relative z-10 border-t',
-          props.className
-        )}
+        className={cn('border-border relative z-10 border-t', props.className)}
       >
         <div className='mx-auto w-full max-w-6xl px-6 py-5'>
-          <div className='bg-muted/20 border-border/50 flex flex-col items-center justify-between gap-4 rounded-2xl border px-4 py-4 backdrop-blur-sm sm:flex-row sm:px-5'>
+          <div className='bg-card/70 border-border flex flex-col items-center justify-between gap-4 rounded-xl border px-4 py-4 shadow-[0_12px_34px_rgb(28_28_28/0.06)] sm:flex-row sm:px-5'>
             <div
               className='custom-footer text-muted-foreground min-w-0 text-center text-sm sm:text-left'
               dangerouslySetInnerHTML={{ __html: footerHtml }}
@@ -193,7 +193,7 @@ export function Footer(props: FooterProps) {
 
   return (
     <footer
-      className={cn('border-border/40 relative z-10 border-t', props.className)}
+      className={cn('border-border relative z-10 border-t', props.className)}
     >
       <div className='mx-auto max-w-6xl px-6 py-12 md:py-16'>
         <div className='flex flex-col justify-between gap-10 md:flex-row md:gap-16'>
@@ -203,11 +203,9 @@ export function Footer(props: FooterProps) {
               <img
                 src={displayLogo}
                 alt={displayName}
-                className='size-7 rounded-lg object-contain'
+                className='h-12 w-64 rounded-none object-contain object-left'
               />
-              <span className='text-sm font-semibold tracking-tight'>
-                {displayName}
-              </span>
+              <span className='sr-only'>{displayName}</span>
             </Link>
             <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
               {t('Powerful API Management Platform')}
