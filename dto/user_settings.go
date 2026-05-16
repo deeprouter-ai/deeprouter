@@ -16,6 +16,17 @@ type UserSetting struct {
 	SidebarModules                   string  `json:"sidebar_modules,omitempty"`                      // SidebarModules 左侧边栏模块配置
 	BillingPreference                string  `json:"billing_preference,omitempty"`                   // BillingPreference 扣费策略（订阅/钱包）
 	Language                         string  `json:"language,omitempty"`                             // Language 用户语言偏好 (zh, en)
+	// Persona is a UI-tailoring preference (not a permission). Values:
+	//   "casual" — non-technical end users; sidebar shrunk to chat/playground/wallet.
+	//   "dev"    — developers; full sidebar minus admin.
+	//   "team"   — team/enterprise; same as dev today, reserved for future.
+	//   "unset"  — sentinel set by Register on new accounts. Frontend reads
+	//              this as "prompt picker on first authenticated load".
+	//   absent   — legacy user (predates persona). Frontend treats as "dev,
+	//              no prompt" so their experience doesn't suddenly shift.
+	// We keep omitempty so legacy users' setting JSON stays clean — only
+	// explicitly-set "unset"/"casual"/... values round-trip.
+	Persona string `json:"persona,omitempty"`
 }
 
 var (

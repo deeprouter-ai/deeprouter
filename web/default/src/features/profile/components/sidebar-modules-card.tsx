@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useState } from 'react'
-import { LayoutDashboard } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, Terminal, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+import { usePersona } from '@/hooks/use-persona'
 import { api } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -31,6 +33,9 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { updateUserSettings } from '../api'
+import { PERSONA_PRESETS } from '../lib/persona-presets'
+import type { Persona, UserSettings } from '../types'
 
 type SidebarModuleConfig = {
   enabled: boolean
@@ -49,9 +54,77 @@ type SectionDef = {
 export function SidebarModulesCard() {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
+  const [presetSaving, setPresetSaving] = useState<Persona | null>(null)
   const [config, setConfig] = useState<SidebarModulesConfig>({})
   const currentUser = useAuthStore((s) => s.auth.user)
   const setUser = useAuthStore((s) => s.auth.setUser)
+  const currentPersona = usePersona()
+
+  const handlePickPreset = async (persona: Persona) => {
+    if (presetSaving) return
+    setPresetSaving(persona)
+    try {
+      const preset = PERSONA_PRESETS[persona]
+      const settingRaw = currentUser?.setting
+      const currentSetting: UserSettings =
+        typeof settingRaw === 'string'
+          ? (JSON.parse(settingRaw) as UserSettings)
+          : ((settingRaw as UserSettings | undefined) ?? {})
+
+      const res = await updateUserSettings({
+        ...currentSetting,
+        persona,
+        sidebar_modules: preset.sidebarModules,
+      })
+      if (!res.success) {
+        toast.error(res.message || t('Save failed'))
+        return
+      }
+      const nextSetting: UserSettings = { ...currentSetting, persona }
+      if (currentUser) {
+        setUser({
+          ...currentUser,
+          setting: nextSetting as unknown as Record<string, unknown>,
+          sidebar_modules: preset.sidebarModules,
+        })
+      }
+      // Re-hydrate the granular switches from the new preset so the user
+      // sees the modules update in place.
+      try {
+        const parsed = JSON.parse(preset.sidebarModules) as SidebarModulesConfig
+        setConfig(parsed)
+      } catch {
+        /* preset is always valid JSON; ignore */
+      }
+      toast.success(t('Switched preset'))
+    } catch {
+      toast.error(t('Save failed, please retry'))
+    } finally {
+      setPresetSaving(null)
+    }
+  }
+
+  const personaCards: Array<{
+    id: Persona
+    title: string
+    icon: React.ReactNode
+  }> = [
+    {
+      id: 'casual',
+      title: t('Casual'),
+      icon: <MessageSquare className='h-3.5 w-3.5' />,
+    },
+    {
+      id: 'dev',
+      title: t('Developer'),
+      icon: <Terminal className='h-3.5 w-3.5' />,
+    },
+    {
+      id: 'team',
+      title: t('Team / Enterprise'),
+      icon: <Users className='h-3.5 w-3.5' />,
+    },
+  ]
 
   const sectionDefs: SectionDef[] = [
     {
@@ -217,6 +290,42 @@ export function SidebarModulesCard() {
         </div>
       </CardHeader>
       <CardContent className='space-y-4 p-3 sm:space-y-5 sm:p-5'>
+        {/* Quick-start preset — picks both persona + sidebar_modules JSON
+          * in one PUT so the user doesn't have to touch the granular
+          * switches below for the common cases. */}
+        <div className='bg-background/60 space-y-3 rounded-xl border p-3'>
+          <div>
+            <p className='text-sm font-medium'>{t('Quick start preset')}</p>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Pick one and we will set the module switches below to match. You can fine-tune anything after.'
+              )}
+            </p>
+          </div>
+          <div className='grid grid-cols-3 gap-2'>
+            {personaCards.map((card) => {
+              const active = currentPersona === card.id
+              return (
+                <Button
+                  key={card.id}
+                  type='button'
+                  variant={active ? 'default' : 'outline'}
+                  size='sm'
+                  disabled={presetSaving !== null}
+                  onClick={() => handlePickPreset(card.id)}
+                  className={cn(
+                    'h-auto flex-col gap-1 py-2 text-xs',
+                    active && 'shadow-sm'
+                  )}
+                >
+                  <span>{card.icon}</span>
+                  <span className='font-medium'>{card.title}</span>
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+
         {sectionDefs.map((section) => {
           const sectionEnabled = config[section.key]?.enabled !== false
           return (
