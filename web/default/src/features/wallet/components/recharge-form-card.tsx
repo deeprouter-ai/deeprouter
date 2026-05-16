@@ -21,6 +21,7 @@ import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatNumber } from '@/lib/format'
 import { estimateChats, formatCount } from '@/lib/usage-estimate'
+import { useIsCasual } from '@/hooks/use-casual'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -112,6 +113,10 @@ export function RechargeFormCard({
 }: RechargeFormCardProps) {
   const { t } = useTranslation()
   const [localAmount, setLocalAmount] = useState(topupAmount.toString())
+  // Casual users see only the preset amount buttons and the payment
+  // methods — custom amount input and redemption code are hidden to
+  // keep the page simple. See docs/tasks/casual-ux-prd.md §3.1.
+  const casual = useIsCasual()
 
   useEffect(() => {
     setLocalAmount(topupAmount.toString())
@@ -287,37 +292,39 @@ export function RechargeFormCard({
                 </div>
               )}
 
-              <div className='space-y-2.5 sm:space-y-3'>
-                <Label
-                  htmlFor='topup-amount'
-                  className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
-                >
-                  {t('Custom Amount')}
-                </Label>
-                <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                  <Input
-                    id='topup-amount'
-                    type='number'
-                    value={localAmount}
-                    onChange={(e) => handleAmountChange(e.target.value)}
-                    min={minTopup}
-                    placeholder={`Minimum ${minTopup}`}
-                    className='h-9 text-base sm:h-10 sm:text-lg'
-                  />
-                  <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
-                    <span className='text-muted-foreground truncate text-xs'>
-                      {t('Amount to pay:')}
-                    </span>
-                    {calculating ? (
-                      <Skeleton className='h-5 w-16' />
-                    ) : (
-                      <span className='text-sm font-semibold'>
-                        {formatCurrency(paymentAmount)}
+              {!casual && (
+                <div className='space-y-2.5 sm:space-y-3'>
+                  <Label
+                    htmlFor='topup-amount'
+                    className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
+                  >
+                    {t('Custom Amount')}
+                  </Label>
+                  <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                    <Input
+                      id='topup-amount'
+                      type='number'
+                      value={localAmount}
+                      onChange={(e) => handleAmountChange(e.target.value)}
+                      min={minTopup}
+                      placeholder={`Minimum ${minTopup}`}
+                      className='h-9 text-base sm:h-10 sm:text-lg'
+                    />
+                    <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
+                      <span className='text-muted-foreground truncate text-xs'>
+                        {t('Amount to pay:')}
                       </span>
-                    )}
+                      {calculating ? (
+                        <Skeleton className='h-5 w-16' />
+                      ) : (
+                        <span className='text-sm font-semibold'>
+                          {formatCurrency(paymentAmount)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className='space-y-2.5 sm:space-y-3'>
                 <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
@@ -461,7 +468,10 @@ export function RechargeFormCard({
           </div>
         )}
 
-      {/* Redemption Code Section */}
+      {/* Redemption Code Section — hidden for casual users since they
+        * don't have promo / wholesale codes anyway. Dev / admin users
+        * (running operations on their account) can still see it. */}
+      {!casual && (
       <div className='space-y-2.5 border-t pt-4 sm:space-y-3 sm:pt-6'>
         <div className='flex items-center gap-2'>
           <Gift className='text-muted-foreground h-4 w-4' />
@@ -505,6 +515,7 @@ export function RechargeFormCard({
           </p>
         )}
       </div>
+      )}
     </TitledCard>
   )
 }
