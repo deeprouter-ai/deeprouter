@@ -200,14 +200,21 @@ function BillingBreakdown(props: {
     }
   }
 
-  const userGR = other.user_group_ratio
-  const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
-  const effectiveGR = isUserGR ? userGR : other.group_ratio
-  if (effectiveGR != null && Number.isFinite(effectiveGR)) {
-    rows.push({
-      label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
-      value: `${formatRatio(effectiveGR)}x`,
-    })
+  // Group ratio / user-exclusive ratio are operator concepts (markup
+  // multipliers) — show only to admin users in the per-call detail
+  // breakdown. Non-admin viewers see the final billed amount via the
+  // surrounding rows, which is sufficient for "why was I charged X?".
+  if (isAdmin) {
+    const userGR = other.user_group_ratio
+    const isUserGR =
+      userGR != null && Number.isFinite(userGR) && userGR !== -1
+    const effectiveGR = isUserGR ? userGR : other.group_ratio
+    if (effectiveGR != null && Number.isFinite(effectiveGR)) {
+      rows.push({
+        label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
+        value: `${formatRatio(effectiveGR)}x`,
+      })
+    }
   }
 
   if (!isTieredExpr && isClaude && hasAnyCacheTokens(other)) {

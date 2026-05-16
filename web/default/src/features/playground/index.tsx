@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getUserModels, getUserGroups } from './api'
 import { PlaygroundChat } from './components/playground-chat'
+import { PlaygroundEmptyState } from './components/playground-empty-state'
 import { PlaygroundInput } from './components/playground-input'
 import { DEFAULT_GROUP } from './constants'
 import { usePlaygroundState, useChatHandler } from './hooks'
@@ -174,18 +175,22 @@ export function Playground() {
     <div className='relative flex size-full flex-col overflow-hidden'>
       {/* Full-width scroll container: scrolling works even over side whitespace */}
       <div className='flex flex-1 flex-col overflow-hidden'>
-        <PlaygroundChat
-          messages={messages}
-          onCopyMessage={handleCopyMessage}
-          onRegenerateMessage={handleRegenerateMessage}
-          onEditMessage={handleEditMessage}
-          onDeleteMessage={handleDeleteMessage}
-          isGenerating={isGenerating}
-          editingKey={editingMessageKey}
-          onCancelEdit={handleEditOpenChange}
-          onSaveEdit={(newContent) => applyEdit(newContent, false)}
-          onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
-        />
+        {messages.length === 0 ? (
+          <PlaygroundEmptyState onSubmitPrompt={handleSendMessage} />
+        ) : (
+          <PlaygroundChat
+            messages={messages}
+            onCopyMessage={handleCopyMessage}
+            onRegenerateMessage={handleRegenerateMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            isGenerating={isGenerating}
+            editingKey={editingMessageKey}
+            onCancelEdit={handleEditOpenChange}
+            onSaveEdit={(newContent) => applyEdit(newContent, false)}
+            onSaveEditAndSubmit={(newContent) => applyEdit(newContent, true)}
+          />
+        )}
       </div>
 
       {/* Input area: center content and constrain to the same container width */}
