@@ -8,10 +8,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig(({ envMode }) => {
   const env = loadEnv({ mode: envMode, prefixes: ['VITE_'] })
+  // Use 127.0.0.1 (IPv4 explicit) instead of `localhost`. On macOS / dev
+  // machines that have anything else listening on IPv6 [::1]:3000 — such as
+  // an unrelated project's dev server — the OS resolves `localhost` to IPv6
+  // first and the proxy lands on the wrong service, producing confusing
+  // 404s on /api/* routes. Docker's host network bind is on *:3000 so the
+  // backend reaches us on either family; pinning the IPv4 path is the
+  // safer, predictable default.
   const serverUrl =
     process.env.VITE_REACT_APP_SERVER_URL ||
     env.rawPublicVars.VITE_REACT_APP_SERVER_URL ||
-    'http://localhost:3000'
+    'http://127.0.0.1:3000'
 
   const isProd = envMode === 'production'
   const devProxy = Object.fromEntries(
