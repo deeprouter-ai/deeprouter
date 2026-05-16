@@ -417,17 +417,11 @@
     "Average RPM": "平均 RPM",
     "Average TPM": "平均 TPM",
     "Average TTFT": "平均首 Token 延迟",
-<<<<<<< Updated upstream
     "Average latency": "平均延迟",
     "Average latency, TTFT, and success rate by group": "各分组的平均延迟、首 Token 延迟和成功率",
     "Average time-to-first-token (TTFT) by group": "各分组的平均首 Token 延迟（TTFT）",
     "Average tokens per second sustained per group": "各分组持续输出的平均每秒 token 数",
-=======
     "Avg. latency": "平均延迟",
-    "AWS": "AWS",
-    "AWS Bedrock Claude Compat": "AWS Bedrock Claude 兼容模板",
-    "AWS Key Format": "AWS 密钥格式",
->>>>>>> Stashed changes
     "Azure": "Azure",
     "Back": "返回",
     "Back to Home": "返回主页",
@@ -626,6 +620,7 @@
     "Chat configuration JSON": "聊天配置 JSON",
     "Chat preset not found": "未找到聊天预设",
     "Chat session management": "聊天会话管理",
+    "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.": "在一个平台上即可对话 GPT-5、Claude、Gemini 等 20+ 模型 —— 无需 API 密钥、无需海外信用卡、无需开发集成。",
     "ChatCompletions -> Responses Compatibility": "ChatCompletions → 响应兼容",
     "Check for updates": "检查更新",
     "Check in daily to receive random quota rewards": "每日签到可获得随机额度奖励",
@@ -1213,6 +1208,7 @@
     "Drawing Logs": "绘图日志",
     "Drawing logs": "绘制日志",
     "Drawing task records": "绘图任务记录",
+    "Drop-in OpenAI-compatible API": "兼容 OpenAI 的即插即用 API",
     "Duplicate": "重复",
     "Duplicate group names: {{names}}": "存在重复的分组名称：{{names}}",
     "Duration": "耗时",
@@ -1700,11 +1696,12 @@
     "Full width": "全宽",
     "Function calling": "函数调用",
     "Functions": "函数",
-    "Gateway overview": "网关概览",
     "GC Count": "GC 次数",
     "GC executed": "GC 已执行",
     "GC execution failed": "GC 执行失败",
+    "GPT-5, Claude, Gemini & 20+ models": "GPT-5、Claude、Gemini 等 20+ 模型",
     "GPU count": "GPU 数量",
+    "Gateway overview": "网关概览",
     "Gemini": "Gemini",
     "Gemini Image 4K": "Gemini 图片 4K",
     "Gemini will continue to auto-detect thinking mode even with the adapter disabled. Enable this only when you need finer control over pricing and budgeting.": "即使禁用适配器，Gemini 也会继续自动检测思维模式。仅当您需要对定价和预算进行更精细的控制时才启用此选项。",
@@ -1935,20 +1932,7 @@
     "Inviter Reward": "邀请者奖励",
     "Invites": "邀请",
     "Invoke developer-defined functions with structured arguments": "使用结构化参数调用开发者定义的函数",
-<<<<<<< Updated upstream
-=======
-    "io.net API Key": "io.net API 密钥",
-    "io.net Deployments": "io.net 部署",
-    "IP": "IP",
-    "IP Address": "IP 地址",
-    "IP Filter Mode": "IP 过滤模式",
-    "IP Restriction": "IP 限制",
-    "IP Whitelist (supports CIDR)": "IP 白名单（支持 CIDR 表达式）",
-    "is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.": "是一个用于自托管部署的开源 AI API 网关。接入多家上游服务，并集中管理模型、密钥、额度、日志与路由策略。",
-    "is less than the configured maximum cache size": "小于配置的最大缓存大小",
-    "is the default price; ": "为默认价格；",
     "Issue API keys, assign groups, enforce quotas, and keep access policies manageable as usage grows.": "签发 API 密钥、分配分组、执行额度限制，并在用量增长时保持访问策略可管理。",
->>>>>>> Stashed changes
     "It seems like the page you're looking for": "您要查找的页面似乎",
     "Items": "条目",
     "JSON": "JSON",
@@ -1980,11 +1964,11 @@
     "Keep this above 1 minute to avoid heavy database load": "保持此值大于 1 分钟以避免数据库负载过重",
     "Keep-alive Ping": "保持连接心跳",
     "Key": "密钥",
-    "Key and quota control": "密钥与额度控制",
     "Key Fingerprint": "Key 指纹",
     "Key Sources": "Key 来源",
     "Key Summary": "Key 摘要",
     "Key Update Mode": "密钥更新模式",
+    "Key and quota control": "密钥与额度控制",
     "Keys, OAuth credentials, and multi-key update behavior.": "管理密钥、OAuth 凭据和多密钥更新行为。",
     "Kling": "Kling",
     "Knowledge Base ID *": "知识库 ID *",
@@ -2054,12 +2038,7 @@
     "List of models supported by this channel. Use comma to separate multiple models.": "此渠道支持的模型列表。使用逗号分隔多个模型。",
     "List of origins (one per line) allowed for Passkey registration and authentication.": "允许用于 Passkey 注册和身份验证的来源列表（每行一个）。",
     "List view": "列表视图",
-<<<<<<< Updated upstream
-=======
     "Live policy": "实时策略",
-    "LLM Leaderboard": "LLM 排行榜",
-    "LLM prompt helper": "LLM 辅助设计提示词",
->>>>>>> Stashed changes
     "Load Balancing": "负载均衡",
     "Load template...": "加载模板...",
     "Loader": "加载器",
@@ -2519,23 +2498,6 @@
     "OAuth Integrations": "OAuth 集成",
     "OAuth failed": "OAuth 失败",
     "OAuth start failed": "OAuth 启动失败",
-<<<<<<< Updated upstream
-=======
-    "Object Prune Rules": "对象清理规则",
-    "Observability": "可观测性",
-    "Observed latency": "观测延迟",
-    "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.": "请在 Waffo 后台获取 API 密钥、商户 ID 以及 RSA 密钥对，并配置回调地址。",
-    "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook": "请在 Waffo 后台获取商户、店铺、商品与签名密钥。Webhook 地址：<ServerAddress>/api/waffo-pancake/webhook",
-    "Ocean Breeze": "海风",
-    "of": "条，共",
-    "of 3:": "共 3 个：",
-    "off": "关闭",
-    "Official": "官方",
-    "Official documentation": "官方说明",
-    "Official Repository": "官方仓库",
-    "Official Sync": "官方同步",
-    "OhMyGPT": "OhMyGPT",
->>>>>>> Stashed changes
     "OIDC": "OIDC",
     "OIDC Client ID": "OIDC 客户端 ID",
     "OIDC Client Secret": "OIDC 客户端密钥",
@@ -2544,6 +2506,7 @@
     "OIDC endpoints discovered successfully": "OIDC 端点发现成功",
     "Object Prune Rules": "对象清理规则",
     "Observability": "可观测性",
+    "Observed latency": "观测延迟",
     "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.": "请在 Waffo 后台获取 API 密钥、商户 ID 以及 RSA 密钥对，并配置回调地址。",
     "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook": "请在 Waffo 后台获取商户、店铺、商品与签名密钥。Webhook 地址：<ServerAddress>/api/waffo-pancake/webhook",
     "Ocean Breeze": "海风",
@@ -2559,13 +2522,9 @@
     "One API": "One API",
     "One IP or CIDR range per line": "每行一个 IP 或 CIDR 范围",
     "One IP per line (empty for no restriction)": "每行一个 IP (留空表示无限制)",
-<<<<<<< Updated upstream
     "One domain per line": "每行一个域名",
     "One domain per line (only used when domain restriction is enabled)": "每行一个域名 (仅在启用域名限制时使用)",
-=======
-    "one keyword per line": "每行一个关键词",
     "One route, many models": "一条路由，多种模型",
->>>>>>> Stashed changes
     "Online": "在线",
     "Online payment is not enabled. Please contact the administrator.": "管理员未开启在线支付功能，请联系管理员配置。",
     "Online topup is not enabled. Please use redemption code or contact administrator.": "尚未启用在线充值。请使用兑换码或联系管理员。",
@@ -2590,11 +2549,7 @@
     "Open menu": "打开菜单",
     "Open release": "打开版本",
     "Open source": "开源",
-<<<<<<< Updated upstream
-=======
-    "Open Source": "开源项目",
     "Open source attribution": "开源归属",
->>>>>>> Stashed changes
     "Open the io.net console API Keys page": "打开 io.net 控制台 API 密钥页面",
     "Open theme settings": "打开主题设置",
     "Open weights": "开放权重",
@@ -2609,11 +2564,8 @@
     "Opened authorization page": "已打开授权页",
     "Operation": "操作",
     "Operation Type": "操作类型",
-<<<<<<< Updated upstream
     "Operation failed": "操作失败",
-=======
     "Operational visibility": "运营可观测性",
->>>>>>> Stashed changes
     "Operations": "运维",
     "Operator Admin": "操作管理员",
     "Optimize system for self-hosted single-user usage": "优化系统以适应自托管单用户使用",
@@ -2724,6 +2676,7 @@
     "Path not set": "未设置路径",
     "Path:": "路径：",
     "Pay": "支付",
+    "Pay in your local currency": "用本地货币付款",
     "Pay-as-you-go with real-time usage monitoring": "按量付费，实时监控使用情况",
     "Payment Channel": "支付渠道",
     "Payment Gateway": "支付网关",
@@ -2906,13 +2859,8 @@
     "Pricing group example": "定价分组示例",
     "Pricing groups": "定价分组",
     "Pricing mode": "定价模式",
-<<<<<<< Updated upstream
-=======
-    "Pricing Ratios": "定价比例",
-    "Pricing Type": "定价类型",
-    "Primary lane": "主路由",
->>>>>>> Stashed changes
     "Primary Model": "主模型",
+    "Primary lane": "主路由",
     "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)": "基于请求上下文提取的 Key，优先复用上一次成功的渠道（粘滞选路）",
     "Priority": "优先级",
     "Priority (Default)": "优先级（默认）",
@@ -2954,11 +2902,8 @@
     "Provide per-model header overrides as JSON. Useful for enabling beta features such as expanded context windows.": "以 JSON 格式提供按模型划分的标头覆盖。可用于启用测试功能，例如扩展上下文窗口。",
     "Provider": "提供商",
     "Provider & data privacy": "厂商与数据隐私",
-<<<<<<< Updated upstream
     "Provider Name": "提供商名称",
-=======
     "Provider coverage": "供应商覆盖",
->>>>>>> Stashed changes
     "Provider created successfully": "提供商创建成功",
     "Provider deleted successfully": "提供商删除成功",
     "Provider type (OpenAI, Anthropic, etc.)": "提供商类型 (OpenAI、Anthropic 等)",
@@ -3428,8 +3373,8 @@
     "Selectable groups": "可选分组",
     "Selected conflicts were overwritten successfully.": "选中的冲突已成功覆盖。",
     "Selected when creating a token and used as the default billing group for API calls.": "创建令牌时选择，用作 API 调用的默认计费分组。",
-    "Self-hosted first": "自托管优先",
     "Self-Use Mode": "自用模式",
+    "Self-hosted first": "自托管优先",
     "Send": "发送",
     "Send a request": "发送请求",
     "Send code": "发送验证码",
@@ -3926,6 +3871,7 @@
     "Trim leading/trailing whitespace": "去掉字符串头尾空白",
     "Truncate embeddings to this many dimensions": "将向量截断到指定维度",
     "Trusted": "受信任",
+    "Trusted by developers shipping production AI features.": "被一线 AI 开发者信赖。",
     "Try adjusting your search": "请尝试调整搜索条件",
     "Try adjusting your search to locate a missing model.": "尝试调整您的搜索以找到缺失的模型。",
     "Tune selection priority, testing, status handling, and request overrides.": "调整选择优先级、测试、状态处理和请求覆盖。",
@@ -4038,11 +3984,8 @@
     "Uptime Kuma groups saved successfully": "Uptime Kuma 组保存成功",
     "Uptime since": "运行时间始于",
     "Usage": "用量",
-<<<<<<< Updated upstream
     "Usage Logs": "使用日志",
-=======
     "Usage and billing clarity": "用量与计费清晰可见",
->>>>>>> Stashed changes
     "Usage at a glance": "用量概览",
     "Usage guide": "使用教程",
     "Usage logs": "使用日志",
@@ -4221,14 +4164,6 @@
     "Webhook secret": "Webhook 密钥",
     "Webhook signing secret (leave blank unless updating)": "Webhook 签名密钥（除非更新，否则留空）",
     "Website is under maintenance!": "网站正在维护中！",
-<<<<<<< Updated upstream
-=======
-    "WeChat": "微信",
-    "WeChat login QR code": "微信登录二维码",
-    "WeChat Pay": "微信支付",
-    "WeChat QR code will be displayed here": "微信二维码将显示在此处",
-    "WeChat sign in": "微信登录",
->>>>>>> Stashed changes
     "Week": "本周",
     "Weekday": "星期",
     "Weekly": "每周",
@@ -4238,6 +4173,7 @@
     "Weekly token usage by model since launch": "自上线以来按模型分布的每周 Token 使用量",
     "Weight": "权重",
     "Weighted by request count": "按请求数加权",
+    "Welcome back": "欢迎回来",
     "Welcome back!": "欢迎回来！",
     "Welcome to our New API...": "欢迎使用我们的 New API...",
     "Well-Known URL": "Well-Known URL",
@@ -4259,12 +4195,8 @@
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "在容器或临时环境中运行时，请确保 SQLite 文件映射到持久存储，以避免重启时数据丢失。",
     "Whitelist": "白名单",
     "Whitelist (Only allow listed IPs)": "白名单（仅允许列出的 IP）",
-<<<<<<< Updated upstream
     "Whitelist (Only allow listed domains)": "白名单（仅允许列出的域）",
-=======
-    "whsec_xxx": "whsec_xxx",
     "Why DeepRouter": "为什么选择 DeepRouter",
->>>>>>> Stashed changes
     "Window:": "窗口：",
     "Wire encoding for the embedding vectors": "向量传输的编码格式",
     "Without additional conditions, only the type above is used for pruning.": "未添加附加条件时，仅使用上方 type 进行清理。",
@@ -4297,22 +4229,17 @@
     "Your GitHub OAuth Client Secret": "您的 GitHub OAuth 客户端密钥",
     "Your Referral Link": "您的推荐链接",
     "Your Telegram Bot Token": "您的 Telegram 机器人令牌",
-    "Your transaction history will appear here": "您的交易历史会显示在这里",
     "Your Turnstile secret key": "您的 Turnstile 密钥",
     "Your Turnstile site key": "您的 Turnstile 站点密钥",
-<<<<<<< Updated upstream
     "Your new API key is ready": "你的新 API Key 已准备好",
     "Your new backup codes are ready": "您的新备份代码已准备就绪",
     "Your setup guide is collapsed so usage stays in focus.": "设置引导已收起，让用量信息保持在焦点位置。",
     "Your system access token for API authentication. Keep it secure and don't share it with others.": "您的系统访问令牌，用于 API 认证。请妥善保管，不要与他人分享。",
     "Your transaction history will appear here": "您的交易历史会显示在这里",
-=======
->>>>>>> Stashed changes
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
     "Zoom": "缩放",
-<<<<<<< Updated upstream
     "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]": "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]",
     "[{\"name\":\"支付宝\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]": "[{\"name\":\"支付宝\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]",
     "_copy": "_复制",
@@ -4395,7 +4322,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -4549,13 +4476,5 @@
     "{{value}}s": "{{value}} 秒",
     "| Based on": "| 基于",
     "© 2025 Your Company. All rights reserved.": "© 2025 您的公司。保留所有权利。"
-=======
-    "Welcome back": "欢迎回来",
-    "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.": "在一个平台上即可对话 GPT-5、Claude、Gemini 等 20+ 模型 —— 无需 API 密钥、无需海外信用卡、无需开发集成。",
-    "GPT-5, Claude, Gemini & 20+ models": "GPT-5、Claude、Gemini 等 20+ 模型",
-    "Pay in your local currency": "用本地货币付款",
-    "Drop-in OpenAI-compatible API": "兼容 OpenAI 的即插即用 API",
-    "Trusted by developers shipping production AI features.": "被一线 AI 开发者信赖。"
->>>>>>> Stashed changes
   }
 }
