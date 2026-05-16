@@ -119,9 +119,22 @@ export async function fetchTokenKeysBatch(ids: number[]): Promise<{
 
 // Fetch Simple-mode purpose cards + price tier metadata.
 // Drives the picker UI in the Create API Key drawer.
+//
+// Falls back to a hardcoded mirror of setting/alias_setting/seed/aliases.yaml
+// when the backend hasn't shipped the endpoint yet (binary needs rebuild) or
+// returns an empty payload. Production servers will override.
 export async function getApiKeyPurposes(): Promise<
   ApiResponse<ApiKeyPurposesResponse>
 > {
-  const res = await api.get('/api/user/self/api-key-purposes')
-  return res.data
+  try {
+    const res = await api.get('/api/user/self/api-key-purposes')
+    const body = res.data as ApiResponse<ApiKeyPurposesResponse>
+    if (body?.success && body.data?.purposes?.length) return body
+  } catch {
+    /* fall through to fallback */
+  }
+  const { FALLBACK_API_KEY_PURPOSES } = await import(
+    './lib/api-key-purposes-fallback'
+  )
+  return { success: true, data: FALLBACK_API_KEY_PURPOSES }
 }

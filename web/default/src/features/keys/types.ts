@@ -150,6 +150,7 @@ export interface ApiKeyPurposesResponse {
 // ============================================================================
 
 export type ApiKeysDialogType =
+  | 'mode-picker'
   | 'create'
   | 'update'
   | 'delete'

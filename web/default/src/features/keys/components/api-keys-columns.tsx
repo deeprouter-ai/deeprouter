@@ -98,6 +98,9 @@ function useGroupRatios(): Record<string, number> {
 export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
   const { t } = useTranslation()
   const groupRatios = useGroupRatios()
+  const isAdmin = useAuthStore((s) =>
+    Boolean(s.auth.user?.role && s.auth.user.role >= 10)
+  )
   return [
     {
       id: 'select',
@@ -220,48 +223,56 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       },
       meta: { label: t('Quota') },
     },
-    {
-      accessorKey: 'group',
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Group')} />
-      ),
-      cell: ({ row }) => {
-        const apiKey = row.original
-        const group = row.getValue('group') as string
-        const ratio = group && group !== 'auto' ? groupRatios[group] : undefined
+    // Group column is admin-only. End users should never see "1.2x" markup
+    // multipliers next to their keys (PRD — group + ratio belong in the
+    // operator surface, not the customer surface).
+    ...(isAdmin
+      ? [
+          {
+            accessorKey: 'group',
+            header: ({ column }) => (
+              <DataTableColumnHeader column={column} title={t('Group')} />
+            ),
+            cell: ({ row }) => {
+              const apiKey = row.original
+              const group = row.getValue('group') as string
+              const ratio =
+                group && group !== 'auto' ? groupRatios[group] : undefined
 
-        if (group === 'auto') {
-          return (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className='inline-flex items-center gap-1.5 text-xs' />
-                }
-              >
-                <GroupBadge group='auto' />
-                {apiKey.cross_group_retry && (
-                  <>
-                    <span className='text-muted-foreground/30'>·</span>
-                    <span className='text-muted-foreground/60'>
-                      {t('Cross-group')}
-                    </span>
-                  </>
-                )}
-              </TooltipTrigger>
-              <TooltipContent>
-                <span className='text-xs'>
-                  {t(
-                    'Automatically selects the best available group with circuit breaker mechanism'
-                  )}
-                </span>
-              </TooltipContent>
-            </Tooltip>
-          )
-        }
-        return <GroupBadge group={group} ratio={ratio} />
-      },
-      meta: { label: t('Group'), mobileHidden: true },
-    },
+              if (group === 'auto') {
+                return (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className='inline-flex items-center gap-1.5 text-xs' />
+                      }
+                    >
+                      <GroupBadge group='auto' />
+                      {apiKey.cross_group_retry && (
+                        <>
+                          <span className='text-muted-foreground/30'>·</span>
+                          <span className='text-muted-foreground/60'>
+                            {t('Cross-group')}
+                          </span>
+                        </>
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span className='text-xs'>
+                        {t(
+                          'Automatically selects the best available group with circuit breaker mechanism'
+                        )}
+                      </span>
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              }
+              return <GroupBadge group={group} ratio={ratio} />
+            },
+            meta: { label: t('Group'), mobileHidden: true },
+          } satisfies ColumnDef<ApiKey>,
+        ]
+      : []),
     {
       id: 'model_limits',
       accessorKey: 'model_limits',

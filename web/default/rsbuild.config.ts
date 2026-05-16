@@ -72,6 +72,11 @@ export default defineConfig(({ envMode }) => {
     },
     server: {
       host: '0.0.0.0',
+      // Pinned to 17231 (uncommon, unlikely to clash with other dev servers).
+      // 3000/3001 routinely collide with Node/Next/CRA/Vite defaults; we own
+      // 17231 for DeepRouter so the URL is stable across machines.
+      port: 17231,
+      strictPort: false,
       proxy: devProxy,
     },
     output: {

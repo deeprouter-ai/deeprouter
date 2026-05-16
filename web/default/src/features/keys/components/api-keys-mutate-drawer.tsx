@@ -59,11 +59,10 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
-import { createApiKey, updateApiKey, getApiKey } from '../api'
+import { createApiKey, updateApiKey, getApiKey, getApiKeyPurposes } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES, DEFAULT_GROUP } from '../constants'
 import {
   apiKeyFormSchema,
@@ -72,15 +71,23 @@ import {
   detectAdvancedMode,
   getApiKeyFormDefaultValues,
   loadPreferredMode,
-  savePreferredMode,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import { type ApiKey } from '../types'
+import {
+  type ApiKey,
+  type SimpleBrand,
+  type SimplePriceTierId,
+  type SimplePurposeId,
+} from '../types'
+import { ApiKeyBrandFilter } from './api-key-brand-filter'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
+import { ApiKeyPriceTier } from './api-key-price-tier'
+import { ApiKeyPurposePicker } from './api-key-purpose-picker'
+import { ApiKeySuccessDialog } from './api-key-success-dialog'
 import { useApiKeys } from './api-keys-provider'
 
 type ApiKeyMutateDrawerProps = {
@@ -126,7 +133,7 @@ export function ApiKeysMutateDrawer({
 }: ApiKeyMutateDrawerProps) {
   const { t } = useTranslation()
   const isUpdate = !!currentRow
-  const { triggerRefresh } = useApiKeys()
+  const { triggerRefresh, setOpen: setApiKeysDialog } = useApiKeys()
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -155,6 +162,24 @@ export function ApiKeysMutateDrawer({
     queryFn: getUserGroups,
     staleTime: 5 * 60 * 1000,
   })
+
+  // Simple-mode picker metadata (6 purpose cards + 4 price tiers).
+  const { data: purposesData, isLoading: purposesLoading } = useQuery({
+    queryKey: ['api-key-purposes'],
+    queryFn: getApiKeyPurposes,
+    staleTime: 10 * 60 * 1000,
+  })
+  const purposes = purposesData?.data?.purposes ?? []
+  const priceTiers = purposesData?.data?.price_tiers ?? []
+  const defaultPriceTier = purposesData?.data?.default_price_tier ?? 'standard'
+
+  // Once a Simple-mode key is created, surface key + base URL + client links
+  // in the success dialog (PRD §4.2). Lives outside the drawer so it
+  // survives the drawer closing.
+  const [createdKey, setCreatedKey] = useState<string | null>(null)
+  const [createdPurpose, setCreatedPurpose] = useState<
+    SimplePurposeId | undefined
+  >(undefined)
 
   const models = modelsData?.data || []
   const groupsRaw = groupsData?.data || {}
@@ -205,12 +230,12 @@ export function ApiKeysMutateDrawer({
     }
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, userDefaultGroup])
 
-  const handleModeChange = (next: string) => {
-    const nextMode: CreateMode = next === 'advanced' ? 'advanced' : 'simple'
-    setMode(nextMode)
-    // Only persist the preference for the create flow — edits inherit the
-    // smart-detected mode from the token's actual state.
-    if (!isUpdate) savePreferredMode(nextMode)
+  // Re-open the mode-picker dialog so the user can switch modes mid-create.
+  // The drawer stays open underneath; when the user picks a mode the picker
+  // closes itself and our form-init useEffect re-runs against the new
+  // preferred mode (since we close + reopen 'create').
+  const handleChangeMode = () => {
+    setApiKeysDialog('mode-picker')
   }
 
   const onSubmit = async (data: ApiKeyFormValues) => {
@@ -234,17 +259,19 @@ export function ApiKeysMutateDrawer({
         // Create mode - handle batch creation
         const count = data.tokenCount || 1
         let successCount = 0
+        let firstKey: string | null = null
 
         for (let i = 0; i < count; i++) {
           const result = await createApiKey({
             ...basePayload,
             name:
-              i === 0 && data.name
-                ? data.name
-                : `${data.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
+              i === 0 && basePayload.name
+                ? basePayload.name
+                : `${basePayload.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
           })
           if (result.success) {
             successCount++
+            if (i === 0 && result.data?.key) firstKey = result.data.key
           } else {
             toast.error(result.message || t(ERROR_MESSAGES.CREATE_FAILED))
             break
@@ -252,13 +279,22 @@ export function ApiKeysMutateDrawer({
         }
 
         if (successCount > 0) {
-          toast.success(
-            t('Successfully created {{count}} API Key(s)', {
-              count: successCount,
-            })
-          )
-          onOpenChange(false)
           triggerRefresh()
+          // Simple + single-key create → reveal key + base url + client
+          // tutorial chips in the success dialog (PRD §4.2). Batch creates
+          // skip the dialog because power users don't need it.
+          if (mode === 'simple' && count === 1 && firstKey) {
+            setCreatedKey(firstKey)
+            setCreatedPurpose(data.simple_purpose as SimplePurposeId | undefined)
+            onOpenChange(false)
+          } else {
+            toast.success(
+              t('Successfully created {{count}} API Key(s)', {
+                count: successCount,
+              })
+            )
+            onOpenChange(false)
+          }
         }
       }
     } catch (_error) {
@@ -291,6 +327,7 @@ export function ApiKeysMutateDrawer({
     : t('Enter quota in {{currency}}', { currency: currencyLabel })
   const selectedGroup = form.watch('group')
   const unlimitedQuota = form.watch('unlimited_quota')
+  const simplePurpose = form.watch('simple_purpose')
 
   return (
     <Sheet
@@ -307,15 +344,33 @@ export function ApiKeysMutateDrawer({
         className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[620px]'
       >
         <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
-          <SheetTitle className='text-base sm:text-lg'>
-            {isUpdate ? t('Update API Key') : t('Create API Key')}
-          </SheetTitle>
-          <SheetDescription className='pr-6 text-xs sm:text-sm'>
-            {isUpdate
-              ? t('Update the API key by providing necessary info.')
-              : t('Add a new API key by providing necessary info.')}{' '}
-            {t("Click save when you're done.")}
-          </SheetDescription>
+          <div className='flex items-start justify-between gap-3'>
+            <div className='min-w-0'>
+              <SheetTitle className='text-base sm:text-lg'>
+                {isUpdate ? t('Update API Key') : t('Create API Key')}
+              </SheetTitle>
+              <SheetDescription className='pr-6 text-xs sm:text-sm'>
+                {isUpdate
+                  ? t('Update the API key by providing necessary info.')
+                  : mode === 'simple'
+                    ? t(
+                        'Simple mode — defaults to unlimited models and any IP.'
+                      )
+                    : t('Add a new API key by providing necessary info.')}
+              </SheetDescription>
+            </div>
+            {!isUpdate && (
+              <button
+                type='button'
+                onClick={handleChangeMode}
+                className='text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline focus-visible:outline-none'
+              >
+                {mode === 'simple'
+                  ? t('Switch to Advanced')
+                  : t('Switch to Simple')}
+              </button>
+            )}
+          </div>
         </SheetHeader>
         <Form {...form}>
           <form
@@ -323,26 +378,141 @@ export function ApiKeysMutateDrawer({
             onSubmit={form.handleSubmit(onSubmit)}
             className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
           >
-            {/* DeepRouter Simple ↔ Advanced mode toggle. Simple hides the
-              * group / cross_group_retry / tokenCount / model_limits /
-              * allow_ips fields so a first-time user sees just "name +
-              * expiry + quota" — closer to OpenAI's 2-field create flow.
-              * Hidden values are still kept in react-hook-form state, so a
-              * mode toggle is purely visual (no silent data loss). */}
-            <Tabs value={mode} onValueChange={handleModeChange}>
-              <TabsList className='grid w-full grid-cols-2'>
-                <TabsTrigger value='simple'>{t('Simple')}</TabsTrigger>
-                <TabsTrigger value='advanced'>{t('Advanced')}</TabsTrigger>
-              </TabsList>
-              {mode === 'simple' && (
-                <p className='text-muted-foreground mt-2 text-xs'>
-                  {t(
-                    'Simple key creation — defaults to unlimited models and any IP. Switch to Advanced to restrict.'
+            {/* Mode is chosen via the mode-picker Dialog before the drawer
+              * opens (see ApiKeysDialogs). The "Switch to ..." link in the
+              * SheetHeader re-opens the picker mid-flow. Simple shows a
+              * 6-card purpose picker (PRD §4.1); Advanced shows the full
+              * form. Hidden values stay in react-hook-form state, so toggle
+              * is purely visual (no silent data loss). */}
+            {mode === 'simple' && (
+              <>
+                <ApiKeyFormSection
+                  title={t('Name your key')}
+                  description={t(
+                    'Optional. A name helps you remember which key is which.'
                   )}
-                </p>
-              )}
-            </Tabs>
+                  icon={KeyRound}
+                >
+                  <FormField
+                    control={form.control}
+                    name='name'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder={t(
+                              'e.g. cherry-studio-personal (optional)'
+                            )}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </ApiKeyFormSection>
 
+                <ApiKeyFormSection
+                  title={t('Choose your AI')}
+                  description={t(
+                    'Pick the task — we route to the best model for you.'
+                  )}
+                  icon={Settings2}
+                >
+                  <FormField
+                    control={form.control}
+                    name='simple_purpose'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <ApiKeyPurposePicker
+                            options={purposes}
+                            value={field.value as SimplePurposeId | undefined}
+                            isLoading={purposesLoading}
+                            onValueChange={(v) => {
+                              field.onChange(v)
+                              if (
+                                v === 'all' &&
+                                !form.getValues('simple_price_tier')
+                              ) {
+                                form.setValue(
+                                  'simple_price_tier',
+                                  defaultPriceTier as SimplePriceTierId
+                                )
+                              }
+                              const next = purposes.find((p) => p.id === v)
+                              const currentBrand =
+                                form.getValues('simple_brand')
+                              if (
+                                currentBrand &&
+                                next &&
+                                !next.available_brands.includes(
+                                  currentBrand as SimpleBrand
+                                )
+                              ) {
+                                form.setValue('simple_brand', undefined)
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {simplePurpose &&
+                    simplePurpose !== 'all' &&
+                    (() => {
+                      const card = purposes.find((p) => p.id === simplePurpose)
+                      if (!card || card.available_brands.length === 0)
+                        return null
+                      return (
+                        <FormField
+                          control={form.control}
+                          name='simple_brand'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className='text-xs'>
+                                {t('Prefer a provider? (optional)')}
+                              </FormLabel>
+                              <FormControl>
+                                <ApiKeyBrandFilter
+                                  availableBrands={card.available_brands}
+                                  value={field.value as SimpleBrand | undefined}
+                                  onValueChange={field.onChange}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )
+                    })()}
+
+                  {simplePurpose === 'all' && (
+                    <FormField
+                      control={form.control}
+                      name='simple_price_tier'
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <ApiKeyPriceTier
+                              tiers={priceTiers}
+                              value={field.value as SimplePriceTierId}
+                              onValueChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </ApiKeyFormSection>
+              </>
+            )}
+
+            {mode === 'advanced' && (
+              <>
             <ApiKeyFormSection
               title={t('Basic Information')}
               description={t('Set API key basic information')}
@@ -362,8 +532,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {mode === 'advanced' && (
-                <FormField
+              <FormField
                   control={form.control}
                   name='group'
                   render={({ field }) => (
@@ -381,9 +550,8 @@ export function ApiKeysMutateDrawer({
                     </FormItem>
                   )}
                 />
-              )}
 
-              {mode === 'advanced' && selectedGroup === 'auto' && (
+              {selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -469,7 +637,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {!isUpdate && mode === 'advanced' && (
+              {!isUpdate && (
                 <FormField
                   control={form.control}
                   name='tokenCount'
@@ -559,7 +727,43 @@ export function ApiKeysMutateDrawer({
               />
             </ApiKeyFormSection>
 
-            {mode === 'advanced' && (
+            <ApiKeyFormSection
+              title={t('Allowed models')}
+              description={t(
+                'Pick which models this key can call. Leave empty to allow every model your account has access to.'
+              )}
+              icon={Settings2}
+            >
+              <FormField
+                control={form.control}
+                name='model_limits'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <MultiSelect
+                        options={models.map((m) => ({ label: m, value: m }))}
+                        selected={field.value}
+                        onChange={field.onChange}
+                        placeholder={t(
+                          'Search and pick models (e.g. deepseek-v3, gpt-4o, claude-sonnet-4-7) — empty = all'
+                        )}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {field.value.length > 0
+                        ? t('{{count}} model(s) selected', {
+                            count: field.value.length,
+                          })
+                        : t(
+                            'All available models. Clients can call any model your channels expose.'
+                          )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </ApiKeyFormSection>
+
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <section className='bg-card rounded-lg border'>
                 <CollapsibleTrigger
@@ -592,33 +796,6 @@ export function ApiKeysMutateDrawer({
                   <div className='space-y-3 border-t p-3 sm:space-y-4 sm:p-4'>
                     <FormField
                       control={form.control}
-                      name='model_limits'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('Model Limits')}</FormLabel>
-                          <FormControl>
-                            <MultiSelect
-                              options={models.map((m) => ({
-                                label: m,
-                                value: m,
-                              }))}
-                              selected={field.value}
-                              onChange={field.onChange}
-                              placeholder={t(
-                                'Select models (empty for allow all)'
-                              )}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {t('Limit which models can be used with this key')}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
                       name='allow_ips'
                       render={({ field }) => (
                         <FormItem>
@@ -648,6 +825,7 @@ export function ApiKeysMutateDrawer({
                 </CollapsibleContent>
               </section>
             </Collapsible>
+              </>
             )}
           </form>
         </Form>
@@ -663,10 +841,23 @@ export function ApiKeysMutateDrawer({
             disabled={isSubmitting}
             className='w-full sm:w-auto'
           >
-            {isSubmitting ? t('Saving...') : t('Save changes')}
+            {isSubmitting
+              ? t('Saving...')
+              : mode === 'simple' && !isUpdate
+                ? t('Create key')
+                : t('Save changes')}
           </Button>
         </SheetFooter>
       </SheetContent>
+      <ApiKeySuccessDialog
+        open={!!createdKey}
+        apiKey={createdKey}
+        purpose={createdPurpose}
+        onClose={() => {
+          setCreatedKey(null)
+          setCreatedPurpose(undefined)
+        }}
+      />
     </Sheet>
   )
 }

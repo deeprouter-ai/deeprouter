@@ -17,6 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
+import { savePreferredMode } from '../lib'
+import { ApiKeyModePickerDialog } from './api-key-mode-picker-dialog'
 import { ApiKeysDeleteDialog } from './api-keys-delete-dialog'
 import { ApiKeysMutateDrawer } from './api-keys-mutate-drawer'
 import { useApiKeys } from './api-keys-provider'
@@ -38,8 +40,21 @@ export function ApiKeysDialogs() {
     }
   }, [open])
 
+  // User picked Simple/Advanced in the mode-picker dialog → persist the
+  // preference and open the create drawer (which reads loadPreferredMode()
+  // on open).
+  const handlePickMode = (mode: 'simple' | 'advanced') => {
+    savePreferredMode(mode)
+    setOpen('create')
+  }
+
   return (
     <>
+      <ApiKeyModePickerDialog
+        open={open === 'mode-picker'}
+        onOpenChange={(isOpen) => !isOpen && setOpen(null)}
+        onPick={handlePickMode}
+      />
       <ApiKeysMutateDrawer
         open={open === 'create' || open === 'update'}
         onOpenChange={(isOpen) => !isOpen && setOpen(null)}
