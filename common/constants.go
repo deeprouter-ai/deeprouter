@@ -120,7 +120,14 @@ var TurnstileSecretKey = ""
 var TelegramBotToken = ""
 var TelegramBotName = ""
 
-var QuotaForNewUser = 0
+// QuotaForNewUser is the trial credit granted to every new account at
+// signup time (consumed by model/user.go:410 inside User.Insert()).
+//
+// 500_000 = $1 USD = ~500K tokens at the standard 1:500_000 ratio. This is
+// enough for a casual user to chat ~100 turns with gpt-4o-mini and verify
+// the service end-to-end before topping up. Operators who don't want
+// trial credits can override to 0 in System Settings → Operations.
+var QuotaForNewUser = 500_000
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
 var ChannelDisableThreshold = 5.0

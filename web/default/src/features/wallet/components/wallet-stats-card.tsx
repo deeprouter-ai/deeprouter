@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { Activity, BarChart3, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatQuota } from '@/lib/format'
+import { estimateChats, formatCount } from '@/lib/usage-estimate'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { UserWalletData } from '../types'
 
@@ -45,23 +46,28 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
     )
   }
 
+  const balanceQuota = props.user?.quota ?? 0
+  const chats = estimateChats(balanceQuota)
   const stats = [
     {
       label: t('Current Balance'),
-      value: formatQuota(props.user?.quota ?? 0),
-      description: t('Remaining quota'),
+      value: formatQuota(balanceQuota),
+      description:
+        chats > 0
+          ? t('≈ {{count}} chats remaining', { count: formatCount(chats) })
+          : t('Top up to start using AI models'),
       icon: WalletCards,
     },
     {
       label: t('Total Usage'),
       value: formatQuota(props.user?.used_quota ?? 0),
-      description: t('Total consumed quota'),
+      description: t('Spent so far'),
       icon: BarChart3,
     },
     {
       label: t('API Requests'),
       value: (props.user?.request_count ?? 0).toLocaleString(),
-      description: t('Total requests made'),
+      description: t('Total calls made'),
       icon: Activity,
     },
   ]
@@ -81,7 +87,7 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
             <div className='text-foreground mt-1.5 font-mono text-base font-bold tracking-tight break-all tabular-nums sm:mt-2 sm:text-2xl'>
               {item.value}
             </div>
-            <div className='text-muted-foreground/60 mt-1 hidden text-xs md:block'>
+            <div className='text-muted-foreground/60 mt-1 text-xs'>
               {item.description}
             </div>
           </div>
