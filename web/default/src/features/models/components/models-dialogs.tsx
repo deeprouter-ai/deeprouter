@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { DescriptionDialog } from './dialogs/description-dialog'
 import { MissingModelsDialog } from './dialogs/missing-models-dialog'
 import { PrefillGroupManagement } from './dialogs/prefill-group-management'
+import { QuickImportModelsDialog } from './dialogs/quick-import-models-dialog'
 import { SyncWizardDialog } from './dialogs/sync-wizard-dialog'
 import { UpstreamConflictDialog } from './dialogs/upstream-conflict-dialog'
 import { VendorMutateDialog } from './dialogs/vendor-mutate-dialog'
@@ -60,6 +61,12 @@ export function ModelsDialogs() {
       {/* Sync Wizard Dialog */}
       <SyncWizardDialog
         open={open === 'sync-wizard'}
+        onOpenChange={(v) => !v && setOpen(null)}
+      />
+
+      {/* Quick Import Models Dialog (DeepRouter addition) */}
+      <QuickImportModelsDialog
+        open={open === 'quick-import-models'}
         onOpenChange={(v) => !v && setOpen(null)}
       />
 

@@ -23,6 +23,7 @@ import {
   List,
   Building2,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,16 @@ export function ModelsPrimaryButtons() {
 
   return (
     <div className='flex items-center gap-2'>
+      {/* Quick Import (preset models) */}
+      <Button
+        variant='outline'
+        size='sm'
+        onClick={() => setOpen('quick-import-models')}
+      >
+        <Sparkles className='h-4 w-4' />
+        <span className='max-sm:hidden'>{t('Quick Import')}</span>
+      </Button>
+
       {/* Create Model */}
       <Button onClick={handleCreateModel} size='sm'>
         <Plus className='h-4 w-4' />

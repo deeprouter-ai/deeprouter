@@ -41,6 +41,7 @@ type DialogType =
   | 'upstream-conflict'
   | 'prefill-groups'
   | 'description'
+  | 'quick-import-models'
   | null
 
 type ModelsContextType = {
