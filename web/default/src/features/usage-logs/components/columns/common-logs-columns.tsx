@@ -27,6 +27,7 @@ import {
   formatLogQuota,
   formatTimestampToDate,
 } from '@/lib/format'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -449,6 +450,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     ),
     cell: function TokenNameCell({ row }) {
       const { sensitiveVisible } = useUsageLogsContext()
+      const isAdmin = useIsAdmin()
       const log = row.original
       if (!isDisplayableLogType(log.type)) return null
 
@@ -461,10 +463,12 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
       if (!group) group = other?.group || ''
 
       const metaParts: string[] = []
-      const groupRatioText = getGroupRatioText(other)
-      if (group) {
+      // Group / Ratio belong to the operator surface — non-admin users
+      // shouldn't see "5x" multipliers in their own logs.
+      if (isAdmin && group) {
         metaParts.push(sensitiveVisible ? group : '••••')
       }
+      const groupRatioText = isAdmin ? getGroupRatioText(other) : null
       if (groupRatioText) metaParts.push(groupRatioText)
 
       return (

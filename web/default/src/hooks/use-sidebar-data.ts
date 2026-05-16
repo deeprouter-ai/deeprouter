@@ -90,7 +90,7 @@ export function useSidebarData(): SidebarData {
             icon: Key,
           },
           {
-            title: t('Usage Logs'),
+            title: t('Call history'),
             url: '/usage-logs/common',
             icon: FileText,
           },
