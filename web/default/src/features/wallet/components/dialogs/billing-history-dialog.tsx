@@ -172,12 +172,14 @@ export function BillingHistoryDialog({
               ) : records.length === 0 ? (
                 <div className='text-muted-foreground flex h-[320px] flex-col items-center justify-center text-center sm:h-[400px]'>
                   <p className='text-sm font-medium'>
-                    {t('No billing records found')}
+                    {keyword
+                      ? t('No billing records found')
+                      : t("You haven't recharged yet")}
                   </p>
                   <p className='mt-1 text-xs'>
                     {keyword
                       ? t('Try adjusting your search')
-                      : t('Your transaction history will appear here')}
+                      : t('Once you top up, your records appear here.')}
                   </p>
                 </div>
               ) : (
