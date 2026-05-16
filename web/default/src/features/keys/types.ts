@@ -45,6 +45,11 @@ export const apiKeySchema = z.object({
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
+  // DeepRouter Simple-mode bindings (PRD docs/tasks/api-key-simple-advanced-prd.md).
+  // Empty / unset means the key was created in Advanced mode.
+  simple_purpose: z.string().nullish().default(''),
+  simple_brand: z.string().nullish().default(''),
+  simple_price_tier: z.string().nullish().default(''),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
@@ -92,6 +97,52 @@ export interface ApiKeyFormData {
   allow_ips: string
   group: string
   cross_group_retry: boolean
+  // Optional Simple-mode bindings; empty in Advanced mode.
+  simple_purpose?: string
+  simple_brand?: string
+  simple_price_tier?: string
+}
+
+// ============================================================================
+// Simple-mode purpose & price-tier metadata (from GET /api/user/self/api-key-purposes)
+// ============================================================================
+
+export type SimplePurposeId =
+  | 'chat'
+  | 'coding'
+  | 'image'
+  | 'video'
+  | 'voice'
+  | 'all'
+
+export type SimpleBrand = 'claude' | 'openai' | 'gemini' | 'deepseek'
+
+export type SimplePriceTierId = 'economy' | 'standard' | 'premium' | 'ultra'
+
+export interface PurposeSummary {
+  id: SimplePurposeId
+  label: string
+  icon: string
+  desc: string
+  human_estimate: string
+  price_range: string
+  recommended_brand: SimpleBrand | ''
+  available_brands: SimpleBrand[]
+}
+
+export interface PriceTierSummary {
+  id: SimplePriceTierId
+  label: string
+  desc: string
+  price_range: string
+  is_default: boolean
+  requires_confirm: boolean
+}
+
+export interface ApiKeyPurposesResponse {
+  purposes: PurposeSummary[]
+  price_tiers: PriceTierSummary[]
+  default_price_tier: SimplePriceTierId
 }
 
 // ============================================================================

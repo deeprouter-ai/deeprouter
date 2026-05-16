@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/alias_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
@@ -221,6 +222,26 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
+		SimplePurpose:      token.SimplePurpose,
+		SimpleBrand:        token.SimpleBrand,
+		SimplePriceTier:    token.SimplePriceTier,
+	}
+	// Simple-mode: derive ModelLimits from the purpose/tier whitelist so the
+	// distribution middleware enforces it automatically. Frontend never sends
+	// model_limits in Simple mode — we own it.
+	if cleanToken.SimplePurpose != "" {
+		if list, ok := alias_setting.ModelWhitelistForToken(
+			cleanToken.SimplePurpose,
+			cleanToken.SimpleBrand,
+			cleanToken.SimplePriceTier,
+		); ok {
+			cleanToken.ModelLimits = alias_setting.ModelWhitelistString(list)
+			cleanToken.ModelLimitsEnabled = true
+		} else {
+			// Ultra tier or unknown purpose → unlimited.
+			cleanToken.ModelLimits = ""
+			cleanToken.ModelLimitsEnabled = false
+		}
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -299,6 +320,25 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.SimplePurpose = token.SimplePurpose
+		cleanToken.SimpleBrand = token.SimpleBrand
+		cleanToken.SimplePriceTier = token.SimplePriceTier
+		// Re-derive ModelLimits when Simple-mode bindings change. Frontend
+		// owns model_limits in Advanced mode (passes empty SimplePurpose), so
+		// we only override when SimplePurpose is set.
+		if cleanToken.SimplePurpose != "" {
+			if list, ok := alias_setting.ModelWhitelistForToken(
+				cleanToken.SimplePurpose,
+				cleanToken.SimpleBrand,
+				cleanToken.SimplePriceTier,
+			); ok {
+				cleanToken.ModelLimits = alias_setting.ModelWhitelistString(list)
+				cleanToken.ModelLimitsEnabled = true
+			} else {
+				cleanToken.ModelLimits = ""
+				cleanToken.ModelLimitsEnabled = false
+			}
+		}
 	}
 	err = cleanToken.Update()
 	if err != nil {

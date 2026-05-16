@@ -25,17 +25,74 @@ import { type ApiKeyFormData, type ApiKey } from '../types'
 // Form Schema
 // ============================================================================
 
-export const apiKeyFormSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  remain_quota_dollars: z.number().min(0).optional(),
-  expired_time: z.date().optional(),
-  unlimited_quota: z.boolean(),
-  model_limits: z.array(z.string()),
-  allow_ips: z.string().optional(),
-  group: z.string().optional(),
-  cross_group_retry: z.boolean().optional(),
-  tokenCount: z.number().min(1).optional(),
-})
+export const SIMPLE_PURPOSE_IDS = [
+  'chat',
+  'coding',
+  'image',
+  'video',
+  'voice',
+  'all',
+] as const
+
+export const SIMPLE_BRANDS = [
+  'claude',
+  'openai',
+  'gemini',
+  'deepseek',
+] as const
+
+export const SIMPLE_PRICE_TIERS = [
+  'economy',
+  'standard',
+  'premium',
+  'ultra',
+] as const
+
+export const apiKeyFormSchema = z
+  .object({
+    name: z.string().optional(),
+    remain_quota_dollars: z.number().min(0).optional(),
+    expired_time: z.date().optional(),
+    unlimited_quota: z.boolean(),
+    model_limits: z.array(z.string()),
+    allow_ips: z.string().optional(),
+    group: z.string().optional(),
+    cross_group_retry: z.boolean().optional(),
+    tokenCount: z.number().min(1).optional(),
+    // Simple-mode bindings — see PRD §3.2. When mode='simple' the picker
+    // populates these; backend derives model_limits from the purpose's
+    // whitelist automatically, so the user never sees model names.
+    mode: z.enum(['simple', 'advanced']),
+    simple_purpose: z.enum(SIMPLE_PURPOSE_IDS).optional(),
+    simple_brand: z.enum(SIMPLE_BRANDS).optional(),
+    simple_price_tier: z.enum(SIMPLE_PRICE_TIERS).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.mode === 'simple') {
+      if (!data.simple_purpose) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['simple_purpose'],
+          message: 'Please choose what you will use this key for',
+        })
+      }
+      if (data.simple_purpose === 'all' && !data.simple_price_tier) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['simple_price_tier'],
+          message: 'Please choose a price tier for Auto mode',
+        })
+      }
+    } else {
+      if (!data.name || data.name.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['name'],
+          message: 'Name is required',
+        })
+      }
+    }
+  })
 
 export type ApiKeyFormValues = z.infer<typeof apiKeyFormSchema>
 
@@ -53,15 +110,21 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   group: DEFAULT_GROUP,
   cross_group_retry: true,
   tokenCount: 1,
+  mode: 'simple',
+  simple_purpose: undefined,
+  simple_brand: undefined,
+  simple_price_tier: undefined,
 }
 
 export function getApiKeyFormDefaultValues(
-  defaultUseAutoGroup: boolean
+  defaultUseAutoGroup: boolean,
+  mode: 'simple' | 'advanced' = 'simple'
 ): ApiKeyFormValues {
   return {
     ...API_KEY_FORM_DEFAULT_VALUES,
     group: defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP,
     cross_group_retry: defaultUseAutoGroup,
+    mode,
   }
 }
 
@@ -75,8 +138,15 @@ export function getApiKeyFormDefaultValues(
 export function transformFormDataToPayload(
   data: ApiKeyFormValues
 ): ApiKeyFormData {
+  const isSimple = data.mode === 'simple'
   return {
-    name: data.name,
+    // Auto-name Simple keys so users don't have to invent one.
+    name:
+      data.name && data.name.trim() !== ''
+        ? data.name
+        : isSimple && data.simple_purpose
+          ? `my-${data.simple_purpose}-key`
+          : (data.name ?? ''),
     remain_quota: data.unlimited_quota
       ? 0
       : parseQuotaFromDollars(data.remain_quota_dollars || 0),
@@ -84,11 +154,16 @@ export function transformFormDataToPayload(
       ? Math.floor(data.expired_time.getTime() / 1000)
       : -1,
     unlimited_quota: data.unlimited_quota,
-    model_limits_enabled: data.model_limits.length > 0,
-    model_limits: data.model_limits.join(','),
+    // In Simple mode the backend derives model_limits from the purpose's
+    // whitelist — frontend sends empty so backend owns it.
+    model_limits_enabled: isSimple ? false : data.model_limits.length > 0,
+    model_limits: isSimple ? '' : data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
     group: data.group || '',
     cross_group_retry: data.group === 'auto' ? !!data.cross_group_retry : false,
+    simple_purpose: isSimple ? data.simple_purpose : '',
+    simple_brand: isSimple ? data.simple_brand : '',
+    simple_price_tier: isSimple ? data.simple_price_tier : '',
   }
 }
 
@@ -98,6 +173,13 @@ export function transformFormDataToPayload(
 export function transformApiKeyToFormDefaults(
   apiKey: ApiKey
 ): ApiKeyFormValues {
+  const purpose = (apiKey.simple_purpose || '') as ApiKeyFormValues['simple_purpose']
+  const brand = (apiKey.simple_brand || '') as ApiKeyFormValues['simple_brand']
+  const tier = (apiKey.simple_price_tier || '') as ApiKeyFormValues['simple_price_tier']
+  // A token created in Simple mode opens in Simple mode for edit, so user
+  // sees the same picker; switching to Advanced reveals the derived
+  // model_limits and lets them customise freely.
+  const mode: 'simple' | 'advanced' = purpose ? 'simple' : 'advanced'
   return {
     name: apiKey.name,
     remain_quota_dollars: quotaUnitsToDollars(apiKey.remain_quota),
@@ -113,5 +195,9 @@ export function transformApiKeyToFormDefaults(
     group: apiKey.group || DEFAULT_GROUP,
     cross_group_retry: !!apiKey.cross_group_retry,
     tokenCount: 1,
+    mode,
+    simple_purpose: purpose || undefined,
+    simple_brand: brand || undefined,
+    simple_price_tier: tier || undefined,
   }
 }

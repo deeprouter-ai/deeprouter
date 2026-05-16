@@ -28,7 +28,14 @@ type Token struct {
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"` // used quota
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	// DeepRouter Simple-mode bindings (PRD docs/tasks/api-key-simple-advanced-prd.md).
+	// When SimplePurpose != "", the token was created in Simple mode and
+	// distribution middleware resolves virtual model names (e.g. "deeprouter")
+	// to a real target via setting/alias_setting based on (purpose, brand).
+	SimplePurpose   string         `json:"simple_purpose" gorm:"default:''"`    // chat|coding|image|video|voice|all
+	SimpleBrand     string         `json:"simple_brand" gorm:"default:''"`      // claude|openai|gemini|deepseek; empty = no preference
+	SimplePriceTier string         `json:"simple_price_tier" gorm:"default:''"` // economy|standard|premium|ultra; only used when SimplePurpose=all
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 }
 
 func (token *Token) Clean() {
@@ -295,7 +302,8 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry",
+		"simple_purpose", "simple_brand", "simple_price_tier").Updates(token).Error
 	return err
 }
 
