@@ -28,7 +28,10 @@ interface CounterProps {
 }
 
 function Counter(props: CounterProps) {
-  const { end, suffix = '', prefix = '', duration = 1600, decimals = 0 } = props
+  // Longer default duration (2.4s vs 1.6s) so viewers actually see the
+  // numbers rolling. Small-end values (10, 50) finished too fast at 1.6s
+  // to register as animation rather than a single repaint.
+  const { end, suffix = '', prefix = '', duration = 2400, decimals = 0 } = props
   const ref = useRef<HTMLSpanElement>(null)
   const startedRef = useRef(false)
 
@@ -46,7 +49,19 @@ function Counter(props: CounterProps) {
       const progress = Math.min((now - start) / duration, 1)
       const eased = 1 - Math.pow(1 - progress, 3)
       el.textContent = `${prefix}${formatValue(eased * end)}${suffix}`
-      if (progress < 1) requestAnimationFrame(step)
+      if (progress < 1) {
+        requestAnimationFrame(step)
+      } else {
+        // Brief "settled" flash when the count locks in — a single class
+        // toggle hooks into the .landing-stat-settle keyframes in
+        // styles/index.css. Cleared on animation end so re-mounts replay.
+        el.classList.add('landing-stat-settle')
+        const onEnd = () => {
+          el.classList.remove('landing-stat-settle')
+          el.removeEventListener('animationend', onEnd)
+        }
+        el.addEventListener('animationend', onEnd)
+      }
     }
     requestAnimationFrame(step)
   }, [end, duration, prefix, suffix, formatValue])
@@ -105,15 +120,15 @@ export function Stats(_props: StatsProps) {
   ]
 
   return (
-    <div className='border-border/40 bg-muted/10 relative z-10 border-y'>
+    <div className='relative z-10 px-6'>
       <div className='mx-auto max-w-6xl px-6 py-10 md:py-12'>
-        <div className='grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12'>
+        <div className='border-border bg-card/70 grid grid-cols-2 gap-px overflow-hidden rounded-xl border shadow-[0_12px_34px_rgb(28_28_28/0.06)] md:grid-cols-4'>
           {stats.map((s) => (
             <div
               key={s.label}
-              className='flex flex-col items-center text-center'
+              className='bg-card/80 flex flex-col items-center px-4 py-7 text-center'
             >
-              <span className='text-2xl font-bold tracking-tight md:text-3xl'>
+              <span className='text-2xl font-bold tracking-normal tabular-nums md:text-3xl'>
                 <Counter end={s.end} suffix={s.suffix} decimals={s.decimals} />
               </span>
               <span className='text-muted-foreground mt-1.5 text-xs'>
