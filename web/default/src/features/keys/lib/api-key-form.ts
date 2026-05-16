@@ -201,3 +201,64 @@ export function transformApiKeyToFormDefaults(
     simple_price_tier: tier || undefined,
   }
 }
+
+// ============================================================================
+// Simple / Advanced mode (DeepRouter UX)
+// ============================================================================
+
+export type CreateMode = 'simple' | 'advanced'
+
+/**
+ * Simple-mode fields: name, expired_time, unlimited_quota, remain_quota_dollars.
+ * Advanced-mode adds: group, cross_group_retry, tokenCount, model_limits,
+ * allow_ips.
+ *
+ * detectAdvancedMode returns true if a token has ANY non-default Advanced
+ * field set — used when opening the edit drawer so we don't accidentally
+ * hide existing restrictions behind the Simple tab.
+ */
+export function detectAdvancedMode(
+  apiKey: ApiKey,
+  userDefaultGroup: string
+): boolean {
+  if (apiKey.model_limits_enabled) return true
+  if (apiKey.model_limits && apiKey.model_limits.length > 0) return true
+  if (apiKey.allow_ips && apiKey.allow_ips.length > 0) return true
+  // group is "non-default" if it's set AND different from the user's group.
+  // empty string = use user's group → still Simple.
+  if (apiKey.group && apiKey.group !== '' && apiKey.group !== userDefaultGroup) {
+    return true
+  }
+  // cross_group_retry is meaningful only when group=auto; if it's explicitly
+  // off there, that's a deliberate Advanced setting.
+  if (apiKey.group === 'auto' && apiKey.cross_group_retry === false) {
+    return true
+  }
+  return false
+}
+
+/**
+ * Where the user's last-used mode is remembered between drawer opens.
+ * Single key shared across all browsers tabs in the same origin.
+ */
+export const MODE_STORAGE_KEY = 'apiKey.createMode'
+
+export function loadPreferredMode(): CreateMode {
+  if (typeof window === 'undefined') return 'simple'
+  try {
+    const v = window.localStorage.getItem(MODE_STORAGE_KEY)
+    return v === 'advanced' ? 'advanced' : 'simple'
+  } catch {
+    return 'simple'
+  }
+}
+
+export function savePreferredMode(mode: CreateMode): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(MODE_STORAGE_KEY, mode)
+  } catch {
+    // localStorage may be unavailable (private browsing, quota); silently
+    // skip — mode just resets to Simple next time, no harm.
+  }
+}

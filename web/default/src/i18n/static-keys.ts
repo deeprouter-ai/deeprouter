@@ -27,6 +27,11 @@ export const STATIC_I18N_KEYS = [
   'Docs',
   'About',
 
+  // API key create drawer — Simple / Advanced mode toggle
+  'Simple',
+  'Advanced',
+  'Simple key creation — defaults to unlimited models and any IP. Switch to Advanced to restrict.',
+
   // Workspace
   'System Settings',
   'Manage and configure',

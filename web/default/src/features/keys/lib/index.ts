@@ -22,8 +22,13 @@ For commercial licensing, please contact support@quantumnous.com
 export {
   apiKeyFormSchema,
   type ApiKeyFormValues,
+  type CreateMode,
   API_KEY_FORM_DEFAULT_VALUES,
+  MODE_STORAGE_KEY,
+  detectAdvancedMode,
   getApiKeyFormDefaultValues,
+  loadPreferredMode,
+  savePreferredMode,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from './api-key-form'

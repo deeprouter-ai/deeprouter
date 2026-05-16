@@ -63,30 +63,24 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
-import { useApiKeyFormMode } from '@/hooks/use-api-key-form-mode'
-import { createApiKey, updateApiKey, getApiKey, getApiKeyPurposes } from '../api'
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import { createApiKey, updateApiKey, getApiKey } from '../api'
+import { ERROR_MESSAGES, SUCCESS_MESSAGES, DEFAULT_GROUP } from '../constants'
 import {
   apiKeyFormSchema,
   type ApiKeyFormValues,
+  type CreateMode,
+  detectAdvancedMode,
   getApiKeyFormDefaultValues,
+  loadPreferredMode,
+  savePreferredMode,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import {
-  type ApiKey,
-  type SimpleBrand,
-  type SimplePriceTierId,
-  type SimplePurposeId,
-} from '../types'
-import { ApiKeyBrandFilter } from './api-key-brand-filter'
+import { type ApiKey } from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
 } from './api-key-group-combobox'
-import { ApiKeyPriceTier } from './api-key-price-tier'
-import { ApiKeyPurposePicker } from './api-key-purpose-picker'
-import { ApiKeySuccessDialog } from './api-key-success-dialog'
 import { useApiKeys } from './api-keys-provider'
 
 type ApiKeyMutateDrawerProps = {
@@ -136,14 +130,17 @@ export function ApiKeysMutateDrawer({
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Simple ↔ Advanced mode toggle. Simple shows only name + expiry +
+  // unlimited_quota (+ remain_quota_dollars). Advanced shows everything.
+  // Initial value gets set in the open-effect below — start in Simple to
+  // avoid a frame of "Advanced fields visible then hidden" on first paint.
+  const [mode, setMode] = useState<CreateMode>('simple')
   const defaultUseAutoGroup = status?.default_use_auto_group === true
-  const [storedMode, setStoredMode] = useApiKeyFormMode()
-  // Once a Simple-mode key is created, surface key + base URL + client links
-  // in a one-shot dialog. PRD §4.2.
-  const [createdKey, setCreatedKey] = useState<string | null>(null)
-  const [createdPurpose, setCreatedPurpose] = useState<
-    SimplePurposeId | undefined
-  >(undefined)
+  // The user's "default" group from the perspective of detectAdvancedMode —
+  // if backend defaults to auto-group routing, '' would never be the choice
+  // so we compare against 'auto'; otherwise compare against the literal
+  // DEFAULT_GROUP constant ('').
+  const userDefaultGroup = defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP
 
   // Fetch models
   const { data: modelsData } = useQuery({
@@ -158,16 +155,6 @@ export function ApiKeysMutateDrawer({
     queryFn: getUserGroups,
     staleTime: 5 * 60 * 1000,
   })
-
-  // Simple-mode picker metadata (purposes + price tiers).
-  const { data: purposesData, isLoading: purposesLoading } = useQuery({
-    queryKey: ['api-key-purposes'],
-    queryFn: getApiKeyPurposes,
-    staleTime: 10 * 60 * 1000,
-  })
-  const purposes = purposesData?.data?.purposes ?? []
-  const priceTiers = purposesData?.data?.price_tiers ?? []
-  const defaultPriceTier = purposesData?.data?.default_price_tier ?? 'standard'
 
   const models = modelsData?.data || []
   const groupsRaw = groupsData?.data || {}
@@ -191,31 +178,40 @@ export function ApiKeysMutateDrawer({
 
   const form = useForm<ApiKeyFormValues>({
     resolver: zodResolver(apiKeyFormSchema),
-    defaultValues: getApiKeyFormDefaultValues(defaultUseAutoGroup, storedMode),
+    defaultValues: getApiKeyFormDefaultValues(defaultUseAutoGroup),
   })
 
-  const mode = form.watch('mode') ?? storedMode
-  const simplePurpose = form.watch('simple_purpose')
-
-  const handleModeChange = (next: 'simple' | 'advanced') => {
-    form.setValue('mode', next)
-    setStoredMode(next)
-  }
-
-  // Load existing data when updating
+  // Load existing data when updating, and pick the initial Simple/Advanced
+  // mode. For edit: smart-detect from the fetched token (any non-default
+  // Advanced field = Advanced). For create: respect the user's last-used
+  // preference from localStorage.
   useEffect(() => {
     if (open && isUpdate && currentRow) {
       // For update, fetch fresh data
       getApiKey(currentRow.id).then((result) => {
         if (result.success && result.data) {
           form.reset(transformApiKeyToFormDefaults(result.data))
+          setMode(
+            detectAdvancedMode(result.data, userDefaultGroup)
+              ? 'advanced'
+              : 'simple'
+          )
         }
       })
     } else if (open && !isUpdate) {
-      // For create, reset to defaults — use the user's last-chosen mode.
-      form.reset(getApiKeyFormDefaultValues(defaultUseAutoGroup, storedMode))
+      // For create, reset to defaults
+      form.reset(getApiKeyFormDefaultValues(defaultUseAutoGroup))
+      setMode(loadPreferredMode())
     }
-  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, storedMode])
+  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, userDefaultGroup])
+
+  const handleModeChange = (next: string) => {
+    const nextMode: CreateMode = next === 'advanced' ? 'advanced' : 'simple'
+    setMode(nextMode)
+    // Only persist the preference for the create flow — edits inherit the
+    // smart-detected mode from the token's actual state.
+    if (!isUpdate) savePreferredMode(nextMode)
+  }
 
   const onSubmit = async (data: ApiKeyFormValues) => {
     setIsSubmitting(true)
@@ -238,19 +234,17 @@ export function ApiKeysMutateDrawer({
         // Create mode - handle batch creation
         const count = data.tokenCount || 1
         let successCount = 0
-        let firstKey: string | null = null
 
         for (let i = 0; i < count; i++) {
           const result = await createApiKey({
             ...basePayload,
             name:
-              i === 0 && basePayload.name
-                ? basePayload.name
-                : `${basePayload.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
+              i === 0 && data.name
+                ? data.name
+                : `${data.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
           })
           if (result.success) {
             successCount++
-            if (i === 0 && result.data?.key) firstKey = result.data.key
           } else {
             toast.error(result.message || t(ERROR_MESSAGES.CREATE_FAILED))
             break
@@ -258,22 +252,13 @@ export function ApiKeysMutateDrawer({
         }
 
         if (successCount > 0) {
+          toast.success(
+            t('Successfully created {{count}} API Key(s)', {
+              count: successCount,
+            })
+          )
+          onOpenChange(false)
           triggerRefresh()
-          // Simple mode + single-key create → show the success dialog
-          // (key + base URL + client tutorial chips). Batch creates skip the
-          // dialog because power users don't need it; they get the count toast.
-          if (data.mode === 'simple' && count === 1 && firstKey) {
-            setCreatedKey(firstKey)
-            setCreatedPurpose(data.simple_purpose)
-            onOpenChange(false)
-          } else {
-            toast.success(
-              t('Successfully created {{count}} API Key(s)', {
-                count: successCount,
-              })
-            )
-            onOpenChange(false)
-          }
         }
       }
     } catch (_error) {
@@ -322,30 +307,15 @@ export function ApiKeysMutateDrawer({
         className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[620px]'
       >
         <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
-          <div className='flex items-start justify-between gap-3'>
-            <div className='min-w-0'>
-              <SheetTitle className='text-base sm:text-lg'>
-                {isUpdate ? t('Update API Key') : t('Create API Key')}
-              </SheetTitle>
-              <SheetDescription className='pr-6 text-xs sm:text-sm'>
-                {mode === 'simple'
-                  ? t('Pick what you will use this key for. We handle the rest.')
-                  : t('Add a new API key by providing necessary info.')}
-              </SheetDescription>
-            </div>
-            <Tabs
-              value={mode}
-              onValueChange={(v) =>
-                handleModeChange(v as 'simple' | 'advanced')
-              }
-              className='shrink-0'
-            >
-              <TabsList>
-                <TabsTrigger value='simple'>{t('Simple')}</TabsTrigger>
-                <TabsTrigger value='advanced'>{t('Advanced')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+          <SheetTitle className='text-base sm:text-lg'>
+            {isUpdate ? t('Update API Key') : t('Create API Key')}
+          </SheetTitle>
+          <SheetDescription className='pr-6 text-xs sm:text-sm'>
+            {isUpdate
+              ? t('Update the API key by providing necessary info.')
+              : t('Add a new API key by providing necessary info.')}{' '}
+            {t("Click save when you're done.")}
+          </SheetDescription>
         </SheetHeader>
         <Form {...form}>
           <form
@@ -353,137 +323,26 @@ export function ApiKeysMutateDrawer({
             onSubmit={form.handleSubmit(onSubmit)}
             className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
           >
-            {mode === 'simple' && (
-              <>
-                <ApiKeyFormSection
-                  title={t('Name your key')}
-                  description={t(
-                    'Optional. A name helps you remember which key is which.'
+            {/* DeepRouter Simple ↔ Advanced mode toggle. Simple hides the
+              * group / cross_group_retry / tokenCount / model_limits /
+              * allow_ips fields so a first-time user sees just "name +
+              * expiry + quota" — closer to OpenAI's 2-field create flow.
+              * Hidden values are still kept in react-hook-form state, so a
+              * mode toggle is purely visual (no silent data loss). */}
+            <Tabs value={mode} onValueChange={handleModeChange}>
+              <TabsList className='grid w-full grid-cols-2'>
+                <TabsTrigger value='simple'>{t('Simple')}</TabsTrigger>
+                <TabsTrigger value='advanced'>{t('Advanced')}</TabsTrigger>
+              </TabsList>
+              {mode === 'simple' && (
+                <p className='text-muted-foreground mt-2 text-xs'>
+                  {t(
+                    'Simple key creation — defaults to unlimited models and any IP. Switch to Advanced to restrict.'
                   )}
-                  icon={KeyRound}
-                >
-                  <FormField
-                    control={form.control}
-                    name='name'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            placeholder={t(
-                              'e.g. cherry-studio-personal (optional)'
-                            )}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </ApiKeyFormSection>
+                </p>
+              )}
+            </Tabs>
 
-                <ApiKeyFormSection
-                  title={t('Choose your AI')}
-                  description={t(
-                    'Pick the task — we route to the best model for you.'
-                  )}
-                  icon={Settings2}
-                >
-                  <FormField
-                    control={form.control}
-                    name='simple_purpose'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <ApiKeyPurposePicker
-                            options={purposes}
-                            value={field.value}
-                            isLoading={purposesLoading}
-                            onValueChange={(v) => {
-                              field.onChange(v)
-                              // When switching to "all", default the price tier.
-                              if (
-                                v === 'all' &&
-                                !form.getValues('simple_price_tier')
-                              ) {
-                                form.setValue(
-                                  'simple_price_tier',
-                                  defaultPriceTier as SimplePriceTierId
-                                )
-                              }
-                              // Reset brand if it's not available for the new purpose.
-                              const next = purposes.find((p) => p.id === v)
-                              const currentBrand =
-                                form.getValues('simple_brand')
-                              if (
-                                currentBrand &&
-                                next &&
-                                !next.available_brands.includes(
-                                  currentBrand as SimpleBrand
-                                )
-                              ) {
-                                form.setValue('simple_brand', undefined)
-                              }
-                            }}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {simplePurpose &&
-                    simplePurpose !== 'all' &&
-                    (() => {
-                      const card = purposes.find((p) => p.id === simplePurpose)
-                      if (!card || card.available_brands.length === 0)
-                        return null
-                      return (
-                        <FormField
-                          control={form.control}
-                          name='simple_brand'
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className='text-xs'>
-                                {t('Prefer a provider? (optional)')}
-                              </FormLabel>
-                              <FormControl>
-                                <ApiKeyBrandFilter
-                                  availableBrands={card.available_brands}
-                                  value={field.value as SimpleBrand | undefined}
-                                  onValueChange={field.onChange}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )
-                    })()}
-
-                  {simplePurpose === 'all' && (
-                    <FormField
-                      control={form.control}
-                      name='simple_price_tier'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <ApiKeyPriceTier
-                              tiers={priceTiers}
-                              value={field.value as SimplePriceTierId}
-                              onValueChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </ApiKeyFormSection>
-              </>
-            )}
-
-            {mode === 'advanced' && (
-              <>
             <ApiKeyFormSection
               title={t('Basic Information')}
               description={t('Set API key basic information')}
@@ -503,26 +362,28 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name='group'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
-                    <FormControl>
-                      <ApiKeyGroupCombobox
-                        options={groups}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder={t('Select a group')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {mode === 'advanced' && (
+                <FormField
+                  control={form.control}
+                  name='group'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Group')}</FormLabel>
+                      <FormControl>
+                        <ApiKeyGroupCombobox
+                          options={groups}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder={t('Select a group')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              {selectedGroup === 'auto' && (
+              {mode === 'advanced' && selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -608,7 +469,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {!isUpdate && (
+              {!isUpdate && mode === 'advanced' && (
                 <FormField
                   control={form.control}
                   name='tokenCount'
@@ -698,6 +559,7 @@ export function ApiKeysMutateDrawer({
               />
             </ApiKeyFormSection>
 
+            {mode === 'advanced' && (
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <section className='bg-card rounded-lg border'>
                 <CollapsibleTrigger
@@ -786,7 +648,6 @@ export function ApiKeysMutateDrawer({
                 </CollapsibleContent>
               </section>
             </Collapsible>
-              </>
             )}
           </form>
         </Form>
@@ -802,23 +663,10 @@ export function ApiKeysMutateDrawer({
             disabled={isSubmitting}
             className='w-full sm:w-auto'
           >
-            {isSubmitting
-              ? t('Saving...')
-              : mode === 'simple' && !isUpdate
-                ? t('Create key')
-                : t('Save changes')}
+            {isSubmitting ? t('Saving...') : t('Save changes')}
           </Button>
         </SheetFooter>
       </SheetContent>
-      <ApiKeySuccessDialog
-        open={!!createdKey}
-        apiKey={createdKey}
-        purpose={createdPurpose}
-        onClose={() => {
-          setCreatedKey(null)
-          setCreatedPurpose(undefined)
-        }}
-      />
     </Sheet>
   )
 }
