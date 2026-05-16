@@ -17,8 +17,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { useIsCasual } from '@/hooks/use-casual'
 import { cn } from '@/lib/utils'
 import type { PurposeSummary, SimplePurposeId } from '../types'
+
+/**
+ * Casual-persona-only extra hint per purpose. Tells the user which
+ * client this purpose pairs with — answers the "but how do I actually
+ * use this key?" question casual users have at this step.
+ */
+const CASUAL_PURPOSE_HINT: Record<SimplePurposeId, string> = {
+  chat: 'Pair with Cherry Studio / Chatbox for chat, writing, translation.',
+  coding: 'Pair with Cursor / Claude Code for AI coding assistance.',
+  image: 'Use DALL·E or Flux models for text-to-image.',
+  video: 'Generate short video clips from a text prompt.',
+  voice: 'Speech-to-text (Whisper) or text-to-speech (TTS).',
+  all: 'Lets the key call any model. Watch the cost.',
+}
 
 type ApiKeyPurposePickerProps = {
   options: PurposeSummary[]
@@ -37,6 +53,8 @@ export function ApiKeyPurposePicker({
   onValueChange,
   isLoading,
 }: ApiKeyPurposePickerProps) {
+  const { t } = useTranslation()
+  const casual = useIsCasual()
   if (isLoading) {
     return (
       <div className='grid grid-cols-2 gap-3 lg:grid-cols-3'>
@@ -87,6 +105,11 @@ export function ApiKeyPurposePicker({
             {option.human_estimate && (
               <span className='text-muted-foreground/90 mt-auto text-[11px] leading-snug'>
                 {option.human_estimate}
+              </span>
+            )}
+            {casual && CASUAL_PURPOSE_HINT[option.id] && (
+              <span className='text-muted-foreground/70 text-[11px] leading-snug'>
+                💡 {t(CASUAL_PURPOSE_HINT[option.id])}
               </span>
             )}
           </button>

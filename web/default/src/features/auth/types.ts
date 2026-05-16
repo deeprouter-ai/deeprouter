@@ -154,6 +154,11 @@ export interface SystemStatus {
     register_enabled?: boolean
     password_register_enabled?: boolean
     custom_oauth_providers?: CustomOAuthProviderInfo[]
+    // Casual UX help FAB (admin-configurable). Empty → placeholder.
+    help_video_url?: string
+    help_wechat_qr?: string
+    help_wechat_id?: string
+    help_support_email?: string
     [key: string]: unknown
   }
   // Allow direct access to common properties

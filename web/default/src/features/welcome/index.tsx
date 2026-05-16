@@ -55,20 +55,26 @@ const PERSONAS: Array<{
     id: 'casual',
     icon: MessageSquare,
     titleKey: 'Casual',
-    descKey: 'Chat, write, translate — use AI clients like Cherry Studio.',
+    // Verbose-by-default because /welcome runs BEFORE persona is set,
+    // so FieldHint can't detect casual. Verbose for everyone is fine
+    // here — this screen is shown exactly once per account.
+    descKey:
+      'For chatting, writing, translation, image generation. No code needed — you use a desktop app like Cherry Studio.',
   },
   {
     id: 'dev',
     icon: Terminal,
     titleKey: 'Developer',
-    descKey: 'Build apps, run scripts, call the API from your own code.',
+    descKey:
+      'For coding and integrating the API into your own scripts or products. You will write code or use tools like Cursor.',
     badge: 'Most users',
   },
   {
     id: 'team',
     icon: Users,
     titleKey: 'Team / Enterprise',
-    descKey: 'Shared keys and team workflows. (Same as Developer for now.)',
+    descKey:
+      'For shared API keys, audit trails, and team integration. UI is the same as Developer for now; team-only tools coming soon.',
   },
 ]
 
@@ -99,56 +105,63 @@ const CLIENTS: Array<{
     id: 'cherry-studio',
     icon: Sparkles,
     titleKey: 'Cherry Studio',
-    descKey: 'Friendly desktop AI client. No code required.',
+    descKey:
+      'Free desktop app. Double-click to install. Best place to start if you don\'t code.',
     recommendedFor: ['casual'],
   },
   {
     id: 'chatbox',
     icon: MessageSquare,
     titleKey: 'Chatbox',
-    descKey: 'Cross-platform (web + desktop + mobile).',
+    descKey:
+      'Web + desktop + mobile. Works in browser, no install needed.',
     recommendedFor: [],
   },
   {
     id: 'lobechat',
     icon: MessageSquare,
     titleKey: 'LobeChat',
-    descKey: 'Open-source chat with plugins.',
+    descKey: 'Open-source chat client with plugins for advanced use.',
     recommendedFor: [],
   },
   {
     id: 'cursor',
     icon: Code,
     titleKey: 'Cursor',
-    descKey: 'AI-powered code editor.',
+    descKey:
+      'AI-powered code editor. Replaces VS Code for AI pair programming.',
     recommendedFor: ['dev', 'team'],
   },
   {
     id: 'claude-code',
     icon: Terminal,
     titleKey: 'Claude Code',
-    descKey: "Anthropic's CLI agent.",
+    descKey:
+      "Anthropic's command-line AI assistant. You'll need a terminal.",
     recommendedFor: ['dev'],
   },
   {
     id: 'code',
     icon: Code,
     titleKey: 'Python / Node',
-    descKey: 'Call the API from your code.',
+    descKey:
+      'Call the API directly from your own Python or Node.js code.',
     recommendedFor: ['dev'],
   },
   {
     id: 'playground',
     icon: PlayCircle,
     titleKey: 'Try in browser',
-    descKey: 'No setup — chat with the AI right here.',
+    descKey:
+      'Zero setup — chat with the AI right here on this site. Best to test quickly.',
     recommendedFor: ['casual'],
   },
   {
     id: 'dashboard',
     icon: KeyRound,
     titleKey: 'Just look around',
-    descKey: 'Skip the guide and explore the dashboard.',
+    descKey:
+      'Skip the guide and explore the dashboard yourself. You can come back later.',
     recommendedFor: ['team'],
   },
 ]

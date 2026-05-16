@@ -35,6 +35,7 @@ import { toast } from 'sonner'
 import { useStatus } from '@/hooks/use-status'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { FieldHint } from '@/components/ui/field-hint'
 import { Markdown } from '@/components/ui/markdown'
 import { getTutorial } from './tutorials/registry'
 
@@ -134,8 +135,16 @@ export function OnboardingTutorial() {
 
       {/* Connection values — top-of-page copy-block for the most common need */}
       <div className='bg-muted/30 mb-6 grid gap-3 rounded-xl border p-4 sm:grid-cols-3'>
-        <CopyField label={t('Base URL')} value={baseUrl} />
-        <CopyField label={t('Model')} value={modelName} />
+        <CopyField
+          label={t('Base URL')}
+          value={baseUrl}
+          hint={t('Paste into the client\'s "API URL" or "Base URL" field. Do not add a trailing slash.')}
+        />
+        <CopyField
+          label={t('Model')}
+          value={modelName}
+          hint={t('Type exactly this. We route to the right AI based on your signup choices.')}
+        />
         <div className='text-muted-foreground flex flex-col justify-center text-xs leading-snug'>
           {t(
             'Use these values in the steps below. Your API Key was shown when you created it on the Keys page.'
@@ -149,7 +158,15 @@ export function OnboardingTutorial() {
   )
 }
 
-function CopyField({ label, value }: { label: string; value: string }) {
+function CopyField({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string
+  hint?: string
+}) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const handleCopy = async () => {
@@ -182,6 +199,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
           )}
         </Button>
       </div>
+      {hint && <FieldHint>{hint}</FieldHint>}
     </div>
   )
 }

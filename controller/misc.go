@@ -117,6 +117,15 @@ func GetStatus(c *gin.Context) {
 		"user_agreement_enabled":      legalSetting.UserAgreement != "",
 		"privacy_policy_enabled":      legalSetting.PrivacyPolicy != "",
 		"checkin_enabled":             operation_setting.GetCheckinSetting().Enabled,
+
+		// === Casual UX help FAB (PRD docs/tasks/casual-ux-prd.md §2.3) ===
+		// All optional; the floating help widget falls back to a
+		// "coming soon" placeholder per item when unset. Admin sets
+		// via System Settings → Operations OR via env at boot.
+		"help_video_url":     common.OptionMap["HelpVideoUrl"],
+		"help_wechat_qr":     common.OptionMap["HelpWeChatQR"],
+		"help_wechat_id":     common.OptionMap["HelpWeChatID"],
+		"help_support_email": common.OptionMap["HelpSupportEmail"],
 	}
 
 	// 根据启用状态注入可选内容
