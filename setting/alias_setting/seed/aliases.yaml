@@ -1,0 +1,222 @@
+# DeepRouter Simple-mode alias table.
+#
+# Phase 1 seed (PRD docs/tasks/api-key-simple-advanced-prd.md §3.2):
+#   - "purposes" defines the 6 cards shown in the API Key create drawer.
+#   - "aliases" maps (purpose, brand) → real model name. When a Simple-mode
+#     token receives a virtual model name from the client (e.g. "deeprouter"),
+#     middleware/distributor.go resolves it via this table.
+#
+# Operator notes:
+#   - This file is embedded into the Go binary via //go:embed at build time.
+#     Changes require rebuild. Admin UI for runtime overrides ships in Phase 3.
+#   - Brand "auto" is the fallback when the token's simple_brand is empty.
+#   - Brand entries do NOT need to be exhaustive — when a (purpose, brand) is
+#     missing, resolution falls back to (purpose, auto).
+#   - "model_whitelist" is what gets written into Token.ModelLimits at create
+#     time (so the distribution middleware enforces it naturally).
+#   - "model_whitelist_tiered" (auto purpose only) applies price-cap routing:
+#     the token's simple_price_tier picks one of economy/standard/premium/ultra.
+#
+# TODO_PLATFORM (block public launch):
+#   - Verify per-1K-token price ranges against current upstream pricing.
+#   - Fill video/voice human_estimate strings with real numbers from platform.
+#   - Audit model_whitelist against actually-enabled channels.
+
+purposes:
+  - id: chat
+    label_en: "Chat / Writing"
+    label_zh: "聊天 / 写作"
+    icon: "💬"
+    desc_en: "Translation, creation, dialogue"
+    desc_zh: "翻译、创作、对话"
+    human_estimate_en: "≈ ¥1 for 100 chats"
+    human_estimate_zh: "约 ¥1 聊 100 句"
+    price_range: "¥0.01 – 0.10 / 1K tokens"
+    recommended_brand: claude
+    available_brands: [claude, openai, gemini, deepseek]
+    model_whitelist:
+      - claude-*
+      - gpt-4o*
+      - gpt-4-turbo*
+      - gemini-2*
+      - deepseek-v3*
+      - deepseek-chat*
+
+  - id: coding
+    label_en: "Coding"
+    label_zh: "编程 / Coding"
+    icon: "💻"
+    desc_en: "Code completion, AI pair programming, refactor"
+    desc_zh: "代码补全、AI 编程、重构"
+    human_estimate_en: "≈ ¥1 for 50 code edits"
+    human_estimate_zh: "约 ¥1 改 50 段代码"
+    price_range: "¥0.02 – 0.15 / 1K tokens"
+    recommended_brand: claude
+    available_brands: [claude, openai, deepseek]
+    model_whitelist:
+      - claude-sonnet-*
+      - claude-opus-*
+      - gpt-4o*
+      - gpt-4-turbo*
+      - o1*
+      - deepseek-coder*
+      - deepseek-v3*
+
+  - id: image
+    label_en: "Image generation"
+    label_zh: "图像生成"
+    icon: "🎨"
+    desc_en: "Text-to-image, image edit, image variation"
+    desc_zh: "文生图、改图、变体"
+    human_estimate_en: "≈ ¥10 for 20 images"
+    human_estimate_zh: "约 ¥10 生成 20 张"
+    price_range: "¥0.3 – 1.0 / image"
+    recommended_brand: openai
+    available_brands: [openai]
+    model_whitelist:
+      - dall-e-*
+      - flux-*
+      - sdxl*
+      - stable-diffusion-*
+
+  - id: video
+    # TODO_PLATFORM: verify model availability & price before public launch
+    label_en: "Video generation"
+    label_zh: "视频生成"
+    icon: "🎬"
+    desc_en: "Text-to-video, video edit"
+    desc_zh: "文生视频、改视频"
+    human_estimate_en: "≈ ¥50 for 10 short clips"
+    human_estimate_zh: "约 ¥50 生成 10 段短视频"
+    price_range: "¥3 – 10 / clip"
+    recommended_brand: openai
+    available_brands: []
+    model_whitelist:
+      - veo-*
+      - sora*
+      - runway*
+
+  - id: voice
+    # TODO_PLATFORM: verify model availability & price before public launch
+    label_en: "Voice / TTS / Transcription"
+    label_zh: "语音 / TTS / 转写"
+    icon: "🎙️"
+    desc_en: "Transcription, voice cloning, text-to-speech"
+    desc_zh: "转写、配音、克隆"
+    human_estimate_en: "≈ ¥10 for 200 minutes"
+    human_estimate_zh: "约 ¥10 转写 200 分钟"
+    price_range: "¥0.05 / minute"
+    recommended_brand: openai
+    available_brands: []
+    model_whitelist:
+      - whisper-*
+      - tts-*
+
+  - id: all
+    label_en: "Everything (Auto)"
+    label_zh: "全部 (Auto)"
+    icon: "⚡"
+    desc_en: "Auto-route by task. Set a price cap below."
+    desc_zh: "按任务自动路由，可设置价格上限"
+    human_estimate_en: "Billed per actual model"
+    human_estimate_zh: "按实际使用模型计费"
+    price_range: "Variable"
+    recommended_brand: ""
+    available_brands: [claude, openai, gemini, deepseek]
+    # When purpose=all, model_whitelist comes from the price tier (see below).
+
+# Price tier whitelists (only applied when purpose=all).
+# These narrow Token.ModelLimits so the distribution middleware rejects
+# anything above the user's chosen cap.
+price_tiers:
+  economy:
+    label_en: "Economy"
+    label_zh: "经济档"
+    desc_en: "Cheap & fast only, never Opus / o1 / Ultra"
+    desc_zh: "只走便宜模型，绝不上 Opus/o1"
+    price_range: "¥0.001 – 0.02 / 1K"
+    model_whitelist:
+      - gpt-4o-mini*
+      - claude-haiku-*
+      - gemini-2*-flash*
+      - deepseek-v3*
+      - deepseek-chat*
+  standard:
+    label_en: "Standard"
+    label_zh: "标准档"
+    desc_en: "Default. Covers most tasks, avoids ultra-premium models."
+    desc_zh: "默认，覆盖大部分场景，避免顶配"
+    price_range: "¥0.001 – 0.10 / 1K"
+    is_default: true
+    model_whitelist:
+      - gpt-4o*
+      - gpt-4-turbo*
+      - claude-sonnet-*
+      - claude-haiku-*
+      - gemini-2*
+      - deepseek-*
+      - dall-e-*
+      - flux-*
+      - whisper-*
+      - tts-*
+  premium:
+    label_en: "Premium"
+    label_zh: "高级档"
+    desc_en: "Includes Claude Opus and GPT-4 family"
+    desc_zh: "含 Claude Opus、GPT-4 系列"
+    price_range: "¥0.001 – 0.30 / 1K"
+    model_whitelist:
+      - gpt-4*
+      - claude-*
+      - gemini-*
+      - deepseek-*
+      - dall-e-*
+      - flux-*
+      - whisper-*
+      - tts-*
+  ultra:
+    label_en: "Ultra"
+    label_zh: "顶配档"
+    desc_en: "No cap. Includes o1 / Opus / Gemini Ultra. Confirm required."
+    desc_zh: "无上限，含 o1 / Opus / Gemini Ultra，需确认"
+    price_range: "Uncapped"
+    requires_confirm: true
+    # Empty whitelist = no model_limits restriction = all enabled models allowed.
+    model_whitelist: []
+
+# (purpose, brand) → target model.
+# Used when client sends a virtual model name (deeprouter, deeprouter-coding, ...).
+# Falls back to (purpose, auto) if the specific brand binding is missing.
+aliases:
+  # Chat
+  - { purpose: chat,   brand: auto,     target: claude-sonnet-4-7 }
+  - { purpose: chat,   brand: claude,   target: claude-sonnet-4-7 }
+  - { purpose: chat,   brand: openai,   target: gpt-4o }
+  - { purpose: chat,   brand: gemini,   target: gemini-2.0-pro }
+  - { purpose: chat,   brand: deepseek, target: deepseek-v3 }
+  # Coding
+  - { purpose: coding, brand: auto,     target: claude-sonnet-4-7 }
+  - { purpose: coding, brand: claude,   target: claude-sonnet-4-7 }
+  - { purpose: coding, brand: openai,   target: gpt-4o }
+  - { purpose: coding, brand: deepseek, target: deepseek-coder-v3 }
+  # Image
+  - { purpose: image,  brand: auto,     target: flux-pro }
+  - { purpose: image,  brand: openai,   target: dall-e-3 }
+  # Video (TODO_PLATFORM)
+  - { purpose: video,  brand: auto,     target: veo-3 }
+  # Voice (TODO_PLATFORM) — default to STT; clients hitting TTS endpoints
+  # specify it explicitly via deeprouter-voice-tts virtual alias.
+  - { purpose: voice,  brand: auto,     target: whisper-1 }
+  # All / Auto — uses the user's account default group + price-tier whitelist.
+  # No alias binding here: the client must specify a real model name.
+
+# Virtual model names the client can send. Any of these triggers alias
+# resolution in the distribution middleware.
+virtual_models:
+  - deeprouter           # → ResolveAlias(token.SimplePurpose, token.SimpleBrand)
+  - deeprouter-chat
+  - deeprouter-coding
+  - deeprouter-image
+  - deeprouter-video
+  - deeprouter-voice
+  - deeprouter-voice-tts # explicit TTS variant when purpose=voice

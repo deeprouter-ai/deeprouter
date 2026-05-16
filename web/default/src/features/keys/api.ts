@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 import type {
   ApiKey,
+  ApiKeyPurposesResponse,
   ApiResponse,
   GetApiKeysParams,
   GetApiKeysResponse,
@@ -113,5 +114,14 @@ export async function fetchTokenKeysBatch(ids: number[]): Promise<{
   data?: { keys: Record<number, string> }
 }> {
   const res = await api.post('/api/token/batch/keys', { ids })
+  return res.data
+}
+
+// Fetch Simple-mode purpose cards + price tier metadata.
+// Drives the picker UI in the Create API Key drawer.
+export async function getApiKeyPurposes(): Promise<
+  ApiResponse<ApiKeyPurposesResponse>
+> {
+  const res = await api.get('/api/user/self/api-key-purposes')
   return res.data
 }

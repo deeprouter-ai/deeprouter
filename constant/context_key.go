@@ -19,6 +19,16 @@ const (
 	ContextKeyTokenModelLimitEnabled ContextKey = "token_model_limit_enabled"
 	ContextKeyTokenModelLimit        ContextKey = "token_model_limit"
 	ContextKeyTokenCrossGroupRetry   ContextKey = "token_cross_group_retry"
+	// DeepRouter Simple-mode bindings — see setting/alias_setting.
+	// Set by middleware/auth.go after token lookup; read by
+	// middleware/distributor.go to resolve virtual model names.
+	ContextKeyTokenSimplePurpose   ContextKey = "token_simple_purpose"
+	ContextKeyTokenSimpleBrand     ContextKey = "token_simple_brand"
+	ContextKeyTokenSimplePriceTier ContextKey = "token_simple_price_tier"
+	// Set when distributor.Distribute() rewrote modelRequest.Model from a
+	// virtual name (e.g. "deeprouter") to its resolved target. Used for
+	// logging / billing audit downstream.
+	ContextKeyAliasResolvedFrom ContextKey = "alias_resolved_from"
 
 	/* channel related keys */
 	ContextKeyChannelId                ContextKey = "channel_id"

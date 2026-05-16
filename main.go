@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/router"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/alias_setting"
 	_ "github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -272,6 +273,14 @@ func InitResources() error {
 
 	// Initialize model settings
 	ratio_setting.InitRatioSettings()
+
+	// Initialize DeepRouter Simple-mode alias bindings
+	// (purpose × brand → real model; YAML-seeded, embedded into binary).
+	if err := alias_setting.InitAliasSettings(); err != nil {
+		common.SysError("failed to initialize alias_setting: " + err.Error())
+		// Don't return error — Simple-mode features will be unavailable but
+		// the rest of the gateway can still serve Advanced-mode keys.
+	}
 
 	service.InitHttpClient()
 

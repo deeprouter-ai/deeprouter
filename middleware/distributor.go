@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/alias_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -35,6 +36,24 @@ func Distribute() func(c *gin.Context) {
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
 			return
+		}
+		// DeepRouter Simple-mode: if the token was created with a purpose
+		// binding and the client sent one of our virtual model names
+		// (deeprouter, deeprouter-coding, ...), resolve it to the concrete
+		// upstream model name BEFORE the model_limit check. The whitelist
+		// AddToken wrote into Token.ModelLimits already includes both the
+		// virtual aliases (so this lookup is allowed) and the real targets.
+		if modelRequest != nil && alias_setting.IsVirtualModel(modelRequest.Model) {
+			tokenPurpose := common.GetContextKeyString(c, constant.ContextKeyTokenSimplePurpose)
+			tokenBrand := common.GetContextKeyString(c, constant.ContextKeyTokenSimpleBrand)
+			if tokenPurpose != "" {
+				if resolved := alias_setting.ResolveAliasForVirtualModel(
+					modelRequest.Model, tokenPurpose, tokenBrand,
+				); resolved != "" {
+					common.SetContextKey(c, constant.ContextKeyAliasResolvedFrom, modelRequest.Model)
+					modelRequest.Model = resolved
+				}
+			}
 		}
 		if ok {
 			id, err := strconv.Atoi(channelId.(string))
