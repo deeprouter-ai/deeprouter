@@ -417,17 +417,11 @@
     "Average RPM": "Average RPM",
     "Average TPM": "Average TPM",
     "Average TTFT": "Average TTFT",
-<<<<<<< Updated upstream
     "Average latency": "Average latency",
     "Average latency, TTFT, and success rate by group": "Average latency, TTFT, and success rate by group",
     "Average time-to-first-token (TTFT) by group": "Average time-to-first-token (TTFT) by group",
     "Average tokens per second sustained per group": "Average tokens per second sustained per group",
-=======
     "Avg. latency": "Avg. latency",
-    "AWS": "AWS",
-    "AWS Bedrock Claude Compat": "AWS Bedrock Claude Compat",
-    "AWS Key Format": "AWS Key Format",
->>>>>>> Stashed changes
     "Azure": "Azure",
     "Back": "Back",
     "Back to Home": "Back to Home",
@@ -626,6 +620,7 @@
     "Chat configuration JSON": "Chat configuration JSON",
     "Chat preset not found": "Chat preset not found",
     "Chat session management": "Chat session management",
+    "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.": "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.",
     "ChatCompletions -> Responses Compatibility": "ChatCompletions -> Responses Compatibility",
     "Check for updates": "Check for updates",
     "Check in daily to receive random quota rewards": "Check in daily to receive random quota rewards",
@@ -1213,6 +1208,7 @@
     "Drawing Logs": "Drawing Logs",
     "Drawing logs": "Drawing logs",
     "Drawing task records": "Drawing task records",
+    "Drop-in OpenAI-compatible API": "Drop-in OpenAI-compatible API",
     "Duplicate": "Duplicate",
     "Duplicate group names: {{names}}": "Duplicate group names: {{names}}",
     "Duration": "Duration",
@@ -1700,11 +1696,12 @@
     "Full width": "Full width",
     "Function calling": "Function calling",
     "Functions": "Functions",
-    "Gateway overview": "Gateway overview",
     "GC Count": "GC Count",
     "GC executed": "GC executed",
     "GC execution failed": "GC execution failed",
+    "GPT-5, Claude, Gemini & 20+ models": "GPT-5, Claude, Gemini & 20+ models",
     "GPU count": "GPU count",
+    "Gateway overview": "Gateway overview",
     "Gemini": "Gemini",
     "Gemini Image 4K": "Gemini Image 4K",
     "Gemini will continue to auto-detect thinking mode even with the adapter disabled. Enable this only when you need finer control over pricing and budgeting.": "Gemini will continue to auto-detect thinking mode even with the adapter disabled. Enable this only when you need finer control over pricing and budgeting.",
@@ -1935,20 +1932,7 @@
     "Inviter Reward": "Inviter Reward",
     "Invites": "Invites",
     "Invoke developer-defined functions with structured arguments": "Invoke developer-defined functions with structured arguments",
-<<<<<<< Updated upstream
-=======
-    "io.net API Key": "io.net API Key",
-    "io.net Deployments": "io.net Deployments",
-    "IP": "IP",
-    "IP Address": "IP Address",
-    "IP Filter Mode": "IP Filter Mode",
-    "IP Restriction": "IP Restriction",
-    "IP Whitelist (supports CIDR)": "IP Whitelist (supports CIDR)",
-    "is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.": "is an open-source AI API gateway for self-hosted deployments. Connect multiple upstream services, manage models, keys, quotas, logs, and routing policies in one place.",
-    "is less than the configured maximum cache size": "is less than the configured maximum cache size",
-    "is the default price; ": "is the default price; ",
     "Issue API keys, assign groups, enforce quotas, and keep access policies manageable as usage grows.": "Issue API keys, assign groups, enforce quotas, and keep access policies manageable as usage grows.",
->>>>>>> Stashed changes
     "It seems like the page you're looking for": "It seems like the page you're looking for",
     "Items": "Items",
     "JSON": "JSON",
@@ -1980,11 +1964,11 @@
     "Keep this above 1 minute to avoid heavy database load": "Keep this above 1 minute to avoid heavy database load",
     "Keep-alive Ping": "Keep-alive Ping",
     "Key": "Key",
-    "Key and quota control": "Key and quota control",
     "Key Fingerprint": "Key Fingerprint",
     "Key Sources": "Key Sources",
     "Key Summary": "Key Summary",
     "Key Update Mode": "Key Update Mode",
+    "Key and quota control": "Key and quota control",
     "Keys, OAuth credentials, and multi-key update behavior.": "Keys, OAuth credentials, and multi-key update behavior.",
     "Kling": "Kling",
     "Knowledge Base ID *": "Knowledge Base ID *",
@@ -2054,12 +2038,7 @@
     "List of models supported by this channel. Use comma to separate multiple models.": "List of models supported by this channel. Use comma to separate multiple models.",
     "List of origins (one per line) allowed for Passkey registration and authentication.": "List of origins (one per line) allowed for Passkey registration and authentication.",
     "List view": "List view",
-<<<<<<< Updated upstream
-=======
     "Live policy": "Live policy",
-    "LLM Leaderboard": "LLM Leaderboard",
-    "LLM prompt helper": "LLM prompt helper",
->>>>>>> Stashed changes
     "Load Balancing": "Load Balancing",
     "Load template...": "Load template...",
     "Loader": "Loader",
@@ -2519,23 +2498,6 @@
     "OAuth Integrations": "OAuth Integrations",
     "OAuth failed": "OAuth failed",
     "OAuth start failed": "OAuth start failed",
-<<<<<<< Updated upstream
-=======
-    "Object Prune Rules": "Object Prune Rules",
-    "Observability": "Observability",
-    "Observed latency": "Observed latency",
-    "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.": "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.",
-    "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook": "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook",
-    "Ocean Breeze": "Ocean Breeze",
-    "of": "of",
-    "of 3:": "of 3:",
-    "off": "off",
-    "Official": "Official",
-    "Official documentation": "Official documentation",
-    "Official Repository": "Official Repository",
-    "Official Sync": "Official Sync",
-    "OhMyGPT": "OhMyGPT",
->>>>>>> Stashed changes
     "OIDC": "OIDC",
     "OIDC Client ID": "OIDC Client ID",
     "OIDC Client Secret": "OIDC Client Secret",
@@ -2544,6 +2506,7 @@
     "OIDC endpoints discovered successfully": "OIDC endpoints discovered successfully",
     "Object Prune Rules": "Object Prune Rules",
     "Observability": "Observability",
+    "Observed latency": "Observed latency",
     "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.": "Obtain the API key, merchant ID, and RSA key pair from the Waffo dashboard, and configure the callback URL.",
     "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook": "Obtain the merchant, store, product and signing keys from your Waffo dashboard. Webhook URL: <ServerAddress>/api/waffo-pancake/webhook",
     "Ocean Breeze": "Ocean Breeze",
@@ -2559,13 +2522,9 @@
     "One API": "One API",
     "One IP or CIDR range per line": "One IP or CIDR range per line",
     "One IP per line (empty for no restriction)": "One IP per line (empty for no restriction)",
-<<<<<<< Updated upstream
     "One domain per line": "One domain per line",
     "One domain per line (only used when domain restriction is enabled)": "One domain per line (only used when domain restriction is enabled)",
-=======
-    "one keyword per line": "one keyword per line",
     "One route, many models": "One route, many models",
->>>>>>> Stashed changes
     "Online": "Online",
     "Online payment is not enabled. Please contact the administrator.": "Online payment is not enabled. Please contact the administrator.",
     "Online topup is not enabled. Please use redemption code or contact administrator.": "Online topup is not enabled. Please use redemption code or contact administrator.",
@@ -2590,11 +2549,7 @@
     "Open menu": "Open menu",
     "Open release": "Open release",
     "Open source": "Open source",
-<<<<<<< Updated upstream
-=======
-    "Open Source": "Open Source",
     "Open source attribution": "Open source attribution",
->>>>>>> Stashed changes
     "Open the io.net console API Keys page": "Open the io.net console API Keys page",
     "Open theme settings": "Open theme settings",
     "Open weights": "Open weights",
@@ -2609,11 +2564,8 @@
     "Opened authorization page": "Opened authorization page",
     "Operation": "Operation",
     "Operation Type": "Operation Type",
-<<<<<<< Updated upstream
     "Operation failed": "Operation failed",
-=======
     "Operational visibility": "Operational visibility",
->>>>>>> Stashed changes
     "Operations": "Operations",
     "Operator Admin": "Operator Admin",
     "Optimize system for self-hosted single-user usage": "Optimize system for self-hosted single-user usage",
@@ -2724,6 +2676,7 @@
     "Path not set": "Path not set",
     "Path:": "Path:",
     "Pay": "Pay",
+    "Pay in your local currency": "Pay in your local currency",
     "Pay-as-you-go with real-time usage monitoring": "Pay-as-you-go with real-time usage monitoring",
     "Payment Channel": "Payment Channel",
     "Payment Gateway": "Payment Gateway",
@@ -2906,13 +2859,8 @@
     "Pricing group example": "Pricing group example",
     "Pricing groups": "Pricing groups",
     "Pricing mode": "Pricing mode",
-<<<<<<< Updated upstream
-=======
-    "Pricing Ratios": "Pricing Ratios",
-    "Pricing Type": "Pricing Type",
-    "Primary lane": "Primary lane",
->>>>>>> Stashed changes
     "Primary Model": "Primary Model",
+    "Primary lane": "Primary lane",
     "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)": "Prioritize reusing the last successful channel based on keys extracted from request context (sticky routing)",
     "Priority": "Priority",
     "Priority (Default)": "Priority (Default)",
@@ -2954,11 +2902,8 @@
     "Provide per-model header overrides as JSON. Useful for enabling beta features such as expanded context windows.": "Provide per-model header overrides as JSON. Useful for enabling beta features such as expanded context windows.",
     "Provider": "Provider",
     "Provider & data privacy": "Provider & data privacy",
-<<<<<<< Updated upstream
     "Provider Name": "Provider Name",
-=======
     "Provider coverage": "Provider coverage",
->>>>>>> Stashed changes
     "Provider created successfully": "Provider created successfully",
     "Provider deleted successfully": "Provider deleted successfully",
     "Provider type (OpenAI, Anthropic, etc.)": "Provider type (OpenAI, Anthropic, etc.)",
@@ -3428,8 +3373,8 @@
     "Selectable groups": "Selectable groups",
     "Selected conflicts were overwritten successfully.": "Selected conflicts were overwritten successfully.",
     "Selected when creating a token and used as the default billing group for API calls.": "Selected when creating a token and used as the default billing group for API calls.",
-    "Self-hosted first": "Self-hosted first",
     "Self-Use Mode": "Self-Use Mode",
+    "Self-hosted first": "Self-hosted first",
     "Send": "Send",
     "Send a request": "Send a request",
     "Send code": "Send code",
@@ -3926,6 +3871,7 @@
     "Trim leading/trailing whitespace": "Trim leading/trailing whitespace",
     "Truncate embeddings to this many dimensions": "Truncate embeddings to this many dimensions",
     "Trusted": "Trusted",
+    "Trusted by developers shipping production AI features.": "Trusted by developers shipping production AI features.",
     "Try adjusting your search": "Try adjusting your search",
     "Try adjusting your search to locate a missing model.": "Try adjusting your search to locate a missing model.",
     "Tune selection priority, testing, status handling, and request overrides.": "Tune selection priority, testing, status handling, and request overrides.",
@@ -4038,11 +3984,8 @@
     "Uptime Kuma groups saved successfully": "Uptime Kuma groups saved successfully",
     "Uptime since": "Uptime since",
     "Usage": "Usage",
-<<<<<<< Updated upstream
     "Usage Logs": "Usage Logs",
-=======
     "Usage and billing clarity": "Usage and billing clarity",
->>>>>>> Stashed changes
     "Usage at a glance": "Usage at a glance",
     "Usage guide": "Usage guide",
     "Usage logs": "Usage logs",
@@ -4221,14 +4164,6 @@
     "Webhook secret": "Webhook secret",
     "Webhook signing secret (leave blank unless updating)": "Webhook signing secret (leave blank unless updating)",
     "Website is under maintenance!": "Website is under maintenance!",
-<<<<<<< Updated upstream
-=======
-    "WeChat": "WeChat",
-    "WeChat login QR code": "WeChat login QR code",
-    "WeChat Pay": "WeChat Pay",
-    "WeChat QR code will be displayed here": "WeChat QR code will be displayed here",
-    "WeChat sign in": "WeChat sign in",
->>>>>>> Stashed changes
     "Week": "Week",
     "Weekday": "Weekday",
     "Weekly": "Weekly",
@@ -4238,6 +4173,7 @@
     "Weekly token usage by model since launch": "Weekly token usage by model since launch",
     "Weight": "Weight",
     "Weighted by request count": "Weighted by request count",
+    "Welcome back": "Welcome back",
     "Welcome back!": "Welcome back!",
     "Welcome to our New API...": "Welcome to our New API...",
     "Well-Known URL": "Well-Known URL",
@@ -4259,12 +4195,8 @@
     "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.": "When running in containers or ephemeral environments, ensure the SQLite file is mapped to persistent storage to avoid data loss on restart.",
     "Whitelist": "Whitelist",
     "Whitelist (Only allow listed IPs)": "Whitelist (Only allow listed IPs)",
-<<<<<<< Updated upstream
     "Whitelist (Only allow listed domains)": "Whitelist (Only allow listed domains)",
-=======
-    "whsec_xxx": "whsec_xxx",
     "Why DeepRouter": "Why DeepRouter",
->>>>>>> Stashed changes
     "Window:": "Window:",
     "Wire encoding for the embedding vectors": "Wire encoding for the embedding vectors",
     "Without additional conditions, only the type above is used for pruning.": "Without additional conditions, only the type above is used for pruning.",
@@ -4297,22 +4229,17 @@
     "Your GitHub OAuth Client Secret": "Your GitHub OAuth Client Secret",
     "Your Referral Link": "Your Referral Link",
     "Your Telegram Bot Token": "Your Telegram Bot Token",
-    "Your transaction history will appear here": "Your transaction history will appear here",
     "Your Turnstile secret key": "Your Turnstile secret key",
     "Your Turnstile site key": "Your Turnstile site key",
-<<<<<<< Updated upstream
     "Your new API key is ready": "Your new API key is ready",
     "Your new backup codes are ready": "Your new backup codes are ready",
     "Your setup guide is collapsed so usage stays in focus.": "Your setup guide is collapsed so usage stays in focus.",
     "Your system access token for API authentication. Keep it secure and don't share it with others.": "Your system access token for API authentication. Keep it secure and don't share it with others.",
     "Your transaction history will appear here": "Your transaction history will appear here",
-=======
->>>>>>> Stashed changes
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom",
-<<<<<<< Updated upstream
     "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]": "[{\"ChatGPT\":\"https://chat.openai.com\"},{\"Lobe Chat\":\"https://chat-preview.lobehub.com/?settings={...}\"}]",
     "[{\"name\":\"支付宝\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]": "[{\"name\":\"Alipay\",\"type\":\"alipay\",\"color\":\"#1677FF\"}]",
     "_copy": "_copy",
@@ -4395,7 +4322,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -4549,13 +4476,5 @@
     "{{value}}s": "{{value}}s",
     "| Based on": "| Based on",
     "© 2025 Your Company. All rights reserved.": "© 2025 Your Company. All rights reserved."
-=======
-    "Welcome back": "Welcome back",
-    "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.": "Chat with GPT-5, Claude, Gemini and 20+ models from one place — no API keys, no foreign cards, no engineering.",
-    "GPT-5, Claude, Gemini & 20+ models": "GPT-5, Claude, Gemini & 20+ models",
-    "Pay in your local currency": "Pay in your local currency",
-    "Drop-in OpenAI-compatible API": "Drop-in OpenAI-compatible API",
-    "Trusted by developers shipping production AI features.": "Trusted by developers shipping production AI features."
->>>>>>> Stashed changes
   }
 }
