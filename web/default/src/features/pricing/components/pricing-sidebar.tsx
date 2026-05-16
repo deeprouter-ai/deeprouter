@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { ChevronDown, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -156,6 +157,9 @@ function FilterSection(props: FilterSectionProps) {
 
 export function PricingSidebar(props: PricingSidebarProps) {
   const { t } = useTranslation()
+  // Group ratio suffix ("x1.2") is an operator concept; non-admin
+  // users don't need to see markup multipliers next to group filters.
+  const isAdmin = useIsAdmin()
   const quotaTypeLabels = getQuotaTypeLabels(t)
   const endpointTypeLabels = getEndpointTypeLabels(t)
 
@@ -186,7 +190,9 @@ export function PricingSidebar(props: PricingSidebarProps) {
     ...props.groups.map((group) => ({
       value: group,
       label: group,
-      suffix: formatGroupRatio(props.groupRatios?.[group]),
+      suffix: isAdmin
+        ? formatGroupRatio(props.groupRatios?.[group])
+        : undefined,
     })),
   ]
 
