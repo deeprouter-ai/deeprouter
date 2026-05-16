@@ -27,6 +27,50 @@ type UserSetting struct {
 	// We keep omitempty so legacy users' setting JSON stays clean — only
 	// explicitly-set "unset"/"casual"/... values round-trip.
 	Persona string `json:"persona,omitempty"`
+
+	// === Onboarding signup-captured fields (PR #8) ===
+	// Set during the 4-step signup wizard. All optional; defaults are
+	// safe (empty strings handled by frontend fallback logic).
+
+	// BrandPreference: 'claude' | 'openai' | 'gemini' | 'deepseek' | ''
+	// Drives the auto-created default token's simple_brand binding so
+	// users who picked Claude at signup can immediately call model:
+	// "deeprouter" and get Claude.
+	BrandPreference string `json:"brand_preference,omitempty"`
+
+	// PreferredClient: 'cherry-studio' | 'chatbox' | 'lobechat' | 'cursor'
+	// | 'claude-code' | 'code' | 'playground' | 'dashboard' | ''
+	// Drives the post-signup redirect target.
+	PreferredClient string `json:"preferred_client,omitempty"`
+
+	// AcquisitionChannel: captured silently from document.referrer +
+	// utm_* params at signup time. Marketing attribution.
+	AcquisitionChannel string `json:"acquisition_channel,omitempty"`
+
+	// Timezone: IANA tz string from browser (e.g. "Asia/Shanghai").
+	Timezone string `json:"timezone,omitempty"`
+
+	// OnboardingCompletedAt: ISO timestamp set when wizard finishes
+	// (skipping steps still counts as complete). Drives the
+	// "Getting Started" checklist on dashboard.
+	OnboardingCompletedAt string `json:"onboarding_completed_at,omitempty"`
+
+	// === Optional profile fields (PR #9, edited in /profile not signup) ===
+
+	// Industry: 'education' | 'finance' | 'ecommerce' | 'gaming' |
+	// 'individual' | 'saas' | 'other' | ''
+	Industry string `json:"industry,omitempty"`
+
+	// ExpectedVolume: 'trying' | 'daily-low' | 'daily-medium' |
+	// 'daily-high' | ''
+	ExpectedVolume string `json:"expected_volume,omitempty"`
+
+	// MarketingEmails: explicit opt-in. Default false.
+	MarketingEmails bool `json:"marketing_emails,omitempty"`
+
+	// OnboardingChecklistDismissedAt: user clicked X on the Getting
+	// Started widget. Don't show again.
+	OnboardingChecklistDismissedAt string `json:"onboarding_checklist_dismissed_at,omitempty"`
 }
 
 var (

@@ -39,6 +39,32 @@ export interface RegisterPayload {
   verification_code?: string
   aff?: string
   turnstile?: string
+  // Signup-wizard captures (optional — backend falls back to "unset"
+  // persona which dashboard picker handles). See docs/tasks/onboarding-prd.md
+  persona?: 'casual' | 'dev' | 'team' | 'unset'
+  brand_preference?: 'claude' | 'openai' | 'gemini' | 'deepseek' | ''
+  preferred_client?:
+    | 'cherry-studio' | 'chatbox' | 'lobechat'
+    | 'cursor' | 'claude-code' | 'code'
+    | 'playground' | 'dashboard' | ''
+  acquisition_channel?: string
+  timezone?: string
+}
+
+/**
+ * Extended register response — server auto-signs-in and returns one-shot
+ * onboarding artifacts (default token, trial quota, suggested next route).
+ * The default_token is the ONLY time the user sees this string; after
+ * navigating away it is gone.
+ */
+export interface RegisterResponseData {
+  id: number
+  username: string
+  display_name: string
+  role: number
+  default_token: string  // empty when GenerateDefaultToken=false
+  trial_quota: number    // raw quota units (500_000 = $1)
+  next: string           // "/onboarding/cherry-studio" or "/playground" or ""
 }
 
 export interface PasswordResetPayload {

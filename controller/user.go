@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -27,6 +28,25 @@ import (
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+// RegisterRequest covers the signup-wizard payload (PRD docs/tasks/
+// onboarding-prd.md §4). All fields beyond the credentials are optional
+// — the user can skip Step 2-4 and the wizard sends empty strings,
+// which the dashboard persona-picker (PR #3) falls back on.
+type RegisterRequest struct {
+	Username         string `json:"username"`
+	Password         string `json:"password"`
+	Email            string `json:"email,omitempty"`
+	VerificationCode string `json:"verification_code,omitempty"`
+	AffCode          string `json:"aff_code,omitempty"`
+
+	// Step 2-4 wizard captures
+	Persona            string `json:"persona,omitempty"`             // casual|dev|team|unset
+	BrandPreference    string `json:"brand_preference,omitempty"`    // claude|openai|gemini|deepseek|''
+	PreferredClient    string `json:"preferred_client,omitempty"`    // cherry-studio|chatbox|...|playground|dashboard|''
+	AcquisitionChannel string `json:"acquisition_channel,omitempty"` // utm_source / referrer marker
+	Timezone           string `json:"timezone,omitempty"`            // IANA tz from browser
 }
 
 func Login(c *gin.Context) {
@@ -143,27 +163,34 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
 		return
 	}
-	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
+	var req RegisterRequest
+	err := json.NewDecoder(c.Request.Body).Decode(&req)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	if err := common.Validate.Struct(&user); err != nil {
+	// Reuse existing model.User validation rules (username + password
+	// constraints) by populating just the validated fields.
+	validateUser := model.User{
+		Username: req.Username,
+		Password: req.Password,
+		Email:    req.Email,
+	}
+	if err := common.Validate.Struct(&validateUser); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
 	if common.EmailVerificationEnabled {
-		if user.Email == "" || user.VerificationCode == "" {
+		if req.Email == "" || req.VerificationCode == "" {
 			common.ApiErrorI18n(c, i18n.MsgUserEmailVerificationRequired)
 			return
 		}
-		if !common.VerifyCodeWithKey(user.Email, user.VerificationCode, common.EmailVerificationPurpose) {
+		if !common.VerifyCodeWithKey(req.Email, req.VerificationCode, common.EmailVerificationPurpose) {
 			common.ApiErrorI18n(c, i18n.MsgUserVerificationCodeError)
 			return
 		}
 	}
-	exist, err := model.CheckUserExistOrDeleted(user.Username, user.Email)
+	exist, err := model.CheckUserExistOrDeleted(req.Username, req.Email)
 	if err != nil {
 		common.ApiErrorI18n(c, i18n.MsgDatabaseError)
 		common.SysLog(fmt.Sprintf("CheckUserExistOrDeleted error: %v", err))
@@ -173,22 +200,39 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserExists)
 		return
 	}
-	affCode := user.AffCode // this code is the inviter's code, not the user's own code
-	inviterId, _ := model.GetUserIdByAffCode(affCode)
+	inviterId, _ := model.GetUserIdByAffCode(req.AffCode)
 	cleanUser := model.User{
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.Username,
+		Username:    req.Username,
+		Password:    req.Password,
+		DisplayName: req.Username,
 		InviterId:   inviterId,
-		Role:        common.RoleCommonUser, // 明确设置角色为普通用户
+		Role:        common.RoleCommonUser,
 	}
 	if common.EmailVerificationEnabled {
-		cleanUser.Email = user.Email
+		cleanUser.Email = req.Email
 	}
-	// Seed setting with persona="unset" sentinel so the frontend prompts the
-	// new account to pick a persona on first authenticated load. Legacy
-	// users have this key absent and are treated as 'dev' silently.
-	defaultSetting := dto.UserSetting{Persona: "unset"}
+	// Seed setting with whatever the wizard captured. Persona falls back
+	// to "unset" sentinel so the dashboard picker (PR #3) still prompts
+	// when the user skipped Step 2.
+	persona := req.Persona
+	if persona == "" {
+		persona = "unset"
+	}
+	defaultSetting := dto.UserSetting{
+		Persona:            persona,
+		BrandPreference:    req.BrandPreference,
+		PreferredClient:    req.PreferredClient,
+		AcquisitionChannel: req.AcquisitionChannel,
+		Timezone:           req.Timezone,
+	}
+	// Only stamp OnboardingCompletedAt when the user made ALL three
+	// wizard choices (persona + brand + client). Skipping anything
+	// leaves it empty so the Getting Started checklist on dashboard
+	// still nudges them to finish.
+	if req.Persona != "" && req.Persona != "unset" &&
+		req.PreferredClient != "" {
+		defaultSetting.OnboardingCompletedAt = time.Now().UTC().Format(time.RFC3339)
+	}
 	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
 		settingStr := string(settingBytes)
 		cleanUser.Setting = &settingStr
@@ -204,25 +248,41 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserRegisterFailed)
 		return
 	}
-	// 生成默认令牌
+
+	// 生成默认令牌 — only one we explicitly surface back to the user
+	// (the Welcome screen reads it from the response). After this
+	// initial response the key string is gone; the user has to copy it
+	// or regenerate via /keys.
+	var defaultTokenKey string
 	if constant.GenerateDefaultToken {
-		key, err := common.GenerateKey()
-		if err != nil {
+		key, kErr := common.GenerateKey()
+		if kErr != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserDefaultTokenFailed)
-			common.SysLog("failed to generate token key: " + err.Error())
+			common.SysLog("failed to generate token key: " + kErr.Error())
 			return
 		}
-		// 生成默认令牌
 		token := model.Token{
-			UserId:             insertedUser.Id, // 使用插入后的用户ID
+			UserId:             insertedUser.Id,
 			Name:               cleanUser.Username + "的初始令牌",
 			Key:                key,
 			CreatedTime:        common.GetTimestamp(),
 			AccessedTime:       common.GetTimestamp(),
-			ExpiredTime:        -1,     // 永不过期
-			RemainQuota:        500000, // 示例额度
+			ExpiredTime:        -1,
+			RemainQuota:        500000,
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
+		}
+		// Bind the default token to the wizard-captured brand so a casual
+		// user who picked Claude can immediately call model: "deeprouter"
+		// in Cherry Studio without configuring anything else. See
+		// setting/alias_setting/seed/aliases.yaml + middleware/distributor
+		// for the resolution path.
+		if req.Persona != "" && req.Persona != "unset" &&
+			req.Persona != "all" {
+			token.SimplePurpose = req.Persona
+		}
+		if req.BrandPreference != "" {
+			token.SimpleBrand = req.BrandPreference
 		}
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
@@ -231,13 +291,51 @@ func Register(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
 			return
 		}
+		defaultTokenKey = "sk-" + key
+	}
+
+	// Auto sign-in so the wizard doesn't dump the user onto /sign-in to
+	// type the password again. Mirrors setupLogin's session setup but
+	// returns the Welcome-screen payload (default token + trial quota +
+	// next-route hint) instead of the standard login response.
+	model.UpdateUserLastLoginAt(insertedUser.Id)
+	session := sessions.Default(c)
+	session.Set("id", insertedUser.Id)
+	session.Set("username", insertedUser.Username)
+	session.Set("role", insertedUser.Role)
+	session.Set("status", insertedUser.Status)
+	session.Set("group", insertedUser.Group)
+	if err := session.Save(); err != nil {
+		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
+		return
+	}
+
+	// Compute the post-signup landing route based on preferred_client.
+	// Frontend falls back to PERSONA_PRESETS default if next == "".
+	next := ""
+	switch req.PreferredClient {
+	case "cherry-studio", "chatbox", "lobechat",
+		"cursor", "claude-code", "code":
+		next = "/onboarding/" + req.PreferredClient
+	case "playground":
+		next = "/playground"
+	case "dashboard":
+		next = "/dashboard/overview"
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data": gin.H{
+			"id":            insertedUser.Id,
+			"username":      insertedUser.Username,
+			"display_name":  insertedUser.DisplayName,
+			"role":          insertedUser.Role,
+			"default_token": defaultTokenKey,        // empty when GenerateDefaultToken=false
+			"trial_quota":   common.QuotaForNewUser, // raw quota units; frontend formats
+			"next":          next,
+		},
 	})
-	return
 }
 
 func GetAllUsers(c *gin.Context) {

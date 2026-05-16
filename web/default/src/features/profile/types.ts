@@ -129,6 +129,19 @@ export interface UserSettings {
    * - undefined — legacy user (key absent); treated as 'dev' silently.
    */
   persona?: Persona | 'unset'
+  /** Signup-wizard captures (see docs/tasks/onboarding-prd.md §5) */
+  brand_preference?: 'claude' | 'openai' | 'gemini' | 'deepseek' | ''
+  preferred_client?:
+    | 'cherry-studio' | 'chatbox' | 'lobechat'
+    | 'cursor' | 'claude-code' | 'code'
+    | 'playground' | 'dashboard' | ''
+  acquisition_channel?: string
+  timezone?: string
+  onboarding_completed_at?: string
+  industry?: string
+  expected_volume?: 'trying' | 'daily-low' | 'daily-medium' | 'daily-high' | ''
+  marketing_emails?: boolean
+  onboarding_checklist_dismissed_at?: string
 }
 
 export type Persona = 'casual' | 'dev' | 'team'
