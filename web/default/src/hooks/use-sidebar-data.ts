@@ -29,7 +29,7 @@ import {
   Command,
   Radio,
   FlaskConical,
-  MessageSquare,
+  // MessageSquare,  // un-comment when restoring chat-presets dropdown
   CreditCard,
   ListTodo,
   Settings,
@@ -60,11 +60,17 @@ export function useSidebarData(): SidebarData {
             url: '/playground',
             icon: FlaskConical,
           },
-          {
-            title: t('Chat'),
-            icon: MessageSquare,
-            type: 'chat-presets',
-          },
+          // DeepRouter: chat-presets dropdown (Cherry Studio / AionUI /
+          // CC Switch / DeepChat / Lobe Chat / AI as Workspace / AMA 问天 /
+          // OpenCat third-party deep-links) hidden from the sidebar — most
+          // users won't pick a client off this list, and the entries don't
+          // match DeepRouter's positioning. Restore by un-commenting below
+          // once we curate our own list or want the upstream defaults back.
+          // {
+          //   title: t('Chat'),
+          //   icon: MessageSquare,
+          //   type: 'chat-presets',
+          // },
         ],
       },
       {
