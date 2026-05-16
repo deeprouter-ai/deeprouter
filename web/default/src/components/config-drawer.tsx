@@ -28,9 +28,8 @@ import { IconLayoutFull } from '@/assets/custom/icon-layout-full'
 import { IconSidebarFloating } from '@/assets/custom/icon-sidebar-floating'
 import { IconSidebarInset } from '@/assets/custom/icon-sidebar-inset'
 import { IconSidebarSidebar } from '@/assets/custom/icon-sidebar-sidebar'
-import { IconThemeDark } from '@/assets/custom/icon-theme-dark'
-import { IconThemeLight } from '@/assets/custom/icon-theme-light'
-import { IconThemeSystem } from '@/assets/custom/icon-theme-system'
+// IconThemeDark / IconThemeLight / IconThemeSystem dropped along with the
+// ThemeConfig section; re-add when restoring the light/dark switcher.
 import {
   type ContentLayout,
   THEME_PRESETS,
@@ -96,7 +95,10 @@ export function ConfigDrawer() {
           </SheetDescription>
         </SheetHeader>
         <div className='space-y-6 overflow-y-auto px-4'>
-          <ThemeConfig />
+          {/* DeepRouter: hide ThemeConfig (light/dark/system switcher) — the
+            * dark palette hasn't been retuned to match the warm cream brand
+            * yet, and offering the toggle ships users to a half-finished
+            * mode. Re-mount <ThemeConfig /> once dark mode is on-brand. */}
           <PresetConfig />
           <RadiusConfig />
           <ScaleConfig />
@@ -201,37 +203,9 @@ function RadioGroupItem(props: {
   )
 }
 
-function ThemeConfig() {
-  const { t } = useTranslation()
-  const { defaultTheme, theme, setTheme } = useTheme()
-  return (
-    <div>
-      <SectionTitle
-        title={t('Theme')}
-        showReset={theme !== defaultTheme}
-        onReset={() => setTheme(defaultTheme)}
-      />
-      <Radio
-        value={theme}
-        onValueChange={setTheme}
-        className='grid w-full max-w-md grid-cols-3 gap-4'
-        aria-label={t('Select theme preference')}
-        aria-describedby='theme-description'
-      >
-        {[
-          { value: 'system', label: t('System'), icon: IconThemeSystem },
-          { value: 'light', label: t('Light'), icon: IconThemeLight },
-          { value: 'dark', label: t('Dark'), icon: IconThemeDark },
-        ].map((item) => (
-          <RadioGroupItem key={item.value} item={item} isTheme />
-        ))}
-      </Radio>
-      <div id='theme-description' className='sr-only'>
-        {t('Choose between system preference, light mode, or dark mode')}
-      </div>
-    </div>
-  )
-}
+// ThemeConfig (light/dark/system) intentionally removed — see note in
+// ConfigDrawer above. Restore from git history (file revision before the
+// commit that removed the section) once dark palette is on-brand.
 
 function PresetConfig() {
   const { t } = useTranslation()
