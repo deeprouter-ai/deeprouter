@@ -46,6 +46,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
+import { useNavigate } from '@tanstack/react-router'
 import { register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
@@ -53,7 +54,13 @@ import { registerFormSchema } from '@/features/auth/constants'
 import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
-import { getAffiliateCode } from '@/features/auth/lib/storage'
+import {
+  getAffiliateCode,
+  setWelcomeHandoff,
+  captureAcquisitionMeta,
+  readAcquisitionMeta,
+} from '@/features/auth/lib/storage'
+import type { RegisterResponseData } from '@/features/auth/types'
 
 export function SignUpForm({
   className,
@@ -69,6 +76,12 @@ export function SignUpForm({
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
 
   const { status } = useStatus()
+  const navigate = useNavigate()
+  // Capture acquisition meta on first mount so we know where the user
+  // came from even after multiple form submissions / page navigations.
+  useEffect(() => {
+    captureAcquisitionMeta()
+  }, [])
   const {
     isTurnstileEnabled,
     turnstileSiteKey,
@@ -76,7 +89,7 @@ export function SignUpForm({
     setTurnstileToken,
     validateTurnstile,
   } = useTurnstile()
-  const { redirectToLogin, handleLoginSuccess } = useAuthRedirect()
+  const { handleLoginSuccess } = useAuthRedirect()
   const {
     isSending: isSendingCode,
     secondsLeft,
@@ -150,6 +163,7 @@ export function SignUpForm({
 
     setIsLoading(true)
     try {
+      const acquisition = readAcquisitionMeta()
       const res = await register({
         username: data.username,
         password: data.password,
@@ -157,11 +171,21 @@ export function SignUpForm({
         verification_code: verificationCode || undefined,
         aff: getAffiliateCode(),
         turnstile: turnstileToken,
+        // Step 2-4 are captured at /welcome instead — leaving these
+        // empty puts persona on the "unset" sentinel and the dashboard
+        // picker (PR #3) becomes the fallback if user closes /welcome.
+        acquisition_channel: acquisition.channel,
+        timezone: acquisition.timezone,
       })
 
       if (res?.success) {
-        toast.success(t('Account created! Please sign in'))
-        redirectToLogin()
+        // Backend already set the session; stash the one-shot artifacts
+        // (default token, trial quota, next route) for /welcome and
+        // navigate there. Welcome page captures persona/brand/client.
+        if (res.data) {
+          setWelcomeHandoff(res.data as RegisterResponseData)
+        }
+        navigate({ to: '/welcome' })
       }
     } catch (_error) {
       // Errors are handled by global interceptor
