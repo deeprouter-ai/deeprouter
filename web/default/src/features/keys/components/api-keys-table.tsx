@@ -173,7 +173,7 @@ function ApiKeysMobileList({
 export function ApiKeysTable() {
   const { t } = useTranslation()
   const { refreshTrigger, setOpen } = useApiKeys()
-  const handleCreate = () => setOpen('create')
+  const handleCreate = () => setOpen('mode-picker')
   const columns = useApiKeysColumns()
   const [rowSelection, setRowSelection] = useState({})
   const [sorting, setSorting] = useState<SortingState>([])

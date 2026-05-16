@@ -59,7 +59,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
@@ -72,7 +71,6 @@ import {
   detectAdvancedMode,
   getApiKeyFormDefaultValues,
   loadPreferredMode,
-  savePreferredMode,
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
@@ -126,7 +124,7 @@ export function ApiKeysMutateDrawer({
 }: ApiKeyMutateDrawerProps) {
   const { t } = useTranslation()
   const isUpdate = !!currentRow
-  const { triggerRefresh } = useApiKeys()
+  const { triggerRefresh, setOpen: setApiKeysDialog } = useApiKeys()
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -205,12 +203,12 @@ export function ApiKeysMutateDrawer({
     }
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, userDefaultGroup])
 
-  const handleModeChange = (next: string) => {
-    const nextMode: CreateMode = next === 'advanced' ? 'advanced' : 'simple'
-    setMode(nextMode)
-    // Only persist the preference for the create flow — edits inherit the
-    // smart-detected mode from the token's actual state.
-    if (!isUpdate) savePreferredMode(nextMode)
+  // Re-open the mode-picker dialog so the user can switch modes mid-create.
+  // The drawer stays open underneath; when the user picks a mode the picker
+  // closes itself and our form-init useEffect re-runs against the new
+  // preferred mode (since we close + reopen 'create').
+  const handleChangeMode = () => {
+    setApiKeysDialog('mode-picker')
   }
 
   const onSubmit = async (data: ApiKeyFormValues) => {
@@ -307,15 +305,33 @@ export function ApiKeysMutateDrawer({
         className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[620px]'
       >
         <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
-          <SheetTitle className='text-base sm:text-lg'>
-            {isUpdate ? t('Update API Key') : t('Create API Key')}
-          </SheetTitle>
-          <SheetDescription className='pr-6 text-xs sm:text-sm'>
-            {isUpdate
-              ? t('Update the API key by providing necessary info.')
-              : t('Add a new API key by providing necessary info.')}{' '}
-            {t("Click save when you're done.")}
-          </SheetDescription>
+          <div className='flex items-start justify-between gap-3'>
+            <div className='min-w-0'>
+              <SheetTitle className='text-base sm:text-lg'>
+                {isUpdate ? t('Update API Key') : t('Create API Key')}
+              </SheetTitle>
+              <SheetDescription className='pr-6 text-xs sm:text-sm'>
+                {isUpdate
+                  ? t('Update the API key by providing necessary info.')
+                  : mode === 'simple'
+                    ? t(
+                        'Simple mode — defaults to unlimited models and any IP.'
+                      )
+                    : t('Add a new API key by providing necessary info.')}
+              </SheetDescription>
+            </div>
+            {!isUpdate && (
+              <button
+                type='button'
+                onClick={handleChangeMode}
+                className='text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline focus-visible:outline-none'
+              >
+                {mode === 'simple'
+                  ? t('Switch to Advanced')
+                  : t('Switch to Simple')}
+              </button>
+            )}
+          </div>
         </SheetHeader>
         <Form {...form}>
           <form
@@ -323,26 +339,12 @@ export function ApiKeysMutateDrawer({
             onSubmit={form.handleSubmit(onSubmit)}
             className='min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 py-3 sm:space-y-4 sm:px-4 sm:py-4'
           >
-            {/* DeepRouter Simple ↔ Advanced mode toggle. Simple hides the
+            {/* Mode is chosen via the mode-picker Dialog before the drawer
+              * opens (see ApiKeysDialogs). The "Switch to ..." link in the
+              * SheetHeader re-opens the picker mid-flow. Simple hides
               * group / cross_group_retry / tokenCount / model_limits /
-              * allow_ips fields so a first-time user sees just "name +
-              * expiry + quota" — closer to OpenAI's 2-field create flow.
-              * Hidden values are still kept in react-hook-form state, so a
-              * mode toggle is purely visual (no silent data loss). */}
-            <Tabs value={mode} onValueChange={handleModeChange}>
-              <TabsList className='grid w-full grid-cols-2'>
-                <TabsTrigger value='simple'>{t('Simple')}</TabsTrigger>
-                <TabsTrigger value='advanced'>{t('Advanced')}</TabsTrigger>
-              </TabsList>
-              {mode === 'simple' && (
-                <p className='text-muted-foreground mt-2 text-xs'>
-                  {t(
-                    'Simple key creation — defaults to unlimited models and any IP. Switch to Advanced to restrict.'
-                  )}
-                </p>
-              )}
-            </Tabs>
-
+              * allow_ips fields; their values stay in react-hook-form state
+              * across toggles so switching modes is purely visual. */}
             <ApiKeyFormSection
               title={t('Basic Information')}
               description={t('Set API key basic information')}
