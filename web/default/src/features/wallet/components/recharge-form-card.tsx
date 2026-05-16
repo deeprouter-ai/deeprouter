@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react'
 import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatNumber } from '@/lib/format'
+import { estimateChats, formatCount } from '@/lib/usage-estimate'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -263,6 +264,22 @@ export function RechargeFormCard({
                               </span>
                             )}
                           </div>
+                          {/* Human-friendly "how many chats" hint — derived
+                            * from the preset's quota value (estimateChats
+                            * uses a mid-tier model average; see
+                            * lib/usage-estimate.ts). Helps non-technical
+                            * users gauge value at a glance. */}
+                          {(() => {
+                            const chats = estimateChats(preset.value)
+                            if (chats <= 0) return null
+                            return (
+                              <div className='text-muted-foreground/70 mt-1 w-full text-[11px]'>
+                                {t('≈ {{count}} chats', {
+                                  count: formatCount(chats),
+                                })}
+                              </div>
+                            )
+                          })()}
                         </Button>
                       )
                     })}
