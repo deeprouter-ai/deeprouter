@@ -32,6 +32,7 @@ import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { cn } from '@/lib/utils'
+import { useIsAdmin } from '@/hooks/use-admin'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
 import {
@@ -134,6 +135,11 @@ export function ApiKeysMutateDrawer({
   const { t } = useTranslation()
   const isUpdate = !!currentRow
   const { triggerRefresh, setOpen: setApiKeysDialog } = useApiKeys()
+  // Reseller-flavored fields (Group, Cross-group retry, Quantity batch
+  // create) are operator concepts. Non-admin users — even in Advanced
+  // mode — should see a real developer view: Name + Allowed models +
+  // Expiration + Quota + IP whitelist. Admin role keeps the full surface.
+  const isAdmin = useIsAdmin()
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -532,7 +538,8 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              <FormField
+              {isAdmin && (
+                <FormField
                   control={form.control}
                   name='group'
                   render={({ field }) => (
@@ -550,8 +557,9 @@ export function ApiKeysMutateDrawer({
                     </FormItem>
                   )}
                 />
+              )}
 
-              {selectedGroup === 'auto' && (
+              {isAdmin && selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -637,7 +645,7 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              {!isUpdate && (
+              {!isUpdate && isAdmin && (
                 <FormField
                   control={form.control}
                   name='tokenCount'

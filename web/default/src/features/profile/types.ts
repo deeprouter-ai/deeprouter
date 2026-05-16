@@ -118,7 +118,20 @@ export interface UserSettings {
   upstream_model_update_notify_enabled?: boolean
   /** Preferred interface/API response language */
   language?: string
+  /**
+   * UI-tailoring preference (not a permission).
+   *
+   * - 'casual' — non-technical end users; sidebar shrunk to chat/playground/wallet.
+   * - 'dev'    — developers; full sidebar minus admin.
+   * - 'team'   — team/enterprise; same as dev for now, reserved for future.
+   * - 'unset'  — sentinel set by backend Register on new accounts; the
+   *              authenticated layout prompts the picker on first load.
+   * - undefined — legacy user (key absent); treated as 'dev' silently.
+   */
+  persona?: Persona | 'unset'
 }
+
+export type Persona = 'casual' | 'dev' | 'team'
 
 /**
  * User update request
@@ -145,6 +158,10 @@ export interface UpdateUserSettingsRequest {
   accept_unset_model_ratio_model?: boolean
   record_ip_log?: boolean
   upstream_model_update_notify_enabled?: boolean
+  /** UI-tailoring preference; see UserSettings.persona */
+  persona?: Persona | 'unset'
+  /** Sidebar visibility config (matches dto.UserSetting.SidebarModules) */
+  sidebar_modules?: string
 }
 
 /**

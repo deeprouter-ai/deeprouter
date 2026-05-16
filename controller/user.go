@@ -185,6 +185,14 @@ func Register(c *gin.Context) {
 	if common.EmailVerificationEnabled {
 		cleanUser.Email = user.Email
 	}
+	// Seed setting with persona="unset" sentinel so the frontend prompts the
+	// new account to pick a persona on first authenticated load. Legacy
+	// users have this key absent and are treated as 'dev' silently.
+	defaultSetting := dto.UserSetting{Persona: "unset"}
+	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
+		settingStr := string(settingBytes)
+		cleanUser.Setting = &settingStr
+	}
 	if err := cleanUser.Insert(inviterId); err != nil {
 		common.ApiError(c, err)
 		return

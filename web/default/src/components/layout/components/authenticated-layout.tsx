@@ -22,6 +22,7 @@ import { LayoutProvider } from '@/context/layout-provider'
 import { SearchProvider } from '@/context/search-provider'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { AnimatedOutlet } from '@/components/page-transition'
+import { PersonaPickerHost } from '@/components/persona-picker-host'
 import { SkipToMain } from '@/components/skip-to-main'
 import { WorkspaceProvider } from '../context/workspace-context'
 import { AppHeader } from './app-header'
@@ -53,6 +54,7 @@ export function AuthenticatedLayout(props: AuthenticatedLayoutProps) {
                 {props.children ?? <AnimatedOutlet />}
               </SidebarInset>
             </div>
+            <PersonaPickerHost />
           </SidebarProvider>
         </WorkspaceProvider>
       </SearchProvider>
