@@ -12,22 +12,36 @@ import (
 // defaultGroupRatio — DeepRouter pricing ladder (see docs/PRD.md §7).
 //
 //   ratio  = sell_price / upstream_cost
-//   margin = (sell - cost) / sell  = (ratio - 1) / ratio
+//   markup = ratio - 1                 (e.g. 1.2 = +20%)
+//   margin = (sell - cost) / sell      (e.g. ratio 1.2 → ~17% margin)
 //
-// Out-of-the-box defaults target ~70% gross margin on external traffic.
+// Default is a CONSERVATIVE +20% markup across the board.
+//
+// History / rationale:
+//   - v0.1 first ladder was aggressive (default 3.333× / enterprise 4.0×
+//     targeting 70-75% gross margin). Operator (Lightman, 2026-05-16)
+//     flagged that as too high for a launch default — if a ratio or
+//     upstream price is mis-configured the gateway over-charges customers
+//     before we notice. Lost a customer > made an extra dollar.
+//   - Revised default to flat 1.2× so a fresh install is safe.
+//     Operators move specific groups up to 2.0-3.5× later, deliberately,
+//     per business decision — not via the default.
+//
 // Operators override per group at runtime via admin UI System Settings →
-// Operations → 分组倍率, or PUT /api/option key=GroupRatio.
+// Operations → 分组倍率, or PUT /api/option key=GroupRatio. Existing
+// deployments need an explicit PUT — this default only affects fresh
+// installs (AddAll only fills missing keys).
 //
 // Group names align with PLAN.md / AIRBOTIX.md "Tenants (V0)" table —
 // airbotix-kids / jr-academy are the two launch tenants; default / vip /
 // svip / enterprise are the external SaaS tiers.
 var defaultGroupRatio = map[string]float64{
-	"default":       3.333, // external baseline       — 70% gross margin
-	"vip":           2.5,   // VIP external (volume)   — 60% margin
-	"svip":          2.0,   // Super VIP (anchor)      — 50% margin
-	"enterprise":    4.0,   // enterprise w/ SLA       — 75% margin
-	"airbotix-kids": 1.0,   // own product Airbotix    — pass-through
-	"jr-academy":    1.5,   // own product JR Academy  — 33% margin internal
+	"default":       1.2, // safe baseline — +20% markup (~17% margin)
+	"vip":           1.2, // bump up deliberately when running real VIP promos
+	"svip":          1.2,
+	"enterprise":    1.2, // raise to 2.0-3.5× per enterprise contract
+	"airbotix-kids": 1.2, // own product — small buffer for infra overhead
+	"jr-academy":    1.2, // own product — same
 }
 
 var groupRatioMap = types.NewRWMap[string, float64]()

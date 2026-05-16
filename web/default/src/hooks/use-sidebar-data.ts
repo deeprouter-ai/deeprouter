@@ -33,6 +33,7 @@ import {
   CreditCard,
   ListTodo,
   Settings,
+  HelpCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -60,12 +61,8 @@ export function useSidebarData(): SidebarData {
             url: '/playground',
             icon: FlaskConical,
           },
-          // DeepRouter: chat-presets dropdown (Cherry Studio / AionUI /
-          // CC Switch / DeepChat / Lobe Chat / AI as Workspace / AMA 问天 /
-          // OpenCat third-party deep-links) hidden from the sidebar — most
-          // users won't pick a client off this list, and the entries don't
-          // match DeepRouter's positioning. Restore by un-commenting below
-          // once we curate our own list or want the upstream defaults back.
+          // DeepRouter: chat-presets dropdown hidden — restore by
+          // un-commenting MessageSquare import + the entry below.
           // {
           //   title: t('Chat'),
           //   icon: MessageSquare,
@@ -156,6 +153,14 @@ export function useSidebarData(): SidebarData {
             url: '/system-settings/site',
             activeUrls: ['/system-settings'],
             icon: Settings,
+          },
+          // DeepRouter cheatsheet — keeps the Channel/Model/Group pricing
+          // relationship a click away so the operator never has to re-derive
+          // the quota formula from memory.
+          {
+            title: t('Pricing Cheatsheet'),
+            url: '/help/pricing',
+            icon: HelpCircle,
           },
         ],
       },
