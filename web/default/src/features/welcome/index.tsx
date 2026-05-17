@@ -180,7 +180,9 @@ function formatChatsCount(n: number): string {
   return `${Math.floor(n / 1000)}k`
 }
 
-export function Welcome() {
+export type WelcomeStep = 'persona' | 'brand' | 'client'
+
+export function Welcome({ step = 'persona' }: { step?: WelcomeStep }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.auth.user)
@@ -206,10 +208,26 @@ export function Welcome() {
     }
   }, [user, navigate])
 
-  const [persona, setPersona] = useState<Persona | null>(null)
+  // Default-select Casual so the Step 1 "Continue" is enabled on landing
+  // and non-technical users see a sensible pick highlighted. Brand defaults
+  // to "No preference" (empty) — same as the original. Client is left
+  // null and gets auto-suggested from the chosen persona below.
+  const [persona, setPersona] = useState<Persona | null>('casual')
   const [brand, setBrand] = useState<BrandId>('')
   const [client, setClient] = useState<ClientId | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const goToStep = (next: WelcomeStep) => {
+    navigate({ to: '/welcome', search: { step: next } })
+  }
+  // Sanitize deep-links: someone landing on ?step=brand or ?step=client
+  // without a persona pick gets rewound to step=persona.
+  useEffect(() => {
+    if (step !== 'persona' && !persona) {
+      goToStep('persona')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step])
 
   // Pre-suggest a sensible client based on persona pick — but user can
   // override any time before final submit.
@@ -345,27 +363,33 @@ export function Welcome() {
         </div>
       </div>
 
-      <Stepper currentStep={persona ? (client ? 3 : 2) : 1} totalSteps={3} />
+      <Stepper
+        currentStep={step === 'persona' ? 1 : step === 'brand' ? 2 : 3}
+        totalSteps={3}
+      />
 
-      {/* Step 2 — Persona */}
-      <Section title={t('How do you plan to use DeepRouter?')} stepLabel={t('Step 1 of 3')}>
-        <div className='grid gap-3 sm:grid-cols-3'>
-          {PERSONAS.map((p) => (
-            <ChoiceCard
-              key={p.id}
-              icon={<p.icon className='h-5 w-5' />}
-              title={t(p.titleKey)}
-              description={t(p.descKey)}
-              badge={p.badge ? t(p.badge) : undefined}
-              selected={persona === p.id}
-              onClick={() => setPersona(p.id)}
-            />
-          ))}
-        </div>
-      </Section>
+      {step === 'persona' && (
+        <Section
+          title={t('How do you plan to use DeepRouter?')}
+          stepLabel={t('Step 1 of 3')}
+        >
+          <div className='grid gap-3 sm:grid-cols-3'>
+            {PERSONAS.map((p) => (
+              <ChoiceCard
+                key={p.id}
+                icon={<p.icon className='h-5 w-5' />}
+                title={t(p.titleKey)}
+                description={t(p.descKey)}
+                badge={p.badge ? t(p.badge) : undefined}
+                selected={persona === p.id}
+                onClick={() => setPersona(p.id)}
+              />
+            ))}
+          </div>
+        </Section>
+      )}
 
-      {/* Step 3 — Brand */}
-      {persona && (
+      {step === 'brand' && (
         <Section
           title={t('Pick your favourite AI provider (optional)')}
           subtitle={t(
@@ -390,8 +414,7 @@ export function Welcome() {
         </Section>
       )}
 
-      {/* Step 4 — Landing */}
-      {persona && (
+      {step === 'client' && persona && (
         <Section
           title={t('Where would you like to start?')}
           stepLabel={t('Step 3 of 3')}
@@ -416,23 +439,49 @@ export function Welcome() {
       )}
 
       <div className='mt-6 flex items-center justify-between gap-2'>
-        <Button
-          type='button'
-          variant='ghost'
-          size='sm'
-          disabled={submitting}
-          onClick={() => handleFinish('dashboard', true)}
-        >
-          {t('Skip — set this later')}
-        </Button>
-        <Button
-          type='button'
-          disabled={!persona || !client || submitting}
-          onClick={() => handleFinish()}
-        >
-          {submitting ? t('Saving...') : t('Continue')}
-          <ArrowRight className='ml-1.5 h-4 w-4' />
-        </Button>
+        <div className='flex items-center gap-2'>
+          {step !== 'persona' && (
+            <Button
+              type='button'
+              variant='outline'
+              size='sm'
+              disabled={submitting}
+              onClick={() =>
+                goToStep(step === 'brand' ? 'persona' : 'brand')
+              }
+            >
+              {t('Back')}
+            </Button>
+          )}
+          <Button
+            type='button'
+            variant='ghost'
+            size='sm'
+            disabled={submitting}
+            onClick={() => handleFinish('dashboard', true)}
+          >
+            {t('Skip — set this later')}
+          </Button>
+        </div>
+        {step === 'client' ? (
+          <Button
+            type='button'
+            disabled={!persona || !client || submitting}
+            onClick={() => handleFinish()}
+          >
+            {submitting ? t('Saving...') : t('Finish')}
+            <ArrowRight className='ml-1.5 h-4 w-4' />
+          </Button>
+        ) : (
+          <Button
+            type='button'
+            disabled={step === 'persona' ? !persona : false}
+            onClick={() => goToStep(step === 'persona' ? 'brand' : 'client')}
+          >
+            {t('Continue')}
+            <ArrowRight className='ml-1.5 h-4 w-4' />
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -510,7 +559,7 @@ function ChoiceCard({
           </span>
         )}
       </span>
-      <span className='text-muted-foreground line-clamp-2 text-xs leading-snug'>
+      <span className='text-muted-foreground text-xs leading-snug'>
         {description}
       </span>
     </button>
