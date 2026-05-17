@@ -234,8 +234,7 @@ func Register(c *gin.Context) {
 		defaultSetting.OnboardingCompletedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
-		settingStr := string(settingBytes)
-		cleanUser.Setting = &settingStr
+		cleanUser.Setting = string(settingBytes)
 	}
 	if err := cleanUser.Insert(inviterId); err != nil {
 		common.ApiError(c, err)

@@ -413,7 +413,12 @@ func (user *User) Insert(inviterId int) error {
 
 	// 初始化用户设置，包括默认的边栏配置
 	if user.Setting == "" {
-		defaultSetting := dto.UserSetting{}
+		// Seed persona="unset" so OAuth signups (github/wechat/oidc/
+		// discord/linuxdo/telegram) flow through PersonaPickerHost ->
+		// /welcome wizard just like the email Register path does.
+		// Email Register pre-populates Setting before calling Insert,
+		// so this branch only fires for OAuth-created users.
+		defaultSetting := dto.UserSetting{Persona: "unset"}
 		// 这里暂时不设置SidebarModules，因为需要在用户创建后根据角色设置
 		user.SetSetting(defaultSetting)
 	}

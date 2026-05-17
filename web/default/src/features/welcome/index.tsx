@@ -192,16 +192,19 @@ export function Welcome() {
     takeWelcomeHandoff<RegisterResponseData>()
   )
 
-  // If a user navigates here directly (no handoff), gracefully redirect
-  // to dashboard. The wizard makes no sense without the just-signed-up
-  // context, and we don't want to expose a stale Welcome state.
+  // Unauthenticated visitors get bounced to /sign-in. Otherwise stay on
+  // the wizard even without a handoff — covers:
+  //   * Old backend (didn't return data) — user is logged in, just no
+  //     default-token banner
+  //   * OAuth signups landing here via PersonaPickerHost redirect
+  //   * Privacy-mode browsers where sessionStorage write failed
+  //   * User navigating to /welcome on their own to redo the picker
+  // The default-token banner is conditionally rendered against `handoff`.
   useEffect(() => {
-    if (!handoff && !user) {
+    if (!user) {
       navigate({ to: '/sign-in', replace: true })
-    } else if (!handoff && user) {
-      navigate({ to: '/dashboard/overview' as never, replace: true })
     }
-  }, [handoff, user, navigate])
+  }, [user, navigate])
 
   const [persona, setPersona] = useState<Persona | null>(null)
   const [brand, setBrand] = useState<BrandId>('')
@@ -294,7 +297,7 @@ export function Welcome() {
     }
   }
 
-  if (!handoff && !user) return null
+  if (!user) return null
 
   return (
     <div className='mx-auto max-w-3xl px-4 py-6 sm:py-10'>
