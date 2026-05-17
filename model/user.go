@@ -476,7 +476,10 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 
 	// 初始化用户设置
 	if user.Setting == "" {
-		defaultSetting := dto.UserSetting{}
+		// Same persona="unset" seed as Insert() — InsertWithTx is the
+		// path used by controller/oauth.go::OAuthBind for atomic OAuth
+		// user creation, and those users also need the /welcome wizard.
+		defaultSetting := dto.UserSetting{Persona: "unset"}
 		user.SetSetting(defaultSetting)
 	}
 
