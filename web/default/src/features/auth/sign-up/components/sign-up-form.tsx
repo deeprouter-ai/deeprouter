@@ -46,7 +46,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
-import { useNavigate } from '@tanstack/react-router'
 import { register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
@@ -76,7 +75,6 @@ export function SignUpForm({
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
 
   const { status } = useStatus()
-  const navigate = useNavigate()
   // Capture acquisition meta on first mount so we know where the user
   // came from even after multiple form submissions / page navigations.
   useEffect(() => {
@@ -185,7 +183,13 @@ export function SignUpForm({
         if (res.data) {
           setWelcomeHandoff(res.data as RegisterResponseData)
         }
-        navigate({ to: '/welcome' })
+        // Hydrate authStore from the just-created session before
+        // navigating — /welcome's user guard reads from authStore and
+        // would bounce us to /sign-in if user were still null.
+        await handleLoginSuccess(
+          res.data as { id?: number } | null,
+          '/welcome'
+        )
       }
     } catch (_error) {
       // Errors are handled by global interceptor

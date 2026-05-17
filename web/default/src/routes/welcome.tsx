@@ -16,9 +16,22 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { z } from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
 import { Welcome } from '@/features/welcome'
 
-export const Route = createFileRoute('/welcome')({
-  component: Welcome,
+// Wizard step is encoded in the URL so browser back/forward and refresh
+// land on the same step the user was on. Default = 'persona' (step 1).
+const welcomeSearchSchema = z.object({
+  step: z.enum(['persona', 'brand', 'client']).optional(),
 })
+
+export const Route = createFileRoute('/welcome')({
+  component: RouteComponent,
+  validateSearch: welcomeSearchSchema,
+})
+
+function RouteComponent() {
+  const { step = 'persona' } = Route.useSearch()
+  return <Welcome step={step} />
+}
