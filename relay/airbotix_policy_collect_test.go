@@ -1,22 +1,13 @@
 package relay
 
-// Proof-of-gap tests for PR #27 (DR-7) review.
+// Regression + coverage tests for PR #27 (DR-7) review.
 //
-// Two P1 blocking issues are demonstrated here:
+// P1-A (fixed): Decision.InjectChildSafePrompt was a dead field — renamed to
+//   InjectSystemPrompt and set to true for adult profile. Tests below are
+//   now regression guards that prove the fix holds.
 //
-// P1-A: Decision.InjectChildSafePrompt is a dead field.
-//   DecisionFor() sets it for kid-safe and kids_mode paths, profile_test.go
-//   asserts it, relay/README.md says "check this field". But relay code
-//   replaced every InjectChildSafePrompt check with policy.SystemPromptFor(d).
-//   Adult profile: InjectChildSafePrompt=false, SystemPromptFor returns a prompt.
-//   Any handler using the stale field silently skips adult system prompt injection.
-//   TestInjectChildSafePromptDeadField_AdultProfileTrap FAILS to prove this.
-//
-// P1-B: No direct unit tests for the five collect* extraction functions.
-//   These functions are the only layer between user input and CheckInput().
-//   A bug in any collect* function silently bypasses all denylist filtering.
-//   Tests below cover every branch: multipart content, multi-turn, role
-//   filtering, collectAnyText recursion, edge cases absent from existing tests.
+// P1-B (fixed): Direct unit tests for the five collect* extraction functions
+//   were absent. Tests below cover every branch and are new permanent coverage.
 
 import (
 	"strings"
@@ -26,46 +17,33 @@ import (
 	"github.com/QuantumNous/new-api/internal/policy"
 )
 
-// ── P1-A: InjectChildSafePrompt dead field ────────────────────────────────────
+// ── P1-A regression: InjectSystemPrompt field covers all profiles ─────────────
 
-// TestInjectChildSafePromptDeadField_AdultProfileTrap FAILS intentionally.
-//
-// It follows the pattern documented in relay/README.md:
-//   "Prepends kids.ChildSafeSystemPrompt() as a system message if decision.InjectChildSafePrompt"
-//
-// For adult profile, InjectChildSafePrompt == false, so injection never runs.
-// But policy.SystemPromptFor(adult) returns a non-empty prompt — adult users
-// should receive system prompt injection per PR #27's own logic.
-//
-// InjectChildSafePrompt was set only for kid-safe / kids_mode paths and never
-// updated when adult profile prompt injection was added. Any future handler
-// that follows the stale README pattern silently drops adult safety prompt.
-//
-// This test FAILS on current DR-7 code to prove the trap is real.
-// Fix: remove Decision.InjectChildSafePrompt; use policy.SystemPromptFor(d) as
-// the single gate for prompt injection across all profiles.
-func TestInjectChildSafePromptDeadField_AdultProfileTrap(t *testing.T) {
+// TestInjectSystemPrompt_AdultProfileInjectsPrompt is a regression guard for
+// the original dead-field bug: InjectChildSafePrompt was false for adult profile
+// even though SystemPromptFor(adult) returned a non-empty prompt.
+// After the fix (renamed to InjectSystemPrompt, adult now gets true), this PASSES.
+func TestInjectSystemPrompt_AdultProfileInjectsPrompt(t *testing.T) {
 	adult := policy.DecisionFor(false, "adult")
 
-	// Precondition: adult profile HAS a system prompt in the new enforcement API.
-	_, hasPrompt := policy.SystemPromptFor(adult)
-	if !hasPrompt {
-		t.Fatal("precondition: SystemPromptFor(adult) returned false — recheck enforcement.go")
+	if !adult.InjectSystemPrompt {
+		t.Fatal("regression: adult.InjectSystemPrompt must be true after fix")
 	}
 
-	// Simulate a new handler written following relay/README.md (stale pattern):
-	//   "if decision.InjectChildSafePrompt { inject system prompt }"
+	_, hasPrompt := policy.SystemPromptFor(adult)
+	if !hasPrompt {
+		t.Fatal("regression: SystemPromptFor(adult) must return a prompt after fix")
+	}
+
 	req := &dto.GeneralOpenAIRequest{
 		Model:    "gpt-4",
 		Messages: []dto.Message{{Role: "user", Content: "help me write a lesson plan"}},
 	}
 
-	if adult.InjectChildSafePrompt {
-		// NEVER reached for adult: InjectChildSafePrompt is false.
+	if adult.InjectSystemPrompt {
 		prependProfileSystemPrompt(req, adult)
 	}
 
-	// Count injected system / developer messages after the stale-pattern code.
 	var injected int
 	for _, m := range req.Messages {
 		if m.Role == "system" || m.Role == "developer" {
@@ -73,63 +51,39 @@ func TestInjectChildSafePromptDeadField_AdultProfileTrap(t *testing.T) {
 		}
 	}
 
-	// WANT: 1 system message — adult has a prompt per SystemPromptFor.
-	// GOT:  0 system messages — InjectChildSafePrompt=false skipped injection.
-	//
-	// This FAILS to prove the semantic trap. The field gives the wrong answer
-	// for adult profile and must be removed.
 	if injected != 1 {
-		t.Errorf(
-			"DEAD FIELD TRAP: adult.InjectChildSafePrompt=%v → system prompt silently skipped\n"+
-				"  got %d injected system message(s), want 1\n"+
-				"  relay/README.md still says 'check InjectChildSafePrompt' but:\n"+
-				"    adult.InjectChildSafePrompt = false  (stale field — gives wrong answer)\n"+
-				"    policy.SystemPromptFor(adult) = true  (correct API — has a prompt)\n"+
-				"  Fix: remove Decision.InjectChildSafePrompt from struct, DecisionFor, tests, docs.",
-			adult.InjectChildSafePrompt, injected,
-		)
+		t.Errorf("adult profile: want 1 injected system message, got %d", injected)
 	}
 }
 
-// TestInjectChildSafePromptDeadField_FieldVsAPIDisagreement is a table-driven
-// proof that InjectChildSafePrompt and SystemPromptFor disagree on adult profile.
-// This is the root cause of the trap: two APIs with conflicting answers.
-func TestInjectChildSafePromptDeadField_FieldVsAPIDisagreement(t *testing.T) {
+// TestInjectSystemPrompt_FieldAndAPIAgree verifies InjectSystemPrompt and
+// SystemPromptFor are consistent across all profiles (no semantic divergence).
+func TestInjectSystemPrompt_FieldAndAPIAgree(t *testing.T) {
 	cases := []struct {
 		name            string
 		decision        policy.Decision
-		wantField       bool // what InjectChildSafePrompt says
-		wantPromptExist bool // what SystemPromptFor says (ground truth)
+		wantField       bool
+		wantPromptExist bool
 	}{
-		{"passthrough — both agree no prompt", policy.DecisionFor(false, "passthrough"), false, false},
-		// adult: DISAGREEMENT — field says no, API says yes. This is the bug.
-		{"adult — FIELD WRONG, API correct", policy.DecisionFor(false, "adult"), false, true},
-		{"kid-safe — both agree inject", policy.DecisionFor(false, "kid-safe"), true, true},
-		{"kids_mode override — both agree inject", policy.DecisionFor(true, "adult"), true, true},
+		{"passthrough", policy.DecisionFor(false, "passthrough"), false, false},
+		{"adult", policy.DecisionFor(false, "adult"), true, true},
+		{"kid-safe", policy.DecisionFor(false, "kid-safe"), true, true},
+		{"kids_mode override", policy.DecisionFor(true, "adult"), true, true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotField := tc.decision.InjectChildSafePrompt
+			gotField := tc.decision.InjectSystemPrompt
 			_, gotAPI := policy.SystemPromptFor(tc.decision)
 
-			// Explicit divergence check — fails on "adult" row.
 			if gotField != gotAPI {
 				t.Errorf(
-					"SEMANTIC DIVERGENCE on %q profile:\n"+
-						"  InjectChildSafePrompt = %v  (wrong — stale, unread dead field)\n"+
-						"  SystemPromptFor       = %v  (correct — actual gate in relay code)\n"+
-						"  Callers using InjectChildSafePrompt skip injection; those using\n"+
-						"  SystemPromptFor inject correctly. Remove the field.",
+					"DIVERGENCE on %q: InjectSystemPrompt=%v but SystemPromptFor=%v — must agree",
 					tc.name, gotField, gotAPI,
 				)
 			}
-
 			if gotField != tc.wantField {
-				t.Errorf("InjectChildSafePrompt: got %v, want %v", gotField, tc.wantField)
-			}
-			if gotAPI != tc.wantPromptExist {
-				t.Errorf("SystemPromptFor presence: got %v, want %v", gotAPI, tc.wantPromptExist)
+				t.Errorf("InjectSystemPrompt: got %v, want %v", gotField, tc.wantField)
 			}
 		})
 	}
@@ -250,10 +204,6 @@ func TestCollectGeneralOpenAIInputTexts_SimpleUserMessage(t *testing.T) {
 // A multipart user message (text + image) arrives as []any after json.Unmarshal.
 // StringContent() must extract the text part — if not, harmful text in multimodal
 // messages completely bypasses the denylist with no error or log.
-//
-// This test uses Content: []any{...} which is the actual JSON-deserialized form
-// (NOT SetMediaContent which produces []MediaContent and is NOT handled by
-// StringContent's []any branch).
 func TestCollectGeneralOpenAIInputTexts_MultipartContent(t *testing.T) {
 	req := &dto.GeneralOpenAIRequest{
 		Messages: []dto.Message{
@@ -269,18 +219,16 @@ func TestCollectGeneralOpenAIInputTexts_MultipartContent(t *testing.T) {
 	got := collectGeneralOpenAIInputTexts(req)
 	if !contains(got, "explicit harm content") {
 		t.Errorf(
-			"MULTIPART MESSAGE BYPASS: text in multipart content NOT extracted\n"+
+			"MULTIPART MESSAGE: text in multipart content NOT extracted\n"+
 				"  got: %v\n"+
-				"  StringContent() must handle []any content (json.Unmarshal form of multipart messages)\n"+
-				"  If this fails, harmful content in any multimodal message bypasses all denylist checks",
+				"  StringContent() must handle []any content (json.Unmarshal form of multipart messages)",
 			got,
 		)
 	}
 }
 
 // TestCollectGeneralOpenAIInputTexts_AssistantAndSystemSkipped verifies that
-// assistant and system messages are NOT extracted (only user-controlled input
-// is denylist-checked — injected system prompts must not trigger self-blocking).
+// assistant and system messages are NOT extracted.
 func TestCollectGeneralOpenAIInputTexts_AssistantAndSystemSkipped(t *testing.T) {
 	req := &dto.GeneralOpenAIRequest{
 		Messages: []dto.Message{
@@ -300,8 +248,6 @@ func TestCollectGeneralOpenAIInputTexts_AssistantAndSystemSkipped(t *testing.T) 
 	}
 }
 
-// TestCollectGeneralOpenAIInputTexts_EmptyRoleIsUser verifies that Role==""
-// messages are collected (treated as user input — some clients omit the role field).
 func TestCollectGeneralOpenAIInputTexts_EmptyRoleIsUser(t *testing.T) {
 	req := &dto.GeneralOpenAIRequest{
 		Messages: []dto.Message{{Role: "", Content: "harm via empty-role message"}},
@@ -354,8 +300,6 @@ func TestCollectClaudeInputTexts_UserMessageCollected(t *testing.T) {
 	}
 }
 
-// TestCollectClaudeInputTexts_AssistantSkipped verifies that assistant prefill
-// turns are NOT collected (only user-controlled input goes through denylist).
 func TestCollectClaudeInputTexts_AssistantSkipped(t *testing.T) {
 	req := &dto.ClaudeRequest{
 		Messages: []dto.ClaudeMessage{
@@ -373,7 +317,6 @@ func TestCollectClaudeInputTexts_AssistantSkipped(t *testing.T) {
 
 // TestCollectClaudeInputTexts_MultiTurnAllUserTurnsCollected verifies that in a
 // multi-turn conversation ALL user turns are collected, not just the last one.
-// If only the last turn is collected, a harmful term in turn 1 would be missed.
 func TestCollectClaudeInputTexts_MultiTurnAllUserTurnsCollected(t *testing.T) {
 	req := &dto.ClaudeRequest{
 		Messages: []dto.ClaudeMessage{
@@ -417,8 +360,6 @@ func TestCollectGeminiInputTexts_UserRoleCollected(t *testing.T) {
 	}
 }
 
-// TestCollectGeminiInputTexts_ModelRoleSkipped verifies that model (assistant)
-// responses are NOT collected. Filter: skip if Role != "" && Role != "user".
 func TestCollectGeminiInputTexts_ModelRoleSkipped(t *testing.T) {
 	req := &dto.GeminiChatRequest{
 		Contents: []dto.GeminiChatContent{
@@ -433,9 +374,8 @@ func TestCollectGeminiInputTexts_ModelRoleSkipped(t *testing.T) {
 	}
 }
 
-// TestCollectGeminiInputTexts_EmptyRoleCollected covers the role=="" edge case.
-// Filter condition: `content.Role != "" && content.Role != "user"`.
-// Empty role passes BOTH conditions (not skipped) → treated as user input.
+// TestCollectGeminiInputTexts_EmptyRoleCollected covers role=="" edge case.
+// Filter: skip if Role != "" && Role != "user". Empty role passes both → collected.
 func TestCollectGeminiInputTexts_EmptyRoleCollected(t *testing.T) {
 	req := &dto.GeminiChatRequest{
 		Contents: []dto.GeminiChatContent{
@@ -448,8 +388,6 @@ func TestCollectGeminiInputTexts_EmptyRoleCollected(t *testing.T) {
 	}
 }
 
-// TestCollectGeminiInputTexts_MultiTurnOnlyUserTexts verifies multi-turn
-// conversations only expose user turns to the denylist.
 func TestCollectGeminiInputTexts_MultiTurnOnlyUserTexts(t *testing.T) {
 	req := &dto.GeminiChatRequest{
 		Contents: []dto.GeminiChatContent{
@@ -476,8 +414,6 @@ func TestCollectGeminiInputTexts_MultiTurnOnlyUserTexts(t *testing.T) {
 	}
 }
 
-// TestCollectGeminiInputTexts_MultiPartPerTurn verifies multiple Parts in a
-// single content block are all collected (empty parts skipped).
 func TestCollectGeminiInputTexts_MultiPartPerTurn(t *testing.T) {
 	req := &dto.GeminiChatRequest{
 		Contents: []dto.GeminiChatContent{
@@ -485,7 +421,7 @@ func TestCollectGeminiInputTexts_MultiPartPerTurn(t *testing.T) {
 				Role: "user",
 				Parts: []dto.GeminiPart{
 					{Text: "part one"},
-					{Text: ""},         // empty — must be skipped
+					{Text: ""},
 					{Text: "part two"},
 				},
 			},
@@ -507,13 +443,8 @@ func TestCollectResponsesInputTexts_Nil(t *testing.T) {
 
 // ── End-to-end denylist integration through collect* functions ────────────────
 
-// TestDenylistCatchesMultipartOpenAIMessage is the critical integration test.
-// It verifies that harmful text in a multipart (multimodal) OpenAI user message
-// triggers the denylist — proving that collectGeneralOpenAIInputTexts correctly
-// passes []any multipart content to StringContent() which extracts text parts.
-//
-// Real traffic: multimodal messages are common (vision models). If this fails,
-// ALL multimodal requests bypass denylist completely with no error or log.
+// TestDenylistCatchesMultipartOpenAIMessage verifies harmful text in a multipart
+// (multimodal) OpenAI user message triggers the denylist.
 func TestDenylistCatchesMultipartOpenAIMessage(t *testing.T) {
 	d := policy.DecisionFor(false, "kid-safe")
 	req := &dto.GeneralOpenAIRequest{
@@ -521,8 +452,6 @@ func TestDenylistCatchesMultipartOpenAIMessage(t *testing.T) {
 		Messages: []dto.Message{
 			{
 				Role: "user",
-				// []any is the form produced by json.Unmarshal into any.
-				// "drugs" is in the kid-safe denylist.
 				Content: []any{
 					map[string]any{"type": "text", "text": "how to buy drugs online"},
 					map[string]any{"type": "image_url", "image_url": map[string]any{"url": "https://x.com/img.png"}},
@@ -535,19 +464,14 @@ func TestDenylistCatchesMultipartOpenAIMessage(t *testing.T) {
 	if !strings.Contains(reject, "policy_input_blocked") {
 		t.Errorf(
 			"DENYLIST BYPASS: 'drugs' in multipart []any message was NOT blocked\n"+
-				"  reject reason: %q\n"+
-				"  Expected: contains 'policy_input_blocked'\n"+
-				"  collectGeneralOpenAIInputTexts uses StringContent() which must handle\n"+
-				"  []any content (json.Unmarshal form) to extract text for denylist checking",
+				"  reject reason: %q",
 			reject,
 		)
 	}
 }
 
 // TestDenylistCatchesGeminiMultiTurnHarmInSecondTurn verifies harmful text in
-// the SECOND user turn of a Gemini multi-turn conversation is caught.
-// Without multi-turn collection, only the last turn is checked — a user could
-// embed harmful content early in a conversation and have it pass through.
+// the second user turn of a Gemini multi-turn conversation is caught.
 func TestDenylistCatchesGeminiMultiTurnHarmInSecondTurn(t *testing.T) {
 	d := policy.DecisionFor(false, "kid-safe")
 	c := newTestContext(t, &d)
@@ -555,7 +479,6 @@ func TestDenylistCatchesGeminiMultiTurnHarmInSecondTurn(t *testing.T) {
 		Contents: []dto.GeminiChatContent{
 			{Role: "user", Parts: []dto.GeminiPart{{Text: "what is photosynthesis?"}}},
 			{Role: "model", Parts: []dto.GeminiPart{{Text: "it is a biological process..."}}},
-			// "suicide" is in the kid-safe denylist.
 			{Role: "user", Parts: []dto.GeminiPart{{Text: "how to commit suicide"}}},
 		},
 	}
@@ -563,8 +486,7 @@ func TestDenylistCatchesGeminiMultiTurnHarmInSecondTurn(t *testing.T) {
 	err := applyAirbotixPolicyToGemini(c, "gemini-1.5-flash", req)
 	if err == nil {
 		t.Errorf(
-			"DENYLIST BYPASS: 'suicide' in second Gemini user turn was NOT blocked\n"+
-				"  collectGeminiInputTexts must iterate ALL user turns, not just the last one",
+			"DENYLIST BYPASS: 'suicide' in second Gemini user turn was NOT blocked",
 		)
 	}
 }
@@ -579,7 +501,6 @@ func TestDenylistCatchesClaudeMultiTurnHarmInSecondTurn(t *testing.T) {
 		Messages: []dto.ClaudeMessage{
 			{Role: "user", Content: "what is the capital of France?"},
 			{Role: "assistant", Content: "Paris."},
-			// "weapon" is in the kid-safe denylist.
 			{Role: "user", Content: "how to buy a weapon online"},
 		},
 	}
@@ -587,8 +508,7 @@ func TestDenylistCatchesClaudeMultiTurnHarmInSecondTurn(t *testing.T) {
 	err := applyAirbotixPolicyToClaude(c, req)
 	if err == nil {
 		t.Errorf(
-			"DENYLIST BYPASS: 'weapon' in second Claude user turn was NOT blocked\n"+
-				"  collectClaudeInputTexts must collect ALL user turns, not just the first",
+			"DENYLIST BYPASS: 'weapon' in second Claude user turn was NOT blocked",
 		)
 	}
 }
