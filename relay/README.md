@@ -116,6 +116,29 @@ If you add a new request shape that needs kids_mode enforcement:
 2. Call it from the new `relay/<shape>_handler.go`.
 3. Add a test case to `airbotix_policy_test.go`.
 
+### Response side: strict output filter (DR-30)
+
+`airbotix_policy.go` also owns the response-side enforcement for `decision.EnforceStrictOutputFilter` (kids_mode strict output filter, PRD §6.4):
+
+```go
+var outputFilter kids.OutputFilter = kids.StrictKeywordFilter{} // V0 default
+
+func wrapOutputFilterWriter(c *gin.Context, decision policy.Decision, shape kids.ResponseShape) (restore func())
+```
+
+- `outputFilter` is the `kids.OutputFilter` consulted for every filtered response. V0 default is `kids.StrictKeywordFilter{}` (deny-list keyword scan against `kids.StrictOutputBlocklist`); a future DR can swap this for a richer classifier without touching callers.
+- `wrapOutputFilterWriter` installs `outputFilterWriter` — a `gin.ResponseWriter` wrapper that buffers the entire response (non-stream body or full SSE stream, up to `maxOutputFilterBufferBytes`), classifies it via `kids.FilterForShape(shape)` + `outputFilter.Check`, and either passes it through unchanged or replaces it with a `kids.SafeFallbackText()`-based fallback in the same wire shape — before any byte reaches the client. If `!decision.EnforceStrictOutputFilter`, it returns a no-op `restore`.
+- Each of the 4 `relay/<shape>_handler.go` files calls this as a thin hook (ADR-0006 controlled expansion, see `CLAUDE.md` §8):
+  ```go
+  decision, _ := policyDecisionFromContext(c)
+  restore := wrapOutputFilterWriter(c, decision, kids.ResponseShapeXxx)
+  defer restore()
+  ... adaptor.DoResponse / chatCompletionsViaResponses ...
+  restore()
+  ```
+- `kids.ResponseShape` per handler: `TextHelper`→`ResponseShapeChatCompletions`, `ClaudeHelper`→`ResponseShapeClaudeMessages`, `ResponsesHelper`→`ResponseShapeOpenAIResponses`, `GeminiHelper`→`ResponseShapeGemini`. The shape-specific text extraction/replacement/fallback-body logic lives in `internal/kids/response_shape_*.go`, not here.
+- On block, `constant.ContextKeyOutputFilterViolations` is set to the matched categories (`[]string`, e.g. `["violence"]`).
+
 ## Adding kids_mode coverage to an existing shape
 
 If a request shape (say image) doesn't currently apply policy and should:

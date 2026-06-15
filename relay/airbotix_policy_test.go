@@ -7,13 +7,16 @@ package relay
 // HTTP-level integration test is tracked as Phase 2.5 follow-up.
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/internal/kids"
 	"github.com/QuantumNous/new-api/internal/policy"
 
 	"github.com/gin-gonic/gin"
@@ -642,5 +645,812 @@ func TestApplyAirbotixPolicyToGemini_ClampsMaxOutputTokens(t *testing.T) {
 	}
 	if req.GenerationConfig.MaxOutputTokens == nil || *req.GenerationConfig.MaxOutputTokens != maxTokensHardCap {
 		t.Fatalf("MaxOutputTokens must be clamped to %d; got %v", maxTokensHardCap, req.GenerationConfig.MaxOutputTokens)
+	}
+}
+
+// =============================================================================
+// outputFilterWriter / wrapOutputFilterWriter — response-side output filter
+// =============================================================================
+
+// newOutputFilterTestContext returns a *gin.Context backed by an
+// *httptest.ResponseRecorder, so tests can inspect the bytes/headers/status
+// that actually reach the "client".
+func newOutputFilterTestContext(t *testing.T) (*gin.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	return c, w
+}
+
+// -----------------------------------------------------------------------
+// Non-stream
+// -----------------------------------------------------------------------
+
+func TestOutputFilterWriter_NonStream_PassesCleanResponse(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"Hello there"},"finish_reason":"stop"}]}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	restore()
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if rec.Body.String() != body {
+		t.Errorf("clean response should pass through unchanged; got %s", rec.Body.String())
+	}
+	if _, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterViolations); ok {
+		t.Error("ContextKeyOutputFilterViolations must not be set for a clean response")
+	}
+}
+
+func TestOutputFilterWriter_NonStream_PassesKnownNonTextResponse(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	// pure tool_calls response: ExtractText returns ok=true, text="" — a
+	// recognised clean case, must NOT fail closed.
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"f","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	restore()
+
+	if rec.Body.String() != body {
+		t.Errorf("tool_calls-only response should pass through unchanged; got %s", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_NonStream_ReplacesBlockedContent(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeClaudeMessages)
+	defer restore()
+
+	body := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"I will murder you"}],"stop_reason":"end_turn"}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeClaudeMessages).ExtractText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractText(replaced) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("blocked content should be replaced with SafeFallbackText; got %q", text)
+	}
+	if strings.Contains(rec.Body.String(), "murder") {
+		t.Errorf("replaced body must not contain the blocked text: %s", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_NonStream_FailsClosedOnUnparseableBody(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeOpenAIResponses)
+	defer restore()
+
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("not json")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeOpenAIResponses).ExtractText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("unparseable body must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+func TestOutputFilterWriter_NonStream_PassthroughOnNon2xxErrorBody(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeGemini)
+	defer restore()
+
+	body := `{"error":{"code":400,"message":"bad request"}}`
+	c.Writer.WriteHeader(http.StatusBadRequest)
+	c.Writer.WriteString(body)
+	restore()
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	if rec.Body.String() != body {
+		t.Errorf("non-2xx error body should pass through unchanged; got %s", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_NonStream_PassthroughWhenDecisionFalse(t *testing.T) {
+	d := passthroughDecision()
+	c, rec := newOutputFilterTestContext(t)
+	orig := c.Writer
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	if c.Writer != orig {
+		t.Fatal("wrapOutputFilterWriter must not wrap c.Writer when EnforceStrictOutputFilter=false")
+	}
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"I will murder you"},"finish_reason":"stop"}]}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	restore()
+
+	if rec.Body.String() != body {
+		t.Errorf("response must pass through unchanged when EnforceStrictOutputFilter=false; got %s", rec.Body.String())
+	}
+}
+
+// -----------------------------------------------------------------------
+// Stream
+// -----------------------------------------------------------------------
+
+func TestOutputFilterWriter_Stream_PassesCleanStream(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeClaudeMessages)
+	defer restore()
+
+	raw := "event: message_start\n" +
+		"data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\"}}\n\n" +
+		"event: content_block_start\n" +
+		"data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+		"event: content_block_delta\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hel\"}}\n\n" +
+		"event: content_block_delta\n" +
+		"data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"lo\"}}\n\n" +
+		"event: content_block_stop\n" +
+		"data: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+		"event: message_delta\n" +
+		"data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n" +
+		"event: message_stop\n" +
+		"data: {\"type\":\"message_stop\"}\n\n"
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(raw)
+	restore()
+
+	if rec.Body.String() != raw {
+		t.Errorf("clean stream should pass through unchanged; got %q", rec.Body.String())
+	}
+	if rec.Header().Get("Content-Length") != "" {
+		t.Errorf("stream responses must not get a Content-Length header; got %q", rec.Header().Get("Content-Length"))
+	}
+}
+
+func TestOutputFilterWriter_Stream_RewritesBlockedStreamBeforeAnyByteSent(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeOpenAIResponses)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("event: response.output_text.delta\n")
+	c.Writer.WriteString("data: {\"type\":\"response.output_text.delta\",\"item_id\":\"item_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"I will \"}\n\n")
+	c.Writer.WriteString("event: response.output_text.delta\n")
+	c.Writer.WriteString("data: {\"type\":\"response.output_text.delta\",\"item_id\":\"item_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"murder you\"}\n\n")
+	c.Writer.WriteString("event: response.completed\n")
+	c.Writer.WriteString("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"I will murder you\",\"annotations\":[]}]}]}}\n\n")
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("no bytes should reach the client before restore(); got %d bytes: %q", rec.Body.Len(), rec.Body.String())
+	}
+
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeOpenAIResponses).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("blocked stream should be replaced with SafeFallbackText; got %q", text)
+	}
+	violations, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterViolations)
+	if !ok {
+		t.Fatal("ContextKeyOutputFilterViolations must be set when the stream is blocked")
+	}
+	if cats, ok := violations.([]string); !ok || len(cats) == 0 {
+		t.Errorf("ContextKeyOutputFilterViolations = %v, want a non-empty []string", violations)
+	}
+}
+
+func TestOutputFilterWriter_Stream_AccumulatesAcrossChunkBoundary(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeGemini)
+	defer restore()
+
+	raw := "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hel\"}]},\"index\":0}]}\n\n" +
+		"data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"lo\"}]},\"finishReason\":\"STOP\",\"index\":0}]}\n\n"
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	// Split mid-line (in the middle of "finishReason") across two Write()
+	// calls, proving the writer reassembles bytes before classifying.
+	mid := len(raw) - 20
+	if _, err := c.Writer.Write([]byte(raw[:mid])); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if _, err := c.Writer.Write([]byte(raw[mid:])); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	restore()
+
+	if rec.Body.String() != raw {
+		t.Errorf("clean stream split across Write() calls should pass through unchanged; got %q", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_Stream_FailsClosedOnMalformedSSE(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("this is not a valid SSE stream at all")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeChatCompletions).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("malformed SSE must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+// TestOutputFilterWriter_Stream_FailsClosedOnMixedValidAndMalformedChunks_*
+// cover the "partially parseable" SSE case: a leading chunk that is valid
+// and matches the shape, followed by one data: chunk that doesn't parse at
+// all. ExtractStreamText must fail closed for the WHOLE stream (not just
+// silently drop the bad chunk and pass the earlier valid text through), so
+// finalize() must still replace the stream with BuildFallbackStream(...).
+
+func TestOutputFilterWriter_Stream_FailsClosedOnMixedValidAndMalformedChunks_Chat(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"}}]}\n\n")
+	c.Writer.WriteString("data: not valid json\n\n")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeChatCompletions).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("a stream with one valid chunk followed by one malformed data: chunk must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+func TestOutputFilterWriter_Stream_FailsClosedOnMixedValidAndMalformedChunks_Claude(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeClaudeMessages)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("event: content_block_delta\n")
+	c.Writer.WriteString("data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\n")
+	c.Writer.WriteString("data: not valid json\n\n")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeClaudeMessages).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("a stream with one valid chunk followed by one malformed data: chunk must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+func TestOutputFilterWriter_Stream_FailsClosedOnMixedValidAndMalformedChunks_Responses(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeOpenAIResponses)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("event: response.output_text.delta\n")
+	c.Writer.WriteString("data: {\"type\":\"response.output_text.delta\",\"item_id\":\"item_1\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\n")
+	c.Writer.WriteString("data: not valid json\n\n")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeOpenAIResponses).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("a stream with one valid chunk followed by one malformed data: chunk must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+func TestOutputFilterWriter_Stream_FailsClosedOnMixedValidAndMalformedChunks_Gemini(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeGemini)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString("data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]},\"index\":0}]}\n\n")
+	c.Writer.WriteString("data: not valid json\n\n")
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeGemini).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("a stream with one valid chunk followed by one malformed data: chunk must fail closed to SafeFallbackText; got %q", text)
+	}
+}
+
+// -----------------------------------------------------------------------
+// Writer behaviour
+// -----------------------------------------------------------------------
+
+func TestOutputFilterWriter_FlushBeforeFinalize_NoBytesWritten(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"Hello there"},"finish_reason":"stop"}]}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	c.Writer.Flush() // mirrors service.IOCopyBytesGracefully's unconditional Flush()
+
+	if rec.Body.Len() != 0 {
+		t.Fatalf("Flush() before finalize() must not write any bytes; got %d", rec.Body.Len())
+	}
+
+	restore()
+	if rec.Body.String() != body {
+		t.Errorf("body should be delivered once restore() runs; got %s", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_Finalize_Idempotent(t *testing.T) {
+	c, rec := newOutputFilterTestContext(t)
+
+	w := &outputFilterWriter{ResponseWriter: c.Writer, c: c, shape: kids.ResponseShapeChatCompletions, filter: outputFilter}
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"Hello there"},"finish_reason":"stop"}]}`
+	w.WriteHeader(http.StatusOK)
+	w.WriteString(body)
+
+	w.finalize()
+	first := rec.Body.String()
+	w.finalize() // must be a no-op
+
+	if rec.Body.String() != first {
+		t.Errorf("finalize() must be idempotent; body changed from %q to %q", first, rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_ExplicitRestoreThenDeferredRestore_ContextKeyAndBytesReadyImmediately(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeClaudeMessages)
+	defer restore()
+
+	body := `{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"I will murder you"}],"stop_reason":"end_turn"}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+
+	restore() // explicit restore — bytes + context key must be ready immediately after this returns
+
+	if rec.Body.Len() == 0 {
+		t.Fatal("expected the fallback body to be written immediately after the explicit restore()")
+	}
+	if _, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterViolations); !ok {
+		t.Fatal("ContextKeyOutputFilterViolations must be readable immediately after the explicit restore()")
+	}
+	if _, wrapped := c.Writer.(*outputFilterWriter); wrapped {
+		t.Error("c.Writer should be restored to the original writer after the explicit restore()")
+	}
+	bodyAfterExplicit := rec.Body.String()
+
+	restore() // deferred restore() — must be a guaranteed no-op
+	if rec.Body.String() != bodyAfterExplicit {
+		t.Error("the deferred restore() after an explicit restore() must not change the response")
+	}
+}
+
+func TestOutputFilterWriter_FinalizeBeforeAnyWrite_NoOutput(t *testing.T) {
+	c, rec := newOutputFilterTestContext(t)
+
+	w := &outputFilterWriter{ResponseWriter: c.Writer, c: c, shape: kids.ResponseShapeChatCompletions, filter: outputFilter}
+	w.finalize()
+
+	if rec.Body.Len() != 0 {
+		t.Errorf("finalize() before any write must produce no body; got %d bytes", rec.Body.Len())
+	}
+	if rec.Header().Get("Content-Length") != "" {
+		t.Errorf("finalize() before any write must not set Content-Length; got %q", rec.Header().Get("Content-Length"))
+	}
+}
+
+func TestOutputFilterWriter_ResponseProducingCallErrorsBeforeWrite_NoSpuriousFallback(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore() // safety net for the case where nothing below ever runs
+
+	// Simulate: the response-producing call returned an error before writing
+	// anything. The explicit restore() must be a no-op (wrote == false), so
+	// the handler's own error response below reaches the client untouched.
+	restore()
+
+	errBody := `{"error":"upstream timeout"}`
+	c.Writer.WriteHeader(http.StatusBadGateway)
+	c.Writer.WriteString(errBody)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	if rec.Body.String() != errBody {
+		t.Errorf("handler's own error body must reach the client unchanged; got %q", rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_EmptyBodyStatus_NoFallback(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	c.Writer.WriteHeader(http.StatusNoContent)
+	restore()
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("empty body must not get a fallback body; got %d bytes: %s", rec.Body.Len(), rec.Body.String())
+	}
+}
+
+func TestOutputFilterWriter_BufferOverflow_NonStream2xx_FailsClosed(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	c.Writer.WriteHeader(http.StatusOK)
+	chunk := make([]byte, 1<<16)
+	for i := 0; i < (maxOutputFilterBufferBytes/len(chunk))+1; i++ {
+		if _, err := c.Writer.Write(chunk); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+	}
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeChatCompletions).ExtractText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("overflowed 2xx response must fail closed to SafeFallbackText; got %q", text)
+	}
+	overflow, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterBufferOverflow)
+	if !ok || overflow != true {
+		t.Errorf("ContextKeyOutputFilterBufferOverflow must be set to true; got %v (ok=%v)", overflow, ok)
+	}
+}
+
+func TestOutputFilterWriter_BufferOverflow_Stream2xx_FailsClosed(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeClaudeMessages)
+	defer restore()
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.WriteHeader(http.StatusOK)
+	chunk := make([]byte, 1<<16)
+	for i := 0; i < (maxOutputFilterBufferBytes/len(chunk))+1; i++ {
+		if _, err := c.Writer.Write(chunk); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+	}
+	restore()
+
+	text, ok := kids.FilterForShape(kids.ResponseShapeClaudeMessages).ExtractStreamText(rec.Body.Bytes())
+	if !ok {
+		t.Fatalf("ExtractStreamText(fallback) ok = false")
+	}
+	if text != kids.SafeFallbackText() {
+		t.Errorf("overflowed 2xx stream must fail closed to SafeFallbackText; got %q", text)
+	}
+	if rec.Header().Get("Content-Length") != "" {
+		t.Errorf("stream fallback must not set Content-Length; got %q", rec.Header().Get("Content-Length"))
+	}
+	overflow, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterBufferOverflow)
+	if !ok || overflow != true {
+		t.Errorf("ContextKeyOutputFilterBufferOverflow must be set to true; got %v (ok=%v)", overflow, ok)
+	}
+}
+
+func TestOutputFilterWriter_BufferOverflow_Non2xx_PassthroughTruncated(t *testing.T) {
+	d := kidsModeDecision()
+	c, rec := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	c.Writer.WriteHeader(http.StatusInternalServerError)
+	chunk := make([]byte, 1<<16)
+	for i := 0; i < (maxOutputFilterBufferBytes/len(chunk))+1; i++ {
+		if _, err := c.Writer.Write(chunk); err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+	}
+	restore()
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if rec.Body.Len() != maxOutputFilterBufferBytes {
+		t.Errorf("truncated non-2xx body length = %d, want %d", rec.Body.Len(), maxOutputFilterBufferBytes)
+	}
+	overflow, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterBufferOverflow)
+	if !ok || overflow != true {
+		t.Errorf("ContextKeyOutputFilterBufferOverflow must be set to true; got %v (ok=%v)", overflow, ok)
+	}
+}
+
+func TestOutputFilterWriter_BufferOverflow_DoesNotGrowBeyondCap(t *testing.T) {
+	c, _ := newOutputFilterTestContext(t)
+
+	w := &outputFilterWriter{ResponseWriter: c.Writer, c: c, shape: kids.ResponseShapeChatCompletions, filter: outputFilter}
+
+	chunk := make([]byte, 1<<16)
+	for i := 0; i < (maxOutputFilterBufferBytes/len(chunk))+2; i++ {
+		n, err := w.Write(chunk)
+		if err != nil {
+			t.Fatalf("Write() error = %v", err)
+		}
+		if n != len(chunk) {
+			t.Fatalf("Write() returned n=%d, want %d (must report success even when discarding overflow)", n, len(chunk))
+		}
+	}
+
+	if w.buf.Len() != maxOutputFilterBufferBytes {
+		t.Errorf("buf.Len() = %d, want %d (must not grow beyond the cap)", w.buf.Len(), maxOutputFilterBufferBytes)
+	}
+	if !w.overflow {
+		t.Error("overflow flag must be set once the cap is exceeded")
+	}
+}
+
+// -----------------------------------------------------------------------
+// Extra
+// -----------------------------------------------------------------------
+
+func TestOutputFilterWriter_ContextKeyOutputFilterViolations_SetOnBlock(t *testing.T) {
+	d := kidsModeDecision()
+	c, _ := newOutputFilterTestContext(t)
+
+	restore := wrapOutputFilterWriter(c, d, kids.ResponseShapeChatCompletions)
+	defer restore()
+
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"You subhuman, I will murder you"},"finish_reason":"stop"}]}`
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.WriteString(body)
+	restore()
+
+	raw, ok := common.GetContextKey(c, constant.ContextKeyOutputFilterViolations)
+	if !ok {
+		t.Fatal("ContextKeyOutputFilterViolations must be set when output is blocked")
+	}
+	categories, ok := raw.([]string)
+	if !ok {
+		t.Fatalf("ContextKeyOutputFilterViolations type = %T, want []string", raw)
+	}
+	want := []string{kids.OutputCategoryViolence, kids.OutputCategoryHate}
+	if len(categories) != len(want) {
+		t.Fatalf("categories = %v, want %v", categories, want)
+	}
+	for i := range want {
+		if categories[i] != want[i] {
+			t.Fatalf("categories = %v, want %v", categories, want)
+		}
+	}
+}
+
+// -----------------------------------------------------------------------
+// Multi-choice / multi-candidate (§5.2.1)
+// -----------------------------------------------------------------------
+
+// TestOutputFilterWriter_NonStream_MultiChoiceSecondEntryBlocked_ReplacesWithSingleFallback
+// covers design doc §5.2.1: a 2xx response with 2 choices/candidates where
+// only the second is blocked must still be blocked overall (ExtractText
+// concatenates all entries), and the fallback body must contain exactly ONE
+// choice/candidate at index 0 — the original Choices[1]/Candidates[1] must
+// not survive in the output.
+func TestOutputFilterWriter_NonStream_MultiChoiceSecondEntryBlocked_ReplacesWithSingleFallback(t *testing.T) {
+	cases := []struct {
+		name  string
+		shape kids.ResponseShape
+		body  string
+	}{
+		{
+			name:  "Chat",
+			shape: kids.ResponseShapeChatCompletions,
+			body: `{"id":"chatcmpl-1","object":"chat.completion","choices":[` +
+				`{"index":0,"message":{"role":"assistant","content":"Hello there"},"finish_reason":"stop"},` +
+				`{"index":1,"message":{"role":"assistant","content":"I will murder you"},"finish_reason":"stop"}` +
+				`]}`,
+		},
+		{
+			name:  "Gemini",
+			shape: kids.ResponseShapeGemini,
+			body: `{"candidates":[` +
+				`{"content":{"role":"model","parts":[{"text":"Hello there"}]},"finishReason":"STOP","index":0},` +
+				`{"content":{"role":"model","parts":[{"text":"I will murder you"}]},"finishReason":"STOP","index":1}` +
+				`]}`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := kidsModeDecision()
+			c, rec := newOutputFilterTestContext(t)
+
+			restore := wrapOutputFilterWriter(c, d, tc.shape)
+			defer restore()
+
+			c.Writer.WriteHeader(http.StatusOK)
+			c.Writer.WriteString(tc.body)
+			restore()
+
+			sf := kids.FilterForShape(tc.shape)
+			text, ok := sf.ExtractText(rec.Body.Bytes())
+			if !ok {
+				t.Fatalf("ExtractText(replaced) ok = false")
+			}
+			if text != kids.SafeFallbackText() {
+				t.Errorf("blocked response should be replaced with SafeFallbackText; got %q", text)
+			}
+			if strings.Contains(rec.Body.String(), "murder") {
+				t.Errorf("replaced body must not contain the original entry[1] blocked text: %s", rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), "Hello there") {
+				t.Errorf("replaced body must not contain the original entry[0] text: %s", rec.Body.String())
+			}
+
+			switch tc.shape {
+			case kids.ResponseShapeChatCompletions:
+				var resp dto.OpenAITextResponse
+				if err := common.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("Unmarshal(fallback body) error = %v", err)
+				}
+				if len(resp.Choices) != 1 {
+					t.Fatalf("len(Choices) = %d, want 1", len(resp.Choices))
+				}
+				if resp.Choices[0].Index != 0 {
+					t.Errorf("Choices[0].Index = %d, want 0", resp.Choices[0].Index)
+				}
+			case kids.ResponseShapeGemini:
+				var resp dto.GeminiChatResponse
+				if err := common.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("Unmarshal(fallback body) error = %v", err)
+				}
+				if len(resp.Candidates) != 1 {
+					t.Fatalf("len(Candidates) = %d, want 1", len(resp.Candidates))
+				}
+				if resp.Candidates[0].Index != 0 {
+					t.Errorf("Candidates[0].Index = %d, want 0", resp.Candidates[0].Index)
+				}
+			}
+
+			if got, want := rec.Header().Get("Content-Length"), strconv.Itoa(rec.Body.Len()); got != want {
+				t.Errorf("Content-Length = %q, want %q (len of replaced body)", got, want)
+			}
+		})
+	}
+}
+
+// TestOutputFilterWriter_Stream_MultiChoiceSecondEntryBlocked_ReplacesWithSingleFallback
+// is the streaming counterpart of the test above: the blocklist keyword is
+// only delivered on choice/candidate index 1's delta. The client must
+// receive zero bytes before restore(), and the final stream must be
+// BuildFallbackStream's single fallback choice/candidate at index 0 — index
+// 1 must not appear in the output.
+func TestOutputFilterWriter_Stream_MultiChoiceSecondEntryBlocked_ReplacesWithSingleFallback(t *testing.T) {
+	cases := []struct {
+		name  string
+		shape kids.ResponseShape
+		raw   string
+	}{
+		{
+			name:  "Chat",
+			shape: kids.ResponseShapeChatCompletions,
+			raw: "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"}}]}\n\n" +
+				"data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":1,\"delta\":{\"role\":\"assistant\",\"content\":\"I will murder you\"}}]}\n\n" +
+				"data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"},{\"index\":1,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+				"data: [DONE]\n\n",
+		},
+		{
+			name:  "Gemini",
+			shape: kids.ResponseShapeGemini,
+			raw: "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]},\"index\":0}]}\n\n" +
+				"data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"I will murder you\"}]},\"index\":1}]}\n\n" +
+				"data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"STOP\",\"index\":0},{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"STOP\",\"index\":1}]}\n\n",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := kidsModeDecision()
+			c, rec := newOutputFilterTestContext(t)
+
+			restore := wrapOutputFilterWriter(c, d, tc.shape)
+			defer restore()
+
+			c.Writer.Header().Set("Content-Type", "text/event-stream")
+			c.Writer.WriteHeader(http.StatusOK)
+			c.Writer.WriteString(tc.raw)
+
+			if rec.Body.Len() != 0 {
+				t.Fatalf("no bytes should reach the client before restore(); got %d bytes: %q", rec.Body.Len(), rec.Body.String())
+			}
+
+			restore()
+
+			sf := kids.FilterForShape(tc.shape)
+			text, ok := sf.ExtractStreamText(rec.Body.Bytes())
+			if !ok {
+				t.Fatalf("ExtractStreamText(fallback) ok = false")
+			}
+			if text != kids.SafeFallbackText() {
+				t.Errorf("blocked stream should be replaced with SafeFallbackText; got %q", text)
+			}
+			if strings.Contains(rec.Body.String(), "murder") {
+				t.Errorf("fallback stream must not contain the original index 1 blocked text: %s", rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), `"index":1`) {
+				t.Errorf("fallback stream must not contain an index 1 entry: %s", rec.Body.String())
+			}
+		})
 	}
 }

@@ -2,9 +2,9 @@
 // (set on User in model/user.go) and exposes a single PolicyDecision
 // that downstream relay code can consult.
 //
-// Wiring into the existing relay path is intentionally deferred:
-// this package compiles as a leaf, ready to be invoked from
-// controller/relay.go in a follow-up commit.
+// The relay path reads Decision via relay/airbotix_policy.go and the
+// per-handler policy context wiring (DR-30). This package remains a pure
+// leaf: it only computes the decision and performs no I/O.
 package policy
 
 // Profile identifies which behavioural profile a tenant is on.
@@ -38,6 +38,9 @@ type Decision struct {
 	StripIdentifying bool
 	// RunInputFilter checks entry input text against the profile denylist.
 	RunInputFilter bool
+	// EnforceStrictOutputFilter requires the response text to pass
+	// kids.OutputFilter before reaching the client (PRD §6.4-pre).
+	EnforceStrictOutputFilter bool
 }
 
 // DecisionFor returns the Decision implied by a tenant's KidsMode + PolicyProfile.
@@ -46,24 +49,26 @@ func DecisionFor(kidsMode bool, rawProfile string) Decision {
 	p := normalise(rawProfile)
 	if kidsMode {
 		return Decision{
-			KidsMode:              true,
-			Profile:               ProfileKidSafe,
-			EnforceModelWhitelist: true,
-			EnforceZDR:            true,
-			InjectSystemPrompt:    true,
-			StripIdentifying:      true,
-			RunInputFilter:        true,
+			KidsMode:                  true,
+			Profile:                   ProfileKidSafe,
+			EnforceModelWhitelist:     true,
+			EnforceZDR:                true,
+			InjectSystemPrompt:        true,
+			StripIdentifying:          true,
+			RunInputFilter:            true,
+			EnforceStrictOutputFilter: true,
 		}
 	}
 	switch p {
 	case ProfileKidSafe:
 		return Decision{
-			Profile:               ProfileKidSafe,
-			EnforceModelWhitelist: true,
-			EnforceZDR:            true,
-			InjectSystemPrompt:    true,
-			StripIdentifying:      true,
-			RunInputFilter:        true,
+			Profile:                   ProfileKidSafe,
+			EnforceModelWhitelist:     true,
+			EnforceZDR:                true,
+			InjectSystemPrompt:        true,
+			StripIdentifying:          true,
+			RunInputFilter:            true,
+			EnforceStrictOutputFilter: true,
 		}
 	case ProfileAdult:
 		return Decision{Profile: ProfileAdult, InjectSystemPrompt: true, RunInputFilter: true}

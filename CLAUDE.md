@@ -23,7 +23,7 @@ This fork adds 4 Airbotix-specific things on top of upstream:
 | `internal/kids/` | Hard constraints for kids_mode (model whitelist, metadata stripping, OpenAI ZDR, child-safe system prompt). |
 | `internal/smart_router_client/` | HTTP client that calls the `smart-router` sidecar for `deeprouter-auto` virtual-model routing. |
 | `internal/billing/` | HMAC-signed per-request billing webhook dispatcher. Implemented, tested, and **wired into the relay completion path** (DR-25 / Phase 2). Fires for every successful, metered relay request by a tenant with `BillingWebhookURL` configured. |
-| `relay/airbotix_policy.go` | The one upstream-adjacent file — stitches policy + kids enforcement into the relay request lifecycle for OpenAI / Claude / Gemini / Responses request shapes. |
+| `relay/airbotix_policy.go` | The one upstream-adjacent file — stitches policy + kids enforcement into the relay request lifecycle for OpenAI / Claude / Gemini / Responses request and response shapes. Core logic stays in this file + `internal/kids/`; see §8 for the ADR-0006 controlled expansion covering 4 handler files. |
 | `model/user.go` | Extended with 5 columns: `kids_mode`, `policy_profile`, `billing_webhook_url`, `custom_pricing_id`, `webhook_secret`. |
 | `middleware/smart_router.go` | Detects `deeprouter-auto`, calls smart_router_client, rewrites the model name before relay. |
 
@@ -147,4 +147,8 @@ Bun is the frontend package manager (AGENTS.md Rule 3) — don't switch to npm/y
 
 ## 8. Upstream sync etiquette
 
-Custom logic belongs in `internal/`. Upstream-adjacent fork files are limited to the 4 sanctioned files (ADR-0006): `relay/airbotix_policy.go` (+ test, policy/kids enforcement per request shape) and `service/airbotix_billing.go` (DR-25, billing webhook dispatch from `PostTextConsumeQuota`). Both are named so rebase conflicts are obvious. Avoid editing upstream files (`controller/`, `model/`, `web/`) when an `internal/` subpackage is the right home. See `AIRBOTIX.md` for the cherry-pick / merge workflow.
+Custom logic belongs in `internal/`. Upstream-adjacent fork files are limited to the 4 sanctioned files (ADR-0006): `relay/airbotix_policy.go` (+ test, policy/kids enforcement across the request and response lifecycle, for OpenAI / Claude / Gemini / Responses shapes) and `service/airbotix_billing.go` (DR-25, billing webhook dispatch from `PostTextConsumeQuota`). Both are named so rebase conflicts are obvious.
+
+**ADR-0006 controlled expansion (DR-30)**: `relay/compatible_handler.go`, `relay/claude_handler.go`, `relay/responses_handler.go`, and `relay/gemini_handler.go` each carry a minimal thin hook touchpoint for the response-side output filter: read `decision` via `policyDecisionFromContext(c)`, install `restore := wrapOutputFilterWriter(c, decision, shape)`, `defer restore()`, then call `restore()` explicitly after the response-producing call (`adaptor.DoResponse` / `chatCompletionsViaResponses`). All parsing/classification/fallback logic stays in `relay/airbotix_policy.go` + `internal/kids/*` — these 4 files carry no core logic, only the touchpoints above.
+
+Avoid editing upstream files (`controller/`, `model/`, `web/`) when an `internal/` subpackage is the right home. See `AIRBOTIX.md` for the cherry-pick / merge workflow.

@@ -1,10 +1,11 @@
 package relay
 
-// Airbotix policy hooks for the V0 kids_mode hard constraints.
+// Airbotix policy hooks for the V0 kids_mode hard constraints, covering both
+// the request AND response lifecycle.
 //
-// Applied to the typed request struct in each relay handler BEFORE the request
-// is converted to a provider-specific payload, so that downstream adapters
-// translate the kid-safe constraints automatically.
+// Request side: applied to the typed request struct in each relay handler
+// BEFORE the request is converted to a provider-specific payload, so that
+// downstream adapters translate the kid-safe constraints automatically.
 //
 // Behaviours (all gated by policy.Decision from middleware/policy.go):
 //   - EnforceModelWhitelist: reject early with HTTP 400 if request.Model is
@@ -17,11 +18,31 @@ package relay
 //   - EnforceZDR + OpenAI-family channel: force Store=false. OpenAI shapes
 //     only (chat/completions, responses).
 //
+// Response side: EnforceStrictOutputFilter installs outputFilterWriter (see
+// wrapOutputFilterWriter below) around the relay handler's response-producing
+// call. It buffers the ENTIRE response (non-stream body or full SSE stream),
+// classifies the assistant-visible text via internal/kids' OutputFilter and
+// ShapeFilter, and either passes the buffered bytes through unchanged or
+// replaces them with a kids.SafeFallbackText()-based response in the same
+// wire format — before any byte reaches the client.
+//
+// ADR-0006 controlled expansion (DR-30): wiring the response-side hook into
+// relay/compatible_handler.go, relay/claude_handler.go,
+// relay/responses_handler.go, and relay/gemini_handler.go is a deliberate,
+// scoped expansion of this package's footprint into those 4 handler files.
+// Each handler is limited to four thin touchpoints — obtaining the
+// policy.Decision, calling wrapOutputFilterWriter, a deferred restore(), and
+// an explicit restore() after the response-producing call returns — with
+// ALL parsing/filter/fallback logic staying in this file and internal/kids.
+//
 // See internal/kids and internal/policy for the source semantics.
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -395,4 +416,263 @@ func collectGeminiInputTexts(request *dto.GeminiChatRequest) []string {
 		}
 	}
 	return texts
+}
+
+// =============================================================================
+// Response side: outputFilterWriter (PRD §6.4-pre, design doc §5)
+// =============================================================================
+
+// outputFilter is the OutputFilter consulted by outputFilterWriter.
+// kids.StrictKeywordFilter{} is the CONFIRMED V0 default (design doc §3.1 /
+// §3.3): a deny-list keyword scan, NOT the final Airbotix moderation
+// classifier. It is wired in now so EnforceStrictOutputFilter has a real
+// (if blunt) effect from day one; a future DR swaps this value for a richer
+// kids.OutputFilter implementation behind the same interface — no other code
+// in this file needs to change.
+var outputFilter kids.OutputFilter = kids.StrictKeywordFilter{}
+
+// maxOutputFilterBufferBytes caps how much of a single response
+// outputFilterWriter buffers in memory before treating it as unverifiable.
+// Confirmed 1 MiB (DR-30 阶段0 核对3): maxTokensHardCap=2048 bounds normal
+// assistant output to well under this limit with a comfortable margin,
+// kids_mode traffic uses small models with short responses, and the overflow
+// path itself fails closed (2xx) or passes through truncated (non-2xx)
+// rather than letting the buffer grow unbounded.
+const maxOutputFilterBufferBytes = 1 << 20
+
+// wrapOutputFilterWriter installs outputFilterWriter on c.Writer when
+// decision.EnforceStrictOutputFilter is set, so that the ENTIRE response
+// (non-stream body or full SSE stream) is buffered, classified against
+// outputFilter via kids.FilterForShape(shape), and either passed through
+// unchanged or replaced with a kids.SafeFallbackText()-based response in the
+// same wire format — before any byte reaches the client.
+//
+// When EnforceStrictOutputFilter is false, restore is a no-op func — callers
+// can unconditionally `defer restore()` without branching, so the buffering
+// cost is paid only by kids_mode / kid-safe tenants.
+//
+// Calling convention for the 4 handler files (阶段8, ADR-0006 controlled
+// expansion):
+//
+//	restore := wrapOutputFilterWriter(c, decision, kids.ResponseShapeXxx)
+//	defer restore()
+//	... existing response-producing call (adaptor.DoResponse / chatCompletionsViaResponses) ...
+//	restore()
+//
+// The `defer restore()` is a safety net for error returns BEFORE the
+// response-producing call: outputFilterWriter.finalize() is a no-op when
+// nothing was ever written through it (see the `wrote` field below), so a
+// deferred restore on a pre-response error path can never synthesize a
+// spurious fallback body or an implicit 200.
+//
+// The explicit `restore()` AFTER the response-producing call is what
+// actually runs finalize() and flushes the (possibly replaced) bytes to the
+// client — any code that runs after it (quota settlement, billing dispatch,
+// a future reader of ContextKeyOutputFilterViolations) observes the
+// post-finalize state. finalize() is idempotent, so the deferred call that
+// follows an explicit restore() is always a guaranteed no-op.
+func wrapOutputFilterWriter(c *gin.Context, decision policy.Decision, shape kids.ResponseShape) (restore func()) {
+	if !decision.EnforceStrictOutputFilter {
+		return func() {}
+	}
+	orig := c.Writer
+	w := &outputFilterWriter{ResponseWriter: orig, c: c, shape: shape, filter: outputFilter}
+	c.Writer = w
+	return func() {
+		w.finalize()
+		c.Writer = orig
+	}
+}
+
+// outputFilterWriter wraps a gin.ResponseWriter and buffers every byte of the
+// response (up to maxOutputFilterBufferBytes) instead of writing it through,
+// so finalize() can classify the complete response before anything reaches
+// the client.
+//
+// All response-writing / header-flushing members of gin.ResponseWriter are
+// overridden below (WriteHeader, WriteHeaderNow, Write, WriteString, Flush)
+// along with the state-inspection members some adapters rely on (Written,
+// Size, Status) — any of these left to promote from the embedded
+// gin.ResponseWriter would bypass buffering and write straight to the real
+// connection. Flush in particular is reachable from a real code path:
+// service.IOCopyBytesGracefully (used by chatCompletionsViaResponses) calls
+// c.Writer.Flush() unconditionally after writing the body.
+//
+// Hijack, CloseNotify, and Pusher (also part of gin.ResponseWriter) are
+// intentionally left promoted unchanged: no relay DoResponse /
+// IOCopyBytesGracefully path for the 4 in-scope response shapes calls them
+// (they exist for websocket upgrade, HTTP/2 push, and client-disconnect
+// detection).
+type outputFilterWriter struct {
+	gin.ResponseWriter
+	c      *gin.Context // for ContextKeyOutputFilterViolations / ContextKeyOutputFilterBufferOverflow
+	shape  kids.ResponseShape
+	filter kids.OutputFilter
+	buf    bytes.Buffer
+
+	statusCode int
+	finalized  bool // guards finalize() against double invocation (defer + explicit restore())
+
+	// wrote becomes true on the first Write / WriteString / WriteHeader call.
+	// It distinguishes a pre-response error return (no response was ever
+	// produced) from a real response that must be filtered. finalize() is a
+	// no-op when wrote is false — see step 0 there.
+	wrote bool
+
+	// overflow becomes true once a Write/WriteString call would push buf past
+	// maxOutputFilterBufferBytes. buf is filled up to the cap and the excess
+	// is silently discarded; Write/WriteString still report success so the
+	// caller completes normally. finalize() treats an overflowed 2xx response
+	// as unverifiable (fails closed, like ExtractText/ExtractStreamText
+	// returning ok=false) and an overflowed non-2xx response as
+	// pass-through-truncated.
+	overflow bool
+}
+
+func (w *outputFilterWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.wrote = true
+}
+
+// WriteHeaderNow is a no-op: headers are only sent from finalize(), once the
+// final (possibly replaced) body and Content-Length are known.
+func (w *outputFilterWriter) WriteHeaderNow() {}
+
+func (w *outputFilterWriter) Write(p []byte) (int, error) {
+	w.wrote = true
+	if w.overflow {
+		return len(p), nil
+	}
+	if remaining := maxOutputFilterBufferBytes - w.buf.Len(); len(p) > remaining {
+		w.buf.Write(p[:remaining])
+		w.overflow = true
+		return len(p), nil
+	}
+	return w.buf.Write(p)
+}
+
+func (w *outputFilterWriter) WriteString(s string) (int, error) {
+	w.wrote = true
+	if w.overflow {
+		return len(s), nil
+	}
+	if remaining := maxOutputFilterBufferBytes - w.buf.Len(); len(s) > remaining {
+		w.buf.WriteString(s[:remaining])
+		w.overflow = true
+		return len(s), nil
+	}
+	return w.buf.WriteString(s)
+}
+
+// Flush is a no-op: flushing here would send headers and/or a partial body
+// before finalize() has classified the response.
+func (w *outputFilterWriter) Flush() {}
+
+func (w *outputFilterWriter) Written() bool { return w.wrote }
+
+func (w *outputFilterWriter) Size() int { return w.buf.Len() }
+
+func (w *outputFilterWriter) Status() int {
+	if w.statusCode == 0 {
+		return http.StatusOK
+	}
+	return w.statusCode
+}
+
+// finalize classifies the buffered response (if any) and writes the
+// (possibly replaced) status/headers/body to the underlying
+// gin.ResponseWriter. See design doc §5.3/§5.4 for the full rationale.
+func (w *outputFilterWriter) finalize() {
+	if w.finalized {
+		return
+	}
+	w.finalized = true
+
+	// Step 0: nothing was ever written through w — a pre-response error
+	// return, not a response to filter. Write nothing; the handler's own
+	// error-response path (writing to orig, not w) is unaffected.
+	if !w.wrote {
+		return
+	}
+
+	raw := w.buf.Bytes()
+	status := w.statusCode
+	if status == 0 {
+		status = http.StatusOK
+	}
+
+	// Step 1: an empty body (e.g. 204 No Content, or a 2xx response with no
+	// body) cannot contain blocked content — pass the status through without
+	// triggering fail-closed fallback. WriteHeaderNow is required here
+	// because gin's WriteHeader only records the status; it is normally
+	// flushed by the first Write, which an empty body never makes.
+	if len(raw) == 0 {
+		if w.statusCode != 0 {
+			w.ResponseWriter.WriteHeader(w.statusCode)
+			w.ResponseWriter.WriteHeaderNow()
+		}
+		return
+	}
+
+	sf := kids.FilterForShape(w.shape)
+	isStream := strings.HasPrefix(w.Header().Get("Content-Type"), "text/event-stream")
+
+	out := raw
+	switch {
+	case status >= 200 && status < 300:
+		var text string
+		var ok bool
+		switch {
+		case w.overflow:
+			// Truncated body: cannot reliably extract/replace text. Treat
+			// like a parse failure and fail closed.
+			ok = false
+			common.SetContextKey(w.c, constant.ContextKeyOutputFilterBufferOverflow, true)
+		case isStream:
+			text, ok = sf.ExtractStreamText(raw)
+		default:
+			text, ok = sf.ExtractText(raw)
+		}
+
+		// !ok (parse failure or buffer overflow) fails closed, same as a
+		// Blocked verdict. ok=true + text=="" (e.g. a tool_calls-only
+		// response) is a recognised clean case and does NOT fail closed.
+		blocked := !ok
+		if ok {
+			if verdict := w.filter.Check(text); verdict.Blocked {
+				blocked = true
+				common.SetContextKey(w.c, constant.ContextKeyOutputFilterViolations, verdict.Categories)
+			}
+		}
+
+		if blocked {
+			switch {
+			case isStream:
+				out = sf.BuildFallbackStream(kids.SafeFallbackText())
+			case ok:
+				if replaced, err := sf.ReplaceText(raw, kids.SafeFallbackText()); err == nil {
+					out = replaced
+				} else {
+					out = sf.BuildFallbackBody(kids.SafeFallbackText())
+				}
+			default:
+				out = sf.BuildFallbackBody(kids.SafeFallbackText())
+			}
+		}
+	case w.overflow:
+		// Non-2xx error body, truncated by the buffer cap: pass the
+		// truncated bytes through (still more useful for ops debugging than
+		// no body), but record that it was truncated.
+		common.SetContextKey(w.c, constant.ContextKeyOutputFilterBufferOverflow, true)
+	}
+	// Other non-2xx responses pass through unchanged — not subject to the
+	// output filter, so upstream error messages remain legible for ops.
+
+	if !isStream {
+		w.Header().Set("Content-Length", strconv.Itoa(len(out)))
+	}
+	if w.statusCode != 0 {
+		w.ResponseWriter.WriteHeader(w.statusCode)
+	}
+	w.ResponseWriter.Write(out)
 }
