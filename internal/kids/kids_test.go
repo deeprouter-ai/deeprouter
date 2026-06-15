@@ -13,12 +13,17 @@ func TestIsModelEligible(t *testing.T) {
 		{"gpt-3.5-turbo", false},             // not on whitelist
 		{"some-uncensored-model-v2", false},
 		{"", false},
-		// gpt-image-2 lineup (added 2026-04-21, replaced DALL-E on 2026-05-12)
-		{"gpt-image-2", true},
-		{"gpt-image-2-2026-04-21", true}, // snapshot variant via HasPrefix
-		{"gpt-image-1", true},            // kept as fallback for older channels
-		{"dall-e-3", false},              // retired by OpenAI on 2026-05-12
-		{"dall-e-2", false},              // retired same date
+		// Image models removed from the whitelist on 2026-06-15: kids_mode's
+		// strict output filter only covers the 4 text response shapes, so no
+		// image model is eligible until an image NSFW filter covers
+		// /v1/images/generations and /v1/images/edits.
+		{"gpt-image-2", false},
+		{"gpt-image-2-2026-04-21", false}, // snapshot variant via HasPrefix
+		{"gpt-image-1", false},
+		{"flux-schnell", false},
+		{"flux-1.1-pro", false},
+		{"dall-e-3", false}, // retired by OpenAI on 2026-05-12
+		{"dall-e-2", false}, // retired same date
 	}
 	for _, tc := range cases {
 		if got := IsModelEligible(tc.model); got != tc.want {

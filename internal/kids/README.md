@@ -38,9 +38,14 @@ Hardcoded in this package. Stays deliberately narrow:
 | Family | Models |
 |---|---|
 | OpenAI chat | `gpt-4o-mini`, `gpt-4o` |
-| OpenAI image | `gpt-image-2` (primary, added 2026-04-21), `gpt-image-1` (fallback) |
 | Anthropic | `claude-3-5-haiku`, `claude-3-5-sonnet` |
-| Image | `flux-schnell`, `flux-1.1-pro` |
+
+No image models are eligible. `gpt-image-2`, `gpt-image-1`, `flux-schnell`,
+and `flux-1.1-pro` were removed on 2026-06-15: the strict output filter (§5
+below) only covers the 4 text response shapes, so an image model on this
+whitelist would let kids_mode tenants reach `/v1/images/generations` /
+`/v1/images/edits` (`relay/image_handler.go`) with zero output filtering.
+Re-add only once an image NSFW filter covers those endpoints.
 
 DALL-E 3 was retired from the whitelist on 2026-05-12. Versioned variants (e.g. `gpt-4o-2024-08-06`) match via `HasPrefix`.
 
@@ -147,4 +152,4 @@ Run: `go test ./internal/kids/...`
 
 ## Versioning the whitelist
 
-Date comments inside the source (`// 2026-04-21 added gpt-image-2`, `// 2026-05-12 dropped DALL-E 3`) document real rollouts. When extending, add a similar dated comment and an explicit test case.
+Date comments inside the source (`// 2026-05-12 dropped DALL-E 3`, `// 2026-06-15 dropped image models`) document real rollouts. When extending, add a similar dated comment and an explicit test case.

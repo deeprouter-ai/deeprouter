@@ -43,8 +43,9 @@ rest of the safety gate unreachable.
 
 Block requests for non-whitelisted models when `KidsMode=true` or
 `EnforceModelWhitelist=true`. Allowed models: `gpt-4o`, `gpt-4o-mini`,
-`gpt-image-2`, `gpt-image-1`, `claude-3-5-haiku-*`, `claude-3-5-sonnet-*`,
-`flux-schnell`, `flux-1.1-pro`.
+`claude-3-5-haiku-*`, `claude-3-5-sonnet-*`. No image models are eligible
+(`internal/kids/kids.go`, removed 2026-06-15 — see "Image generation" row
+under "Gaps / Future Work" below).
 
 | Layer | Owning File | Test File | Test Function(s) |
 |---|---|---|---|
@@ -156,6 +157,7 @@ DB error (defensive pass-through).
 | HTTP-level integration test (httptest mock provider, full relay stack) | Planned — Phase 2.5 | — |
 | ZDR equivalent for Anthropic provider (no `store: false` in Anthropic API) | Accepted gap — metadata strip + prompt control is sufficient for Phase 1 | DR-31 |
 | `/v1/models` fail-closed when **middleware** hits a DB error | When `AirbotixPolicy` middleware runs but DB fails, it writes a passthrough decision (`KidsMode=false`) to context. The catalog endpoint reads that decision and skips filtering — still fail-open in this path. Fix requires adding an `Indeterminate` state to `policy.Decision` so the catalog can distinguish "not kids" from "unknown". Accepted for Phase 1; middleware DB errors are rare and covered by service-level DB health checks. | — |
+| Image generation | `/v1/images/generations` and `/v1/images/edits` now return `model_not_eligible_for_kids_mode` for every model under `KidsMode=true` — no image model is on `internal/kids/EligibleModels` (removed 2026-06-15), because DR-30's strict output filter only covers the 4 text response shapes and an image model on the whitelist would be reachable with zero output filtering. Re-enable once an image NSFW filter covers those endpoints. | DRS-7 / PLAN.md Phase 4 |
 
 ---
 
