@@ -129,6 +129,33 @@ DeepRouter keeps the upstream quota and usage accounting model, then adds a down
 
 The dispatcher is implemented and tested. Full relay completion wiring is tracked in the project plan so the README does not overstate runtime behavior.
 
+### Skill Marketplace (Designed — PRD Complete, Implementation Pending)
+
+The Skill Marketplace is the next product layer on top of the gateway: an officially curated, server-hosted catalog of AI Skills that users browse, enable, and run in the Playground. A "Skill" is a server-managed `instruction_template` plus its entitlement, safety, and execution configuration. The template is the platform's IP — it is never downloadable and never reaches the client.
+
+The V1 product loop is fully specified:
+
+```text
+Super Admin authors an official Skill
+  -> publishes it to the Marketplace
+  -> user browses, views detail, and enables it
+  -> user selects one enabled Skill in the Playground
+  -> Relay validates entitlement + safety, then injects instruction_template server-side
+  -> usage, billing attribution, analytics, and audit are recorded
+  -> Operations monitors adoption, blocked usage, revenue, and safety
+```
+
+Design principles that drive the spec:
+
+- **Server-side prompt DRM.** `instruction_template` lives only in `skill_versions`, is readable only by Super Admin and the Relay execution path, and is excluded from every client API, log, error, analytics event, billing record, and export. Template-change audits use a `sha256` hash, never the prompt text.
+- **Reuses the two-layer router.** A Skill's `model_whitelist` stores platform model aliases / routing groups (e.g. `smart-tier`, `kids-safe-tier`), not hardcoded provider versions. The smart-router resolves aliases at routing time, so a provider deprecation only updates one global alias map — no Skill records change.
+- **Use-time entitlement.** Enabling a Skill is not permanent authorization; plan, subscription, quota, lifecycle, and Kids state are re-checked at execution and mapped to stable error codes (`SKILL_PLAN_REQUIRED`, `SKILL_QUOTA_EXCEEDED`, `SKILL_KIDS_MODE_BLOCKED`, …).
+- **Stateless single-turn V1.** Each Playground submission is an independent request; no prior-turn history is forwarded to the provider, so per-request cost is fixed and predictable.
+- **Kids safety as a hard path.** `is_kids_session` is resolved server-side (client flags ignored), non-Kids-Safe Skills are blocked before injection, and Kids publishing requires Safety Reviewer approval.
+- **Append-only billing + privacy-by-default analytics.** The billing ledger is immutable once charged (refunds are compensating rows, enforced by a DB trigger), and analytics carry no prompt, no raw user input, and no Kids-sensitive content.
+
+The full V1 specification is Sprint-ready: a modular PRD set (functional requirements, UX, data model & API contract, analytics & operations, security & NFR, and a 16-module M00–M15 work breakdown) lives under [docs/skill-marketplace/](./docs/skill-marketplace/). No backend or frontend code has been written yet — this is the design source of truth for the next phase.
+
 ## Architecture At A Glance
 
 ```text
@@ -175,6 +202,7 @@ For a deeper module tour, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 | `relay/airbotix_policy.go` | DeepRouter policy application point near provider conversion. |
 | `middleware/smart_router.go` | Virtual-model resolution for `deeprouter-auto`. |
 | `docs/kids-coverage-matrix.md` | Traceability matrix for kids-mode enforcement and tests. |
+| `docs/skill-marketplace/` | Sprint-ready modular PRD set for the Skill Marketplace (functional, UX, data/API, analytics, security/NFR, WBS, compliance). |
 
 ## Local Quickstart
 
@@ -267,6 +295,10 @@ Implemented and tested:
 - internal model catalog endpoint for the router sidecar
 - signed billing webhook dispatcher
 - development and deployment documentation
+
+Designed (Sprint-ready PRD, implementation pending):
+
+- Skill Marketplace V1 — official curated Skills, server-side prompt DRM, Playground execution, use-time entitlement, billing attribution, analytics, and Kids safety (see [docs/skill-marketplace/](./docs/skill-marketplace/))
 
 In progress or planned:
 
