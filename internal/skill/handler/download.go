@@ -3,7 +3,6 @@ package handler
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
@@ -56,9 +55,11 @@ func DownloadSkillPackage(c *gin.Context) {
 		return
 	}
 
-	// Emit analytics event; log on failure but do not block the download response.
+	// Emit analytics event with the user's resolved plan (not the skill's required_plan).
+	// Log on failure but do not block the download response.
+	userPlan := groupToPlan(c.GetString("group"))
 	if err := skillmodel.EmitSkillEnabled(db, userID, s.ID, s.ActiveVersionID,
-		string(enums.EntryPointSkillPackage), string(s.RequiredPlan)); err != nil {
+		string(enums.EntryPointSkillPackage), string(userPlan)); err != nil {
 		common.SysLog("EmitSkillEnabled failed for skill " + s.ID + ": " + err.Error())
 	}
 
@@ -128,7 +129,7 @@ func buildSkillPackage(s skillmodel.Skill) ([]byte, error) {
 		Category:              s.Category,
 		RequiresDeepRouterKey: true,
 	}
-	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
+	manifestJSON, err := common.Marshal(manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +171,7 @@ func buildSkillMD(s skillmodel.Skill) string {
 	sb.WriteString(s.Description + "\n")
 
 	var hints []string
-	if json.Unmarshal(s.InputHints, &hints) == nil && len(hints) > 0 {
+	if common.Unmarshal(s.InputHints, &hints) == nil && len(hints) > 0 {
 		sb.WriteString("\n### When to Use\n\n")
 		for _, h := range hints {
 			sb.WriteString("- " + h + "\n")

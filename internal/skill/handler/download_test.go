@@ -283,3 +283,26 @@ func TestDownloadSkillPackage_EmitsSkillEnabledEvent(t *testing.T) {
 	require.NotNil(t, evt.Plan)
 	assert.Equal(t, "free", *evt.Plan)
 }
+
+// TestDownloadSkillPackage_EmitRecordsUserPlanNotSkillPlan verifies that when a pro user
+// downloads a free skill, the analytics event.plan reflects the user's plan ("pro"),
+// not the skill's required_plan ("free"). Prevents dashboard funnel distortion.
+func TestDownloadSkillPackage_EmitRecordsUserPlanNotSkillPlan(t *testing.T) {
+	db := testDownloadDB(t)
+	SetDB(db)
+	s := testSkill("free-skill-for-pro", "published")
+	// s.RequiredPlan is "free" by default from testSkill
+	require.NoError(t, db.Create(&s).Error)
+
+	c, w := testDownloadCtx("free-skill-for-pro", 55, "pro")
+	DownloadSkillPackage(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var evt skillmodel.SkillUsageEvent
+	err := db.Where("event_type = ? AND skill_id = ?", "skill_enabled", s.ID).First(&evt).Error
+	require.NoError(t, err)
+	require.NotNil(t, evt.Plan)
+	assert.Equal(t, "pro", *evt.Plan,
+		"analytics event.plan must be the user's plan, not the skill's required_plan")
+}
