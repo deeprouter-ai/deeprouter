@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState } from 'react'
-import { Check, Copy, ExternalLink, X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -31,24 +31,6 @@ function defaultBaseUrl(): string {
   return `${protocol}//${host}/v1`
 }
 
-const CLIENTS: Array<{ name: string; tagline: string; href: string }> = [
-  {
-    name: 'Cherry Studio',
-    tagline: 'Chat / writing — Mac / Win / Linux',
-    href: 'https://cherry-ai.com',
-  },
-  {
-    name: 'Chatbox',
-    tagline: 'Lightweight desktop chat client',
-    href: 'https://chatboxai.app',
-  },
-  {
-    name: 'Claude Code',
-    tagline: 'Terminal AI coding agent',
-    href: 'https://docs.claude.com/en/docs/claude-code',
-  },
-]
-
 /**
  * Persistent tutorial card for casual users on /keys. Existing UX only
  * surfaces "Base URL + Model name + paste into client" inside the one-shot
@@ -57,10 +39,12 @@ const CLIENTS: Array<{ name: string; tagline: string; href: string }> = [
  * until dismissed (localStorage), so the casual flow is end-to-end:
  *   1. Create key
  *   2. Copy Base URL (visible right here)
- *   3. Paste into Cherry Studio / Chatbox / Claude Code
+ *   3. Paste it into whatever AI tool the user already has
  *
  * Only renders for persona === 'casual'. Dev / team personas don't need
- * this scaffolding.
+ * this scaffolding. Per CLAUDE.md §0 Rule 1, casual surfaces MUST NOT name
+ * third-party client brands (Cherry Studio / Chatbox / …) — those live behind
+ * Developer mode only. Keep this card brand-free.
  */
 export function ApiKeysTutorialCard() {
   const { t } = useTranslation()
@@ -108,7 +92,7 @@ export function ApiKeysTutorialCard() {
       </h3>
       <p className='text-muted-foreground mt-1 pr-8 text-xs'>
         {t(
-          'One key, any AI client. Paste it into Cherry Studio, Chatbox, or Claude Code to chat with Claude / GPT / Gemini / DeepSeek.'
+          'One key, any AI tool. Paste it into the app you already use to chat with Claude / GPT / Gemini / DeepSeek.'
         )}
       </p>
       <ol className='mt-3 space-y-3 text-xs'>
@@ -159,31 +143,12 @@ export function ApiKeysTutorialCard() {
             3
           </span>
           <div className='flex-1'>
-            <p className='font-medium'>{t('Paste into an AI client')}</p>
+            <p className='font-medium'>{t('Paste it into your AI tool')}</p>
             <p className='text-muted-foreground'>
               {t(
-                'Find the "API key" and "Base URL" (sometimes called "Endpoint") fields in your client\'s settings, paste both, and save.'
+                'Open the AI app you already use, find the "API key" and "Base URL" (sometimes called "Endpoint") fields in its settings, paste both, and save.'
               )}
             </p>
-            <div className='mt-2 grid gap-2 sm:grid-cols-3'>
-              {CLIENTS.map((c) => (
-                <a
-                  key={c.name}
-                  href={c.href}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                  className='group bg-background hover:border-foreground/40 flex flex-col rounded-md border p-2 transition-colors'
-                >
-                  <span className='flex items-center justify-between text-[11px] font-medium'>
-                    {c.name}
-                    <ExternalLink className='text-muted-foreground group-hover:text-foreground h-3 w-3' />
-                  </span>
-                  <span className='text-muted-foreground text-[10px]'>
-                    {c.tagline}
-                  </span>
-                </a>
-              ))}
-            </div>
           </div>
         </li>
       </ol>

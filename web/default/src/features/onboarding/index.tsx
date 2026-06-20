@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { FieldHint } from '@/components/ui/field-hint'
 import { Markdown } from '@/components/ui/markdown'
+import { modelNameForPurpose } from '@/features/keys/lib/integration'
 import { getTutorial } from './tutorials/registry'
 
 type IconKey = 'cherry' | 'chat' | 'lobe' | 'cursor' | 'terminal' | 'code'
@@ -64,14 +65,17 @@ export function OnboardingTutorial() {
   const { status: _status } = useStatus()
 
   const baseUrl = defaultBaseUrl()
-  const modelName = 'deeprouter'
+  // The ONLY model name the gateway routes today is `deeprouter-auto`; the bare
+  // `deeprouter` alias returns 503 (CLAUDE.md §0 Rule 3). Use the canonical
+  // helper so this never drifts back to a broken value.
+  const modelName = modelNameForPurpose()
 
   const content = useMemo(() => {
     if (!tutorial) return null
     const body = tutorial.content({ baseUrl, modelName })
     const lang = i18next.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'
     return body[lang] ?? body.en
-  }, [tutorial, baseUrl])
+  }, [tutorial, baseUrl, modelName])
 
   if (!tutorial || !content) {
     return (

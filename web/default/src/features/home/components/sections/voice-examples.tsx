@@ -16,7 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Languages, Mic2, Radio, Volume2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Languages, Mic2, Play, Radio, Square, Volume2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
@@ -27,6 +28,10 @@ const VOICE_EXAMPLES = [
     meta: 'ElevenLabs-style TTS',
     icon: Volume2,
     tone: 'accent',
+    lang: 'en-US',
+    rate: 0.95,
+    pitch: 0.95,
+    voiceHints: ['narrator', 'daniel', 'guy', 'male'],
   },
   {
     title: 'AI tutor voice',
@@ -34,6 +39,10 @@ const VOICE_EXAMPLES = [
     meta: 'Warm explanatory tone',
     icon: Mic2,
     tone: 'success',
+    lang: 'en-US',
+    rate: 0.88,
+    pitch: 1.08,
+    voiceHints: ['samantha', 'jenny', 'female', 'google us english'],
   },
   {
     title: 'Multilingual announcement',
@@ -41,6 +50,10 @@ const VOICE_EXAMPLES = [
     meta: 'EN / 中文 / 日本語',
     icon: Languages,
     tone: 'warning',
+    lang: 'zh-CN',
+    rate: 0.92,
+    pitch: 1,
+    voiceHints: ['tingting', 'mei', 'xiaoxiao', 'chinese'],
   },
   {
     title: 'Realtime agent reply',
@@ -48,6 +61,10 @@ const VOICE_EXAMPLES = [
     meta: 'Low-latency streaming',
     icon: Radio,
     tone: 'accent',
+    lang: 'en-US',
+    rate: 1.05,
+    pitch: 1,
+    voiceHints: ['alex', 'google us english', 'english'],
   },
 ] as const
 
@@ -55,6 +72,60 @@ const WAVE_BARS = [18, 34, 24, 46, 30, 58, 38, 72, 45, 62, 36, 50, 28, 40, 22]
 
 export function VoiceExamples() {
   const { t } = useTranslation()
+  const [activeVoice, setActiveVoice] = useState<string | null>(null)
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false)
+
+  useEffect(() => {
+    setIsSpeechSupported(
+      typeof window !== 'undefined' && 'speechSynthesis' in window
+    )
+
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+    }
+  }, [])
+
+  const playExample = (example: (typeof VOICE_EXAMPLES)[number]) => {
+    if (!isSpeechSupported) return
+
+    if (activeVoice === example.title) {
+      window.speechSynthesis.cancel()
+      setActiveVoice(null)
+      return
+    }
+
+    window.speechSynthesis.cancel()
+
+    const speechText = t(example.text)
+    const speechLang = /[\u3400-\u9fff]/.test(speechText)
+      ? 'zh-CN'
+      : example.lang
+    const utterance = new SpeechSynthesisUtterance(speechText)
+    const voices = window.speechSynthesis.getVoices()
+    const matchingVoice = voices.find((voice) => {
+      const voiceName = voice.name.toLowerCase()
+      const voiceLang = voice.lang.toLowerCase()
+
+      return (
+        voiceLang.startsWith(speechLang.toLowerCase().slice(0, 2)) &&
+        example.voiceHints.some((hint) =>
+          voiceName.includes(hint.toLowerCase())
+        )
+      )
+    })
+
+    utterance.lang = speechLang
+    utterance.rate = example.rate
+    utterance.pitch = example.pitch
+    utterance.voice = matchingVoice ?? null
+    utterance.onend = () => setActiveVoice(null)
+    utterance.onerror = () => setActiveVoice(null)
+
+    setActiveVoice(example.title)
+    window.speechSynthesis.speak(utterance)
+  }
 
   return (
     <section className='relative z-10 px-6 py-20 md:py-28'>
@@ -101,33 +172,58 @@ export function VoiceExamples() {
         <div className='grid gap-3 sm:grid-cols-2'>
           {VOICE_EXAMPLES.map((example, index) => {
             const Icon = example.icon
+            const isActive = activeVoice === example.title
+
             return (
               <AnimateInView
                 key={example.title}
                 delay={index * 80}
                 animation='scale-in'
-                className='border-border bg-card/80 rounded-2xl border p-5 shadow-[0_12px_34px_rgb(28_28_28/0.06)]'
+                className={`border-border bg-card/80 rounded-2xl border p-5 shadow-[0_12px_34px_rgb(28_28_28/0.06)] transition duration-300 ${
+                  isActive
+                    ? 'border-primary/40 shadow-[0_18px_46px_rgb(84_108_255/0.18)]'
+                    : ''
+                }`}
               >
-                <div className='flex items-center gap-3'>
-                  <div
-                    className={`flex size-10 items-center justify-center rounded-xl ${
-                      example.tone === 'success'
-                        ? 'bg-success/10 text-success'
-                        : example.tone === 'warning'
-                          ? 'bg-warning/10 text-warning'
-                          : 'bg-accent/10 text-accent'
-                    }`}
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='flex min-w-0 items-center gap-3'>
+                    <div
+                      className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${
+                        example.tone === 'success'
+                          ? 'bg-success/10 text-success'
+                          : example.tone === 'warning'
+                            ? 'bg-warning/10 text-warning'
+                            : 'bg-accent/10 text-accent'
+                      }`}
+                    >
+                      <Icon className='size-5' strokeWidth={1.7} />
+                    </div>
+                    <div className='min-w-0'>
+                      <h3 className='truncate text-sm font-semibold'>
+                        {t(example.title)}
+                      </h3>
+                      <p className='text-muted-foreground mt-0.5 truncate text-xs'>
+                        {t(example.meta)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type='button'
+                    disabled={!isSpeechSupported}
+                    onClick={() => playExample(example)}
+                    className='border-border bg-background hover:bg-muted disabled:text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed'
+                    aria-label={`${isActive ? t('Stop sample') : t('Play sample')}: ${t(example.title)}`}
                   >
-                    <Icon className='size-5' strokeWidth={1.7} />
-                  </div>
-                  <div>
-                    <h3 className='text-sm font-semibold'>
-                      {t(example.title)}
-                    </h3>
-                    <p className='text-muted-foreground mt-0.5 text-xs'>
-                      {t(example.meta)}
-                    </p>
-                  </div>
+                    {isActive ? (
+                      <Square className='size-4 fill-current' strokeWidth={2} />
+                    ) : (
+                      <Play
+                        className='ml-0.5 size-4 fill-current'
+                        strokeWidth={2}
+                      />
+                    )}
+                  </button>
                 </div>
                 <p className='text-muted-foreground mt-5 min-h-16 text-sm leading-relaxed'>
                   “{t(example.text)}”
@@ -136,11 +232,29 @@ export function VoiceExamples() {
                   {WAVE_BARS.slice(0, 10).map((height, barIndex) => (
                     <span
                       key={`${example.title}-${barIndex}`}
-                      className='bg-border w-full rounded-full'
-                      style={{ height: `${Math.max(8, height / 2)}px` }}
+                      className={`w-full rounded-full transition-colors ${
+                        isActive ? 'bg-primary animate-pulse' : 'bg-border'
+                      }`}
+                      style={{
+                        height: `${Math.max(8, height / 2)}px`,
+                        animationDelay: `${barIndex * 80}ms`,
+                      }}
                     />
                   ))}
                 </div>
+
+                <button
+                  type='button'
+                  disabled={!isSpeechSupported}
+                  onClick={() => playExample(example)}
+                  className='text-muted-foreground hover:text-foreground disabled:text-muted-foreground/60 mt-5 text-xs font-semibold transition disabled:cursor-not-allowed'
+                >
+                  {isSpeechSupported
+                    ? isActive
+                      ? t('Stop sample')
+                      : t('Play sample')
+                    : t('Audio preview is not supported in this browser')}
+                </button>
               </AnimateInView>
             )
           })}
