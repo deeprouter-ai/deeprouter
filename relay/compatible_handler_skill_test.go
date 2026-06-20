@@ -250,6 +250,35 @@ func TestTextHelper_SkillRelay_InvalidEntryPoint_Returns400(t *testing.T) {
 	assert.False(t, hasCtx, "SkillRelayContext must NOT be stored when entry_point is invalid")
 }
 
+// TestTextHelper_SkillRelay_PartialExtension_NoSkillIDStripped verifies that a partial
+// deeprouter extension (no skill_id, e.g. {"deeprouter": {"entry_point": "skill_package"}}
+// or {"deeprouter": {}}) does NOT activate the skill gate and does NOT store a
+// SkillRelayContext. The vendor extension must be stripped regardless so it is never
+// forwarded to upstream providers.
+func TestTextHelper_SkillRelay_PartialExtension_NoSkillIDStripped(t *testing.T) {
+	for _, ext := range []*dto.DeepRouterExtension{
+		{},                                // {"deeprouter": {}}
+		{EntryPoint: "skill_package"},     // {"deeprouter": {"entry_point": "skill_package"}}
+		{EntryPoint: "playground_picker"}, // valid enum, no skill_id
+	} {
+		c := newSkillTestCtx(t, 1)
+		apiErr := TextHelper(c, newSkillRelayInfo(&dto.GeneralOpenAIRequest{
+			Model:      "gpt-4o",
+			Deeprouter: ext,
+		}))
+
+		_, hasCtx := skillrelay.Get(c)
+		assert.False(t, hasCtx, "partial deeprouter (no skill_id) must not set SkillRelayContext")
+
+		// Must not return a skill-gate error (401/403/404).
+		if apiErr != nil {
+			assert.NotEqual(t, http.StatusUnauthorized, apiErr.StatusCode)
+			assert.NotEqual(t, http.StatusForbidden, apiErr.StatusCode)
+			assert.NotEqual(t, http.StatusNotFound, apiErr.StatusCode)
+		}
+	}
+}
+
 // TestTextHelper_SkillRelay_EntryPoint_FromDeepRouterField verifies that when
 // deeprouter.entry_point is set (e.g. "skill_package" by an external package client),
 // SkillRelayContext.EntryPoint carries that value through for analytics.
