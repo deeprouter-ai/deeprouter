@@ -16,9 +16,11 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
+import { Route as ResourcesIndexRouteImport } from './routes/resources/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as ResourcesSlugRouteImport } from './routes/resources/$slug'
 import { Route as OnboardingSlugRouteImport } from './routes/onboarding/$slug'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
@@ -109,6 +111,11 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   path: '/setup/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResourcesIndexRoute = ResourcesIndexRouteImport.update({
+  id: '/resources/',
+  path: '/resources/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RankingsIndexRoute = RankingsIndexRouteImport.update({
   id: '/rankings/',
   path: '/rankings/',
@@ -122,6 +129,11 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesSlugRoute = ResourcesSlugRouteImport.update({
+  id: '/resources/$slug',
+  path: '/resources/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingSlugRoute = OnboardingSlugRouteImport.update({
@@ -459,9 +471,11 @@ export interface FileRoutesByFullPath {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
+  '/resources/$slug': typeof ResourcesSlugRoute
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
+  '/resources/': typeof ResourcesIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -524,9 +538,11 @@ export interface FileRoutesByTo {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
+  '/resources/$slug': typeof ResourcesSlugRoute
   '/about': typeof AboutIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
+  '/resources': typeof ResourcesIndexRoute
   '/setup': typeof SetupIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -593,9 +609,11 @@ export interface FileRoutesById {
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
+  '/resources/$slug': typeof ResourcesSlugRoute
   '/about/': typeof AboutIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
+  '/resources/': typeof ResourcesIndexRoute
   '/setup/': typeof SetupIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
@@ -661,9 +679,11 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/onboarding/$slug'
+    | '/resources/$slug'
     | '/about/'
     | '/pricing/'
     | '/rankings/'
+    | '/resources/'
     | '/setup/'
     | '/user/reset'
     | '/chat/$chatId'
@@ -726,9 +746,11 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/onboarding/$slug'
+    | '/resources/$slug'
     | '/about'
     | '/pricing'
     | '/rankings'
+    | '/resources'
     | '/setup'
     | '/user/reset'
     | '/chat/$chatId'
@@ -794,9 +816,11 @@ export interface FileRouteTypes {
     | '/console/topup'
     | '/oauth/$provider'
     | '/onboarding/$slug'
+    | '/resources/$slug'
     | '/about/'
     | '/pricing/'
     | '/rankings/'
+    | '/resources/'
     | '/setup/'
     | '/(auth)/user/reset'
     | '/_authenticated/chat/$chatId'
@@ -855,9 +879,11 @@ export interface RootRouteChildren {
   ConsoleTopupRoute: typeof ConsoleTopupRoute
   OauthProviderRoute: typeof OauthProviderRoute
   OnboardingSlugRoute: typeof OnboardingSlugRoute
+  ResourcesSlugRoute: typeof ResourcesSlugRoute
   AboutIndexRoute: typeof AboutIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
+  ResourcesIndexRoute: typeof ResourcesIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
   PricingModelIdIndexRoute: typeof PricingModelIdIndexRoute
 }
@@ -913,6 +939,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/resources/': {
+      id: '/resources/'
+      path: '/resources'
+      fullPath: '/resources/'
+      preLoaderRoute: typeof ResourcesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rankings/': {
       id: '/rankings/'
       path: '/rankings'
@@ -932,6 +965,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources/$slug': {
+      id: '/resources/$slug'
+      path: '/resources/$slug'
+      fullPath: '/resources/$slug'
+      preLoaderRoute: typeof ResourcesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding/$slug': {
@@ -1485,9 +1525,11 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleTopupRoute: ConsoleTopupRoute,
   OauthProviderRoute: OauthProviderRoute,
   OnboardingSlugRoute: OnboardingSlugRoute,
+  ResourcesSlugRoute: ResourcesSlugRoute,
   AboutIndexRoute: AboutIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
+  ResourcesIndexRoute: ResourcesIndexRoute,
   SetupIndexRoute: SetupIndexRoute,
   PricingModelIdIndexRoute: PricingModelIdIndexRoute,
 }
