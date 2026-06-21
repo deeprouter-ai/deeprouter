@@ -63,9 +63,7 @@ export function estimateVideoClips(quota: number | null | undefined): number {
 }
 
 /** Estimate audio minutes (TTS/STT) at Whisper midpoint. */
-export function estimateAudioMinutes(
-  quota: number | null | undefined
-): number {
+export function estimateAudioMinutes(quota: number | null | undefined): number {
   if (!quota || !Number.isFinite(quota) || quota <= 0) return 0
   const usd = quota / QUOTA_PER_USD
   return Math.max(0, Math.floor(usd / AVG_MINUTE_COST_USD))
@@ -86,7 +84,7 @@ export function formatCount(n: number): string {
 
 /**
  * Per-model character estimates — onboarding-v2 §7.4 wants users to see
- * "约能用 Sonnet X 万字 / GPT-4o X 万字 / DeepSeek X 万字" on each top-up
+ * "约能用 Opus X 万字 / GPT-4o X 万字 / DeepSeek X 万字" on each top-up
  * tier so they can gauge value across cheap / mid / premium models.
  *
  * effectiveRatio = input_ratio × 3 — rough multiplier that accounts for
@@ -97,7 +95,7 @@ export function formatCount(n: number): string {
  * Update HIGHLIGHT_MODELS in lock-step with pricing changes.
  */
 const HIGHLIGHT_MODELS: { name: string; effectiveRatio: number }[] = [
-  { name: 'Claude Sonnet', effectiveRatio: 4.5 }, // input ratio 1.5
+  { name: 'Claude Opus 4.8', effectiveRatio: 7.5 }, // input ratio 2.5
   { name: 'GPT-4o', effectiveRatio: 3.75 }, // input ratio 1.25
   { name: 'DeepSeek V3', effectiveRatio: 0.405 }, // input ratio 0.135
 ]

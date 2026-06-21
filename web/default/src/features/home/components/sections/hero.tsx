@@ -41,7 +41,7 @@ import { HeroAccessWizard } from '../hero-access-wizard'
 // the models behind each brand as the lightweight, asset-free fallback).
 const SUPPORTED_BRANDS: { name: string; models: string }[] = [
   { name: 'OpenAI', models: 'GPT-5.5 · GPT-4o · o-series' },
-  { name: 'Anthropic', models: 'Claude Opus · Sonnet · Haiku' },
+  { name: 'Anthropic', models: 'Claude Opus 4.8 · Haiku' },
   { name: 'Google', models: 'Gemini 2.5 Pro · Flash' },
   { name: 'DeepSeek', models: 'DeepSeek V3 · R1' },
   { name: 'Moonshot', models: 'Kimi (Moonshot)' },

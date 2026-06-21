@@ -37,10 +37,30 @@ interface Example {
 }
 
 const EXAMPLES: Example[] = [
-  { prompt: 'Write a polite follow-up email', target: 'haiku', model: 'Claude Haiku', savings: 90 },
-  { prompt: 'Refactor this function', target: 'sonnet', model: 'Claude Sonnet', savings: 60 },
-  { prompt: 'Summarize a 40-page report', target: 'gemini', model: 'Gemini 2.5 Pro', savings: 70 },
-  { prompt: 'Make a 10-second product video', target: 'kling', model: 'Kling', savings: null },
+  {
+    prompt: 'Write a polite follow-up email',
+    target: 'haiku',
+    model: 'Claude Haiku',
+    savings: 90,
+  },
+  {
+    prompt: 'Plan a complex code migration',
+    target: 'opus',
+    model: 'Claude Opus 4.8',
+    savings: 45,
+  },
+  {
+    prompt: 'Summarize a 40-page report',
+    target: 'gemini',
+    model: 'Gemini 2.5 Pro',
+    savings: 70,
+  },
+  {
+    prompt: 'Make a 10-second product video',
+    target: 'kling',
+    model: 'Kling',
+    savings: null,
+  },
 ]
 
 const NODES: { tag: string; label: string }[] = [
@@ -61,7 +81,10 @@ export function SmartRoutingDemo() {
 
   useEffect(() => {
     if (reduce || paused) return
-    const id = setInterval(() => setIndex((i) => (i + 1) % EXAMPLES.length), CYCLE_MS)
+    const id = setInterval(
+      () => setIndex((i) => (i + 1) % EXAMPLES.length),
+      CYCLE_MS
+    )
     return () => clearInterval(id)
   }, [reduce, paused])
 
@@ -118,7 +141,11 @@ export function SmartRoutingDemo() {
                 <motion.span
                   className='bg-accent absolute inline-flex size-full rounded-full'
                   animate={{ scale: [1, 2.2, 1], opacity: [0.6, 0, 0.6] }}
-                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
+                  transition={{
+                    duration: 1.6,
+                    repeat: Infinity,
+                    ease: 'easeOut',
+                  }}
                 />
               )}
               <span className='bg-accent relative inline-flex size-2 rounded-full' />
@@ -161,11 +188,17 @@ export function SmartRoutingDemo() {
                 transition={{ duration: 0.35, delay: reduce ? 0 : 0.15 }}
               >
                 <p className='text-center text-sm leading-relaxed'>
-                  <span className='text-muted-foreground'>{t('Routed to')} </span>
+                  <span className='text-muted-foreground'>
+                    {t('Routed to')}{' '}
+                  </span>
                   <span className='font-semibold'>{active.model}</span>
                 </p>
                 {active.savings !== null ? (
-                  <CostBar savings={active.savings} reduce={!!reduce} replayKey={index} />
+                  <CostBar
+                    savings={active.savings}
+                    reduce={!!reduce}
+                    replayKey={index}
+                  />
                 ) : (
                   <p className='text-muted-foreground mt-2 text-center text-xs'>
                     {t('The right model for the job — on tap.')}
@@ -203,7 +236,11 @@ function CostBar({
           className='bg-accent absolute inset-y-0 left-0 rounded-full'
           initial={reduce ? false : { width: '100%' }}
           animate={{ width: `${routedPct}%` }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: reduce ? 0 : 0.25 }}
+          transition={{
+            duration: 0.7,
+            ease: [0.16, 1, 0.3, 1],
+            delay: reduce ? 0 : 0.25,
+          }}
         />
       </div>
       <div className='mt-1.5 flex justify-between text-[11px]'>
@@ -217,7 +254,13 @@ function CostBar({
 }
 
 /** Vertical connector with a dot that travels down once per cycle. */
-function Connector({ replayKey, reduce }: { replayKey: number; reduce: boolean }) {
+function Connector({
+  replayKey,
+  reduce,
+}: {
+  replayKey: number
+  reduce: boolean
+}) {
   return (
     <div className='relative my-3 h-9 w-px overflow-visible'>
       <div className='bg-border absolute inset-0 mx-auto w-px' />

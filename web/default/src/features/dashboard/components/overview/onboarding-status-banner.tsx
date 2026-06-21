@@ -50,29 +50,6 @@ function writeDismissed(key: string): void {
   }
 }
 
-type ClientSlug =
-  | 'cherry-studio'
-  | 'chatbox'
-  | 'lobechat'
-  | 'cursor'
-  | 'claude-code'
-  | 'code'
-
-function asClientSlug(value: unknown): ClientSlug | null {
-  if (typeof value !== 'string') return null
-  switch (value) {
-    case 'cherry-studio':
-    case 'chatbox':
-    case 'lobechat':
-    case 'cursor':
-    case 'claude-code':
-    case 'code':
-      return value
-    default:
-      return null
-  }
-}
-
 function parseSettingRaw(
   raw: unknown
 ): Record<string, unknown> | null {
@@ -118,7 +95,6 @@ export function OnboardingStatusBanner() {
   )
 
   const setting = useMemo(() => parseSettingRaw(user?.setting), [user?.setting])
-  const preferredClient = asClientSlug(setting?.preferred_client)
 
   const requestCount = Number(user?.request_count ?? 0)
   const remainingQuota = Number(user?.quota ?? 0)
@@ -156,7 +132,7 @@ export function OnboardingStatusBanner() {
           icon={<Sparkles className='size-4' aria-hidden='true' />}
           title={t("You haven't called the API yet.")}
           description={t(
-            'Your trial credit is sitting unused. Try a 1-click playground request or follow the setup guide for your client.'
+            'Your trial credit is sitting unused. Try a 1-click playground request, or see the setup steps on your Keys page.'
           )}
           actions={
             <>
@@ -164,19 +140,9 @@ export function OnboardingStatusBanner() {
                 <MessageCircle className='mr-1.5 size-3.5' aria-hidden='true' />
                 {t('Try Playground')}
               </Button>
-              {preferredClient && (
-                <Button
-                  size='sm'
-                  render={
-                    <Link
-                      to='/onboarding/$slug'
-                      params={{ slug: preferredClient }}
-                    />
-                  }
-                >
-                  {t('Open setup guide')}
-                </Button>
-              )}
+              <Button size='sm' render={<Link to='/keys' />}>
+                {t('Set up my key')}
+              </Button>
             </>
           }
           onDismiss={() => {
