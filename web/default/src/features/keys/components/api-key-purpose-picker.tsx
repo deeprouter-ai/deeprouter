@@ -23,13 +23,14 @@ import { cn } from '@/lib/utils'
 import type { PurposeSummary, SimplePurposeId } from '../types'
 
 /**
- * Casual-persona-only extra hint per purpose. Tells the user which
- * client this purpose pairs with — answers the "but how do I actually
- * use this key?" question casual users have at this step.
+ * Casual-persona-only extra hint per purpose. Says what this key is best
+ * for — answers the "what do I use this key for?" question casual users
+ * have at this step. Per CLAUDE.md §0 Rule 1, no third-party client brand
+ * names on this casual surface.
  */
 const CASUAL_PURPOSE_HINT: Record<SimplePurposeId, string> = {
-  chat: 'Pair with Cherry Studio / Chatbox for chat, writing, translation.',
-  coding: 'Pair with Cursor / Claude Code for AI coding assistance.',
+  chat: 'Best for chat, writing, and translation.',
+  coding: 'Best for AI coding help in your editor.',
   image: 'Use DALL·E or Flux models for text-to-image.',
   video: 'Generate short video clips from a text prompt.',
   voice: 'Speech-to-text (Whisper) or text-to-speech (TTS).',
