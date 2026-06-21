@@ -2,6 +2,12 @@
 
 DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
+## 2026-06-21
+
+- fix(DR-64): `resolve()` 現在在 DB 取回 Skill 後驗證 `skill.Status`，draft / archived / deprecated 的 Skill 回傳 `SKILL_NOT_PUBLISHED` (HTTP 403)，阻止非 published Skill 被執行 (`internal/skill/relay/resolver.go`)
+- fix(DR-64): `resolve()` 現在驗證 `active_version_id != nil`，防止 DR-88 下游 nil deref；無 active version 的 Skill 同樣回傳 `SKILL_NOT_PUBLISHED` (`internal/skill/relay/resolver.go`)
+- test(DR-64): `defaultSkill()` helper 補上 `ActiveVersionID`；新增 4 個測試覆蓋 draft/archived/deprecated/nil-active-version 路徑 (`internal/skill/relay/resolver_test.go`, `relay/compatible_handler_skill_test.go`)
+
 ## 2026-06-20
 
 - 新增 DR-64 relay entry：接受 `deeprouter.skill_id`，從 auth context 解析用戶身份，返回 `SkillRelayContext` 供下游 DR-67/DR-88 使用 (`internal/skill/relay/`, `relay/compatible_handler.go`, `dto/deeprouter_extension.go`)
