@@ -17,12 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { getMarketplaceSkills } from './api'
 import { EmptyState, ErrorBanner, SkillCard } from './components'
 
+export { SkillDetail } from './skill-detail'
+
 export function Marketplace() {
+  const navigate = useNavigate()
   const { t } = useTranslation()
   const skillsQuery = useQuery({
     queryKey: ['marketplace-skills'],
@@ -53,7 +57,7 @@ export function Marketplace() {
         {t('Skill Marketplace')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Description>
-        {t('Browse and enable skills to enhance your AI experience')}
+        {t('Browse and download skills to enhance your AI experience')}
       </SectionPageLayout.Description>
       <SectionPageLayout.Content>
         <div className='flex flex-col gap-4'>
@@ -74,7 +78,16 @@ export function Marketplace() {
           ) : skills.length > 0 ? (
             <div className='grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'>
               {skills.map((skill) => (
-                <SkillCard key={skill.id} skill={skill} />
+                <SkillCard
+                  key={skill.id}
+                  skill={skill}
+                  onCTA={(s) =>
+                    void navigate({
+                      to: '/skills/$slug',
+                      params: { slug: s.slug },
+                    })
+                  }
+                />
               ))}
             </div>
           ) : (
