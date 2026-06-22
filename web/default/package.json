@@ -8,8 +8,6 @@
     "build": "rsbuild build",
     "build:check": "tsc -b && rsbuild build",
     "typecheck": "tsc -b",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "lint": "eslint .",
     "preview": "rsbuild preview",
     "format:check": "prettier --check .",
@@ -17,7 +15,10 @@
     "copyright:check": "node scripts/add-copyright.mjs --check",
     "copyright": "node scripts/add-copyright.mjs",
     "i18n:sync": "node scripts/sync-i18n.mjs",
-    "knip": "knip"
+    "knip": "knip",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -92,6 +93,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.9",
     "@xyflow/react": "^12.10.2",
     "embla-carousel-react": "^8.6.0",
     "eslint": "^10.1.0",
@@ -105,7 +107,6 @@
     "shadcn": "^3.7.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.2",
-    "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.9"
   }
 }

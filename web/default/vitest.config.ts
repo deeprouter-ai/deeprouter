@@ -1,14 +1,31 @@
+/*
+Copyright (C) 2026 DeepRouter
+SPDX-License-Identifier: AGPL-3.0-or-later
+*/
 import react from '@vitejs/plugin-react'
-import tsconfigPaths from 'vite-tsconfig-paths'
+import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-// Vitest runs independently of the rsbuild production build. jsdom is required
-// because download-utils (isSafeDownloadUrl) reads window.location and the
-// component tests render React. tsconfigPaths mirrors the `@/*` alias.
+// Unified config: DR-76 (skill-analytics) coverage + globals/setup, plus the
+// @vitejs/plugin-react needed by DR-58's marketplace RTL component tests.
+// jsdom is required (download-utils reads window.location; component tests render
+// React). `@` alias mirrors tsconfig paths via resolve.alias.
 export default defineConfig({
-  plugins: [react(), tsconfigPaths()],
+  plugins: [react()],
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.test.{ts,tsx}'],
+    globals: true,
+    setupFiles: ['./src/test-utils/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/features/skill-analytics/**'],
+      reporter: ['text', 'json-summary'],
+      reportsDirectory: './coverage/skill-analytics',
+    },
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
   },
 })
