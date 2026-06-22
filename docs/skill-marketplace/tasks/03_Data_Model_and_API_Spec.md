@@ -605,6 +605,7 @@ Error:
 | Code | HTTP | Notes |
 |---|---:|---|
 | `AUTH_REQUIRED` | 401 | Login required |
+| `SKILL_CONFLICT` | 409 | Duplicate Skill slug or conflicting admin write |
 | `SKILL_NOT_FOUND` | 404 | Unknown Skill |
 | `SKILL_NOT_PUBLISHED` | 403 | Draft, archived, or unavailable deprecated Skill |
 | `SKILL_NOT_ENABLED` | 403 | Execution attempted before enable |
