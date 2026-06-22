@@ -81,6 +81,12 @@ export function Marketplace() {
                 <SkillCard
                   key={skill.id}
                   skill={skill}
+                  // Card click always opens the detail page, so the CTA must
+                  // read "View" — not the backend availability.cta (Upgrade /
+                  // Sign in / Use / Unavailable), which would mislabel a button
+                  // that only navigates. The actual action (Download / upgrade)
+                  // lives on the detail page.
+                  cta='view'
                   onCTA={(s) =>
                     void navigate({
                       to: '/skills/$slug',
