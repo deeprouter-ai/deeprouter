@@ -31,6 +31,12 @@ vi.mock('./api', () => ({
       },
     ],
   }),
+  // DR-78 growth surfaces are part of the merged component; mock them so the
+  // detail-view event (card CTA) and any download URL building are no-ops here.
+  recordMarketplaceSkillEvent: vi.fn().mockResolvedValue(undefined),
+  skillDownloadURL: vi.fn(
+    (idOrSlug: string) => `/api/v1/marketplace/skills/${idOrSlug}/download`
+  ),
 }))
 
 function renderMarketplace() {
