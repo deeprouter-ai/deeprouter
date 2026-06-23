@@ -35,6 +35,7 @@ import {
   skillStatusVariant,
 } from '../constants'
 import type { AdminSkill } from '../types'
+import { AdminSkillEditor } from './admin-skill-editor'
 
 interface AdminSkillDialogProps {
   skill: AdminSkill | null
@@ -112,38 +113,20 @@ export function AdminSkillEditDialog({
   open,
   onOpenChange,
 }: AdminSkillDialogProps) {
-  const { t } = useTranslation()
-  if (!skill) return null
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='max-w-xl'>
-        <DialogHeader>
-          <DialogTitle>{t('Edit Skill')}</DialogTitle>
-          <DialogDescription>
-            {t('Desktop editing is required for Skill administration.')}
-          </DialogDescription>
-        </DialogHeader>
-        <div className='space-y-3'>
-          <PreviewField label={t('Skill')} value={skill.name} />
-          <PreviewField label={t('Slug')} value={skill.slug} />
-          <PreviewField
-            label={t('Active Version')}
-            value={skill.active_version_id ?? t('None')}
-          />
-          <p className='text-muted-foreground text-sm leading-6'>
-            {t(
-              'The edit form will attach to this Skill once the write API is available.'
-            )}
-          </p>
-        </div>
-        <DialogFooter>
-          <DialogClose render={<Button variant='outline' />}>
-            {t('Close')}
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AdminSkillEditor skill={skill} open={open} onOpenChange={onOpenChange} />
+  )
+}
+
+export function AdminSkillCreateDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <AdminSkillEditor skill={null} open={open} onOpenChange={onOpenChange} />
   )
 }
 

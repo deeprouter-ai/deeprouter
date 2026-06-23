@@ -81,3 +81,72 @@ export interface AdminSkillListParams {
   required_plan?: SkillPlan
   kids_approval_status?: AdminSkillKidsApprovalStatus
 }
+
+export interface CreateSkillPayload {
+  slug: string
+  name: string
+  short_description: string
+  description: string
+  category: string
+  tags?: string[]
+  icon_url?: string | null
+  input_hints?: string[]
+  example_inputs?: string[]
+  example_outputs?: string[]
+  required_plan: SkillPlan
+  monetization_type: AdminSkillMonetizationType
+  price_markup?: number
+  free_quota_per_month?: number | null
+  max_input_tokens?: number | null
+  model_whitelist?: string[]
+  timeout_seconds?: number
+  is_kids_safe?: boolean
+  is_kids_exclusive?: boolean
+  kids_approval_status?: AdminSkillKidsApprovalStatus
+  featured_flag?: boolean
+  featured_rank?: number | null
+}
+
+export type UpdateSkillPayload = Partial<Omit<CreateSkillPayload, 'slug'>>
+
+export interface CreateVersionPayload {
+  instruction_template: string
+  prompt_guard_template?: string
+  output_schema?: unknown
+}
+
+export interface SkillVersionMetadata {
+  id: string
+  skill_id: string
+  version_number: number
+  status: 'draft' | 'active' | 'inactive' | 'archived'
+  instruction_template_sha256: string
+  has_prompt_guard_template: boolean
+  has_output_schema: boolean
+  rollout_percentage: number
+  created_by: number
+  created_at: string
+  activated_at?: string | null
+  archived_at?: string | null
+}
+
+export type AdminSkillVersionsResponse =
+  MarketplaceListResponse<SkillVersionMetadata>
+
+export interface AdminSkillAuditEntry {
+  id: string
+  skill_id?: string
+  skill_version_id?: string
+  actor_id: number
+  actor_role: string
+  action: string
+  action_reason?: string
+  changed_fields: string[]
+  before_value?: Record<string, unknown>
+  after_value?: Record<string, unknown>
+  request_id?: string
+  created_at: string
+}
+
+export type AdminSkillAuditLogResponse =
+  MarketplaceListResponse<AdminSkillAuditEntry>
