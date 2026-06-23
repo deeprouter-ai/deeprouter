@@ -4,6 +4,8 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-23
 
+- 新增 DR-78 Growth surfaces：Playground 空态推荐 Skill、Marketplace new-Skill banner、Dashboard 首次 Marketplace 指针，并新增 privacy-safe marketplace 事件端点与下载 `entry_point=recommended/new` 归因，补后端/前端 focused tests 与 i18n（`internal/skill/handler`, `router/skill-router.go`, `web/default/src/features/{marketplace,playground,dashboard}`, `web/default/src/i18n/locales/`）
+- 新增 DR-78 Growth surfaces 任务 PRD，定义 Playground recommendation、Marketplace new-Skill banner、first-run pointer 与 `entry_point=recommended/new` 埋点范围（`docs/tasks/dr78-growth-surfaces-prd.md`）
 - 修复 DR-52 PR review 问题：Marketplace list 搜索在 PostgreSQL 使用 DR-81 `idx_skills_public_search` 对齐的全文检索表达式；公开列表路由支持 session/access-token 可选认证；列表 DB 查询改为最小字段白名单，并补 PG 搜索、LIKE fallback、字段白名单和 token-auth availability 回归测试（`middleware/skill-auth.go`, `router/skill-router.go`, `internal/skill/handler/skills.go`, `*_test.go`）
 
 ## 2026-06-22
