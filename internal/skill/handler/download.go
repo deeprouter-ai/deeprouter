@@ -8,7 +8,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -16,9 +15,15 @@ import (
 	"github.com/QuantumNous/new-api/internal/skill/enums"
 	"github.com/QuantumNous/new-api/internal/skill/errcodes"
 	skillmodel "github.com/QuantumNous/new-api/internal/skill/model"
+	"github.com/QuantumNous/new-api/internal/skill/packageassets"
 	appmodel "github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+)
+
+var (
+	errNoActiveSkillVersion       = errors.New("no active skill version for package build")
+	errMissingInstructionTemplate = errors.New("active skill version missing instruction_template")
 )
 
 const (
@@ -53,8 +58,9 @@ func DownloadSkillPackage(c *gin.Context) {
 		return
 	}
 
-	zipBytes, err := buildSkillPackage(s)
+	zipBytes, err := buildSkillPackage(db, s)
 	if err != nil {
+		logSkillPackageBuildFailure(s, err)
 		skillapi.Error(c, errcodes.ErrSkillInternalError, "Failed to build skill package.", nil)
 		return
 	}
@@ -63,7 +69,7 @@ func DownloadSkillPackage(c *gin.Context) {
 	// DR-55 contract: download creates a download/enablement state record, NOT a
 	// standalone execution grant. This row may be used by Relay as one runtime
 	// eligibility input, but is never sufficient to authorize execution by itself
-	// — runner key + current subscription/entitlement + quota + Kids + lifecycle
+	// - runner key + current subscription/entitlement + quota + Kids + lifecycle
 	// are all still checked at use time (owned by DR-64/DR-68/M05). No runtime
 	// grant / runner token / entitlement override / credential is issued here.
 	if err := skillmodel.EnableSkillForUser(db, userID, userID, s.ID, "skill_package"); err != nil {
@@ -71,10 +77,11 @@ func DownloadSkillPackage(c *gin.Context) {
 		return
 	}
 
+	entryPoint := downloadEntryPoint(c.Query("entry_point"))
 	// Emit analytics event with the user's resolved plan (not the skill's required_plan).
 	// Log on failure but do not block the download response.
 	userPlan := groupToPlan(c.GetString("group"))
-	if err := emitSkillEnabledForDownload(db, userID, s, userPlan); err != nil {
+	if err := emitSkillEnabledForDownload(db, userID, s, userPlan, entryPoint); err != nil {
 		common.SysLog("EmitSkillEnabled failed for skill " + s.ID + ": " + err.Error())
 	}
 
@@ -89,6 +96,17 @@ func DownloadSkillPackage(c *gin.Context) {
 // used by the availability resolver (free < pro < enterprise).
 func downloadEntitled(required enums.RequiredPlan, userGroup string) bool {
 	return downloadPlanLevel(groupToPlan(userGroup)) >= downloadPlanLevel(required)
+}
+
+func downloadEntryPoint(raw string) enums.EntryPoint {
+	switch enums.EntryPoint(strings.TrimSpace(raw)) {
+	case enums.EntryPointNew:
+		return enums.EntryPointNew
+	case enums.EntryPointRecommended:
+		return enums.EntryPointRecommended
+	default:
+		return enums.EntryPointSkillPackage
+	}
 }
 
 func groupToPlan(group string) enums.RequiredPlan {
@@ -115,14 +133,14 @@ func downloadPlanLevel(p enums.RequiredPlan) int {
 	}
 }
 
-func emitSkillEnabledForDownload(db *gorm.DB, userID int64, s skillmodel.Skill, userPlan enums.RequiredPlan) error {
+func emitSkillEnabledForDownload(db *gorm.DB, userID int64, s skillmodel.Skill, userPlan enums.RequiredPlan, entryPoint enums.EntryPoint) error {
 	isKidsSession, err := serverResolvedKidsSession(db, userID)
 	if err != nil {
 		return err
 	}
 	if !isKidsSession {
 		return skillmodel.EmitSkillEnabled(db, userID, s.ID, s.ActiveVersionID,
-			string(enums.EntryPointSkillPackage), string(userPlan))
+			string(entryPoint), string(userPlan))
 	}
 
 	plan := userPlan
@@ -132,7 +150,7 @@ func emitSkillEnabledForDownload(db *gorm.DB, userID int64, s skillmodel.Skill, 
 		EventType:            enums.SkillUsageEventTypeEnabled,
 		SkillID:              &skillID,
 		SkillVersionID:       s.ActiveVersionID,
-		EntryPoint:           enums.EntryPointSkillPackage,
+		EntryPoint:           entryPoint,
 		Plan:                 &plan,
 		IsKidsSafeSkill:      &s.IsKidsSafe,
 		IsKidsExclusiveSkill: &s.IsKidsExclusive,
@@ -168,19 +186,17 @@ func kidsAnalyticsSaltVersion() string {
 	return os.Getenv(kidsAnalyticsSaltVersionEnv)
 }
 
-// ─── Zip builder ─────────────────────────────────────────────────────────────
+// Zip builder.
 
 type skillManifest struct {
-	SchemaVersion string `json:"schema_version"`
-	SkillID       string `json:"skill_id"`
-	// SkillVersionID is nil until DR-41 (skill_versions table) is implemented.
-	// When non-nil it pins the zip to the published version at download time.
-	SkillVersionID        *string `json:"skill_version_id,omitempty"`
-	Slug                  string  `json:"slug"`
-	Name                  string  `json:"name"`
-	RequiredPlan          string  `json:"required_plan"`
-	Category              string  `json:"category"`
-	RequiresDeepRouterKey bool    `json:"requires_deeprouter_key"`
+	SchemaVersion         string `json:"schema_version"`
+	SkillID               string `json:"skill_id"`
+	SkillVersionID        string `json:"skill_version_id"`
+	Slug                  string `json:"slug"`
+	Name                  string `json:"name"`
+	RequiredPlan          string `json:"required_plan"`
+	Category              string `json:"category"`
+	RequiresDeepRouterKey bool   `json:"requires_deeprouter_key"`
 }
 
 type skillPackageKind string
@@ -195,11 +211,16 @@ type skillPackageFile struct {
 	Content []byte
 }
 
-func buildSkillPackage(s skillmodel.Skill) ([]byte, error) {
+func buildSkillPackage(db *gorm.DB, s skillmodel.Skill) ([]byte, error) {
+	version, err := activeSkillVersionForPackage(db, s)
+	if err != nil {
+		return nil, err
+	}
+
 	manifest := skillManifest{
 		SchemaVersion:         "1.0",
 		SkillID:               s.ID,
-		SkillVersionID:        s.ActiveVersionID,
+		SkillVersionID:        version.ID,
 		Slug:                  s.Slug,
 		Name:                  s.Name,
 		RequiredPlan:          string(s.RequiredPlan),
@@ -214,6 +235,9 @@ func buildSkillPackage(s skillmodel.Skill) ([]byte, error) {
 	files := []skillPackageFile{
 		{Name: "manifest.json", Content: manifestJSON},
 		{Name: "SKILL.md", Content: []byte(buildSkillMD(s))},
+		{Name: "instruction_template.md", Content: []byte(version.InstructionTemplate)},
+		{Name: "runtime/deeprouter_skill_runner.py", Content: packageassets.RuntimeClient()},
+		{Name: "runtime/README.md", Content: packageassets.RuntimeREADME()},
 	}
 	return buildSkillPackageZip(skillPackageKindFor(s), files)
 }
@@ -243,6 +267,47 @@ func buildSkillPackageZip(kind skillPackageKind, files []skillPackageFile) ([]by
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+func activeSkillVersionForPackage(db *gorm.DB, s skillmodel.Skill) (skillmodel.SkillVersion, error) {
+	if s.ActiveVersionID == nil || strings.TrimSpace(*s.ActiveVersionID) == "" {
+		return skillmodel.SkillVersion{}, errNoActiveSkillVersion
+	}
+
+	var version skillmodel.SkillVersion
+	err := db.Where("id = ? AND skill_id = ? AND status = ?", *s.ActiveVersionID, s.ID, enums.SkillVersionStatusActive).
+		First(&version).Error
+	if err != nil {
+		return skillmodel.SkillVersion{}, errNoActiveSkillVersion
+	}
+	if strings.TrimSpace(version.InstructionTemplate) == "" {
+		return skillmodel.SkillVersion{}, errMissingInstructionTemplate
+	}
+	return version, nil
+}
+
+func logSkillPackageBuildFailure(s skillmodel.Skill, err error) {
+	activeVersionID := "<nil>"
+	if s.ActiveVersionID != nil && strings.TrimSpace(*s.ActiveVersionID) != "" {
+		activeVersionID = strings.TrimSpace(*s.ActiveVersionID)
+	}
+
+	reason := "package build failed"
+	switch {
+	case errors.Is(err, errNoActiveSkillVersion):
+		reason = "package build failed: active skill_version missing or not active"
+	case errors.Is(err, errMissingInstructionTemplate):
+		reason = "package build failed: active skill_version missing instruction_template"
+	}
+
+	common.SysLog(fmt.Sprintf(
+		"DownloadSkillPackage %s (skill_id=%s slug=%s active_version_id=%s): %v",
+		reason,
+		s.ID,
+		s.Slug,
+		activeVersionID,
+		err,
+	))
 }
 
 func addZipEntry(w *zip.Writer, name string, content []byte) error {
@@ -328,19 +393,42 @@ func hasDeepRouterRoutingCall(workStep string) bool {
 	return false
 }
 
-// buildSkillMD assembles a SKILL.md from the skills table fields available before
-// DR-41 (skill_versions / instruction_template) is implemented. The result is a
-// valid Claude Code SKILL.md that users can load immediately.
+// buildSkillMD emits a Claude-compatible wrapper that points runners at the
+// packaged DeepRouter runtime client instead of describing a local-only skill.
 func buildSkillMD(s skillmodel.Skill) string {
 	var sb strings.Builder
 
 	sb.WriteString("---\n")
 	sb.WriteString("name: " + s.Slug + "\n")
-	sb.WriteString("description: " + strconv.Quote(s.ShortDescription) + "\n")
+	escapedDesc := strings.NewReplacer(`"`, `\"`, "\n", `\n`, "\r", "").Replace(s.ShortDescription)
+	sb.WriteString(`description: "` + escapedDesc + `"` + "\n")
 	sb.WriteString("---\n\n")
 
 	sb.WriteString("## " + s.Name + "\n\n")
-	sb.WriteString(s.Description + "\n")
+	if strings.TrimSpace(s.Description) != "" {
+		sb.WriteString(s.Description + "\n\n")
+	}
+
+	sb.WriteString("This Skill runs through the DeepRouter runtime client.\n\n")
+	sb.WriteString("### Required Environment\n\n")
+	sb.WriteString("- `DEEPROUTER_API_KEY`\n")
+	sb.WriteString("- `DEEPROUTER_EXECUTION_API_URL`\n\n")
+	sb.WriteString("### Run\n\n")
+	sb.WriteString("```bash\n")
+	sb.WriteString("python runtime/deeprouter_skill_runner.py --input \"...\"\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("If `python3` is the available Python 3 command in your environment, use:\n\n")
+	sb.WriteString("```bash\n")
+	sb.WriteString("python3 runtime/deeprouter_skill_runner.py --input \"...\"\n")
+	sb.WriteString("```\n\n")
+	sb.WriteString("### Work Step\n\n")
+	sb.WriteString("Use `runtime/deeprouter_skill_runner.py` to call DeepRouter with the runner's own credential at POST https://api.deeprouter.co/v1/routing/chat/completions (or another approved DeepRouter public routing endpoint configured via `DEEPROUTER_EXECUTION_API_URL`).\n")
+	sb.WriteString("The request must use `manifest.json` for `deeprouter.skill_id` and `deeprouter.skill_version_id`, then base the final answer on the routed DeepRouter response instead of a local-only prompt execution.\n\n")
+	sb.WriteString("### Runtime Behavior\n\n")
+	sb.WriteString("- The runtime client reads `manifest.json` and `instruction_template.md` from this package.\n")
+	sb.WriteString("- The work step must call the DeepRouter execution API using the runner's own credential.\n")
+	sb.WriteString("- Do not execute this package as a standalone local-only prompt or direct local LLM skill.\n")
+	sb.WriteString("- Do not treat the local `instruction_template.md` as authoritative execution truth.\n")
 
 	var hints []string
 	if common.Unmarshal(s.InputHints, &hints) == nil && len(hints) > 0 {
