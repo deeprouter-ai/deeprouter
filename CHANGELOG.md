@@ -4,6 +4,8 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-23
 
+- DR-50 Skill editor UI：新增 `AdminSkillEditor` Sheet 组件，含 8 个分区表单（Metadata / User Guidance / Entitlement / Execution / Safety / Promotion / Version History / Audit Log）；Create 模式通过 DR-46 API 创建草稿，若填写 instruction template 则同步调用 DR-47 创建首个版本；Edit 模式下 template 字段可编辑，保存时调用 DR-47 新建版本并展示 "version change" 提示；`max_input_tokens` 在 Free/free-quota 配置时实时内联报错；Admin Skills 列表页新增 "Create Skill" 按钮；新增 `createAdminSkill`、`createAdminSkillVersion`、`getAdminSkillVersions` API 函数及对应类型（`web/default/src/features/admin-skills/`）
+
 - 修复 PR #92 review 问题：`CreateAdminSkill` 现在拒绝非 `token_markup` 类型传入非 0 `price_markup`，返回 400 `INVALID_REQUEST` / `PRICE_MARKUP_NOT_ALLOWED`，确保 `plan_included`/`free` skill 持久化 `price_markup=0`；补回归测试 `plan_included_with_nonzero_price_markup`、`free_with_price_markup_and_max_input_tokens`、`NonTokenMarkupOmittedPriceMarkupPersistsZero`；更新 `docs/skill-marketplace/tasks/03_Data_Model_and_API_Spec.md` §10.2 记录 `PRICE_MARKUP_REQUIRED`/`PRICE_MARKUP_NOT_ALLOWED` 条件规则（`internal/skill/handler/skills.go`, `internal/skill/handler/skills_test.go`, `docs/skill-marketplace/tasks/03_Data_Model_and_API_Spec.md`）
 
 - 更新 DR-66 PRD 状态为 eval，符合任务 PRD 生命周期并记录当前 awaiting merge 状态（`docs/tasks/dr-66-lifecycle-enabled-gate-prd.md`）

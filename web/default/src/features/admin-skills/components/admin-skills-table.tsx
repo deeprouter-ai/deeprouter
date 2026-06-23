@@ -28,10 +28,12 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from '@tanstack/react-table'
+import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useMediaQuery } from '@/hooks'
 import { DataTablePage } from '@/components/data-table'
+import { Button } from '@/components/ui/button'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { getAdminSkills } from '../api'
 import {
@@ -44,6 +46,7 @@ import type {
   AdminSkillKidsApprovalStatus,
 } from '../types'
 import {
+  AdminSkillCreateDialog,
   AdminSkillEditDialog,
   AdminSkillPreviewDialog,
 } from './admin-skill-dialogs'
@@ -67,6 +70,7 @@ export function AdminSkillsTable() {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [previewSkill, setPreviewSkill] = useState<AdminSkill | null>(null)
   const [editSkill, setEditSkill] = useState<AdminSkill | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
 
   const columns = useAdminSkillsColumns({
     onEdit: setEditSkill,
@@ -181,6 +185,12 @@ export function AdminSkillsTable() {
         skeletonKeyPrefix='admin-skills-skeleton'
         toolbarProps={{
           customSearch: null,
+          preActions: (
+            <Button size='sm' onClick={() => setCreateOpen(true)}>
+              <Plus className='size-4' />
+              {t('Create Skill')}
+            </Button>
+          ),
           filters: [
             {
               columnId: 'status',
@@ -231,6 +241,10 @@ export function AdminSkillsTable() {
         skill={editSkill}
         open={!!editSkill}
         onOpenChange={(open) => !open && setEditSkill(null)}
+      />
+      <AdminSkillCreateDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
       />
     </>
   )

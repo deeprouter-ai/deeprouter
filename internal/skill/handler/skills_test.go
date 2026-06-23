@@ -1046,6 +1046,116 @@ func TestCreateAdminSkill_CreatesDraftFromAuthAndHidesFromMarketplace(t *testing
 	assert.Contains(t, detailW.Body.String(), `"code":"SKILL_NOT_FOUND"`)
 }
 
+func TestUpdateAdminSkill_SavesEditorSectionsAndAuditLog(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	s := testSkill("editor-update", "draft")
+	maxInput := 1200
+	s.MaxInputTokens = &maxInput
+	require.NoError(t, db.Create(&s).Error)
+
+	body := `{
+		"name":"Updated Editor Skill",
+		"short_description":"updated short",
+		"description":"updated long",
+		"category":"research",
+		"tags":["research","admin"],
+		"icon_url":"https://example.com/icon.png",
+		"input_hints":["Paste notes"],
+		"example_inputs":["Summarize this"],
+		"example_outputs":["A concise summary"],
+		"required_plan":"pro",
+		"monetization_type":"token_markup",
+		"price_markup":0.25,
+		"free_quota_per_month":3,
+		"max_input_tokens":2048,
+		"model_whitelist":["smart-tier","fast-tier"],
+		"timeout_seconds":60,
+		"is_kids_safe":true,
+		"is_kids_exclusive":true,
+		"kids_approval_status":"pending",
+		"featured_flag":true,
+		"featured_rank":2
+	}`
+	c, w := testContextWithMethod(http.MethodPatch, "/api/v1/admin/skills/"+s.ID, body)
+	c.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	c.Set("id", 88)
+	c.Set("role", 100)
+
+	UpdateAdminSkill(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data struct {
+			ID                 string          `json:"id"`
+			Name               string          `json:"name"`
+			Category           string          `json:"category"`
+			Tags               json.RawMessage `json:"tags"`
+			InputHints         json.RawMessage `json:"input_hints"`
+			ModelWhitelist     json.RawMessage `json:"model_whitelist"`
+			MonetizationType   string          `json:"monetization_type"`
+			MaxInputTokens     int             `json:"max_input_tokens"`
+			TimeoutSeconds     int             `json:"timeout_seconds"`
+			IsKidsExclusive    bool            `json:"is_kids_exclusive"`
+			KidsApprovalStatus string          `json:"kids_approval_status"`
+			FeaturedFlag       bool            `json:"featured_flag"`
+			FeaturedRank       int             `json:"featured_rank"`
+			UpdatedBy          int64           `json:"updated_by"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	assert.Equal(t, s.ID, got.Data.ID)
+	assert.Equal(t, "Updated Editor Skill", got.Data.Name)
+	assert.Equal(t, "research", got.Data.Category)
+	assert.JSONEq(t, `["research","admin"]`, string(got.Data.Tags))
+	assert.JSONEq(t, `["Paste notes"]`, string(got.Data.InputHints))
+	assert.JSONEq(t, `["smart-tier","fast-tier"]`, string(got.Data.ModelWhitelist))
+	assert.Equal(t, "token_markup", got.Data.MonetizationType)
+	assert.Equal(t, 2048, got.Data.MaxInputTokens)
+	assert.Equal(t, 60, got.Data.TimeoutSeconds)
+	assert.True(t, got.Data.IsKidsExclusive)
+	assert.Equal(t, "pending", got.Data.KidsApprovalStatus)
+	assert.True(t, got.Data.FeaturedFlag)
+	assert.Equal(t, 2, got.Data.FeaturedRank)
+	assert.Equal(t, int64(88), got.Data.UpdatedBy)
+
+	var persisted skillmodel.Skill
+	require.NoError(t, db.First(&persisted, "id = ?", s.ID).Error)
+	assert.JSONEq(t, `["A concise summary"]`, string(persisted.ExampleOutputs))
+	assert.Equal(t, 0.25, persisted.PriceMarkup)
+	assert.Equal(t, int64(88), *persisted.UpdatedBy)
+
+	listC, listW := testContext("/api/v1/admin/skills/" + s.ID + "/audit-log")
+	listC.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	ListAdminSkillAuditLog(listC)
+	require.Equal(t, http.StatusOK, listW.Code)
+	assert.Contains(t, listW.Body.String(), `"action":"skill_updated"`)
+	assert.Contains(t, listW.Body.String(), `"model_whitelist"`)
+	assert.NotContains(t, listW.Body.String(), "updated long", "audit response should not expose raw description text")
+}
+
+func TestUpdateAdminSkill_FreeConfigurationRequiresMaxInputTokens(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	s := testSkill("editor-free-missing-cap", "draft")
+	s.RequiredPlan = enums.RequiredPlanPro
+	s.MonetizationType = enums.MonetizationTypePlanIncluded
+	s.MaxInputTokens = nil
+	require.NoError(t, db.Create(&s).Error)
+
+	body := `{"required_plan":"free"}`
+	c, w := testContextWithMethod(http.MethodPatch, "/api/v1/admin/skills/"+s.ID, body)
+	c.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	c.Set("id", 88)
+	c.Set("role", 100)
+
+	UpdateAdminSkill(c)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), `"code":"INVALID_REQUEST"`)
+	assert.Contains(t, w.Body.String(), `"reason":"MAX_INPUT_TOKENS_REQUIRED"`)
+}
+
 func TestCreateAdminSkill_FreeConfigurationsRequireMaxInputTokens(t *testing.T) {
 	cases := []struct {
 		name string
