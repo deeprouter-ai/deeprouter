@@ -21,11 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
-import {
-  getMarketplaceSkills,
-  recordMarketplaceSkillEvent,
-  skillDownloadURL,
-} from './api'
+import { getMarketplaceSkills, recordMarketplaceSkillEvent } from './api'
 import {
   EmptyState,
   ErrorBanner,
@@ -98,21 +94,21 @@ export function Marketplace() {
     }).catch(() => undefined)
   }, [newSkill, newSkillBannerDismissed])
 
-  const handleSkillCTA = (
+  // Every Marketplace discovery surface (card + new-skill banner) routes to the
+  // Skill Detail page. The real Download action lives only on that page, where it
+  // goes through downloadSkillPackage() (axios api client → New-Api-User header).
+  // We never trigger a download URL directly from the list/banner: native
+  // navigation omits New-Api-User (SkillUserAuth 401) and would bypass the detail
+  // page's runtime-key copy + plan/auth/download error mapping.
+  const goToSkillDetail = (
     skill: MarketplaceSkill,
-    entryPoint: SkillGrowthEntryPoint = 'marketplace_card'
+    entryPoint: SkillGrowthEntryPoint
   ) => {
-    const action = skill.availability?.cta
-    if (action === 'download' || action === 'enable' || action === 'use') {
-      window.location.assign(
-        skillDownloadURL(skill.slug || skill.id, entryPoint)
-      )
-      return
-    }
     void recordMarketplaceSkillEvent(skill.slug || skill.id, {
       event_type: 'skill_detail_view',
       entry_point: entryPoint,
     }).catch(() => undefined)
+    void navigate({ to: '/skills/$slug', params: { slug: skill.slug } })
   }
 
   return (
@@ -128,7 +124,7 @@ export function Marketplace() {
           {showNewSkillBanner && (
             <NewSkillBanner
               skill={newSkill}
-              onAction={() => handleSkillCTA(newSkill, 'new')}
+              onAction={() => goToSkillDetail(newSkill, 'new')}
               onDismiss={() => {
                 setNewSkillBannerDismissed(true)
                 writeDismissed(NEW_SKILL_BANNER_DISMISS_KEY)
@@ -159,19 +155,10 @@ export function Marketplace() {
                   // read "View" — not the backend availability.cta (Upgrade /
                   // Sign in / Use / Unavailable), which would mislabel a button
                   // that only navigates. The actual action (Download / upgrade)
-                  // lives on the detail page. Still record the DR-78 growth
-                  // detail-view event (entry_point=marketplace_card) before nav.
+                  // lives on the detail page. Shares goToSkillDetail with the
+                  // new-skill banner (records the DR-78 detail-view event, then navigates).
                   cta='view'
-                  onCTA={(s) => {
-                    void recordMarketplaceSkillEvent(s.slug || s.id, {
-                      event_type: 'skill_detail_view',
-                      entry_point: 'marketplace_card',
-                    }).catch(() => undefined)
-                    void navigate({
-                      to: '/skills/$slug',
-                      params: { slug: s.slug },
-                    })
-                  }}
+                  onCTA={(s) => goToSkillDetail(s, 'marketplace_card')}
                 />
               ))}
             </div>

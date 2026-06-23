@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Marketplace } from './index'
+import { skillDownloadURL } from './api'
 
 // useNavigate is captured so we can assert the card click navigates to detail.
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }))
@@ -67,5 +68,31 @@ describe('Marketplace list card CTA (P1)', () => {
       to: '/skills/$slug',
       params: { slug: 'my-skill' },
     })
+  })
+})
+
+describe('Marketplace new-skill banner CTA (P1)', () => {
+  it('navigates to the detail page and never triggers a direct download', async () => {
+    // Banner shows when not dismissed; ensure a clean slate.
+    window.localStorage.clear()
+    navigateMock.mockClear()
+    vi.mocked(skillDownloadURL).mockClear()
+
+    renderMarketplace()
+    const tryBtn = await screen.findByRole('button', { name: /Try skill/ })
+    fireEvent.click(tryBtn)
+
+    // Banner CTA must go to the detail page (same flow as the card).
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/skills/$slug',
+      params: { slug: 'my-skill' },
+    })
+    // It must NOT build a download URL from the list/banner surface: a direct
+    // download navigation omits New-Api-User (SkillUserAuth 401) and bypasses the
+    // detail page's downloadSkillPackage() axios flow. skillDownloadURL is the
+    // sole download-URL builder, so asserting it is never called proves no direct
+    // download path is taken. (window.location.assign is non-configurable in jsdom,
+    // so it cannot be spied; the component no longer references it at all.)
+    expect(skillDownloadURL).not.toHaveBeenCalled()
   })
 })
