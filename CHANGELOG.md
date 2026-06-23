@@ -4,6 +4,8 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-23
 
+- 修复 PR #92 review 问题：`CreateAdminSkill` 现在拒绝非 `token_markup` 类型传入非 0 `price_markup`，返回 400 `INVALID_REQUEST` / `PRICE_MARKUP_NOT_ALLOWED`，确保 `plan_included`/`free` skill 持久化 `price_markup=0`；补回归测试 `plan_included_with_nonzero_price_markup`、`free_with_price_markup_and_max_input_tokens`、`NonTokenMarkupOmittedPriceMarkupPersistsZero`；更新 `docs/skill-marketplace/tasks/03_Data_Model_and_API_Spec.md` §10.2 记录 `PRICE_MARKUP_REQUIRED`/`PRICE_MARKUP_NOT_ALLOWED` 条件规则（`internal/skill/handler/skills.go`, `internal/skill/handler/skills_test.go`, `docs/skill-marketplace/tasks/03_Data_Model_and_API_Spec.md`）
+
 - 更新 DR-66 PRD 状态为 eval，符合任务 PRD 生命周期并记录当前 awaiting merge 状态（`docs/tasks/dr-66-lifecycle-enabled-gate-prd.md`）
 - 新增 DR-71 非 Skill API 兼容性回归守卫 PRD，并补正常 chat-completions 请求无 `skill_id` 时 upstream payload 保持 legacy 路径不变的回归测试（`docs/tasks/dr71-non-skill-api-compatibility-regression-guard-prd.md`, `relay/compatible_handler_skill_test.go`）
 - 更新 DR-78 PRD 状态为 ship，记录 Growth surfaces 已通过 PR #95 合并到 main（`docs/tasks/dr78-growth-surfaces-prd.md`）

@@ -1079,6 +1079,8 @@ func validateCreateSkillRequest(req createSkillRequest) string {
 		return "INVALID_MONETIZATION_TYPE"
 	case req.MonetizationType == enums.MonetizationTypeTokenMarkup && (req.PriceMarkup == nil || *req.PriceMarkup <= 0):
 		return "PRICE_MARKUP_REQUIRED"
+	case req.MonetizationType != enums.MonetizationTypeTokenMarkup && req.PriceMarkup != nil && *req.PriceMarkup != 0:
+		return "PRICE_MARKUP_NOT_ALLOWED"
 	case req.FreeQuotaPerMonth != nil && *req.FreeQuotaPerMonth < 0:
 		return "INVALID_FREE_QUOTA_PER_MONTH"
 	case req.MaxInputTokens != nil && *req.MaxInputTokens <= 0:

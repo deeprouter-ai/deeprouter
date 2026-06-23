@@ -1157,6 +1157,16 @@ func TestCreateAdminSkill_ValidationErrors(t *testing.T) {
 			body:   `{"slug":"token-zero","name":"Draft","short_description":"short","description":"long","category":"writing","required_plan":"pro","monetization_type":"token_markup","price_markup":0}`,
 			reason: "PRICE_MARKUP_REQUIRED",
 		},
+		{
+			name:   "plan_included_with_nonzero_price_markup",
+			body:   `{"slug":"plan-markup","name":"Draft","short_description":"short","description":"long","category":"writing","required_plan":"pro","monetization_type":"plan_included","price_markup":0.25}`,
+			reason: "PRICE_MARKUP_NOT_ALLOWED",
+		},
+		{
+			name:   "free_with_price_markup_and_max_input_tokens",
+			body:   `{"slug":"free-markup","name":"Draft","short_description":"short","description":"long","category":"writing","required_plan":"free","monetization_type":"free","price_markup":0.25,"max_input_tokens":1000}`,
+			reason: "PRICE_MARKUP_NOT_ALLOWED",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1265,6 +1275,22 @@ func TestCreateAdminSkill_TokenMarkupWithPriceMarkup(t *testing.T) {
 	assert.Contains(t, string(audit.ChangedFields), `"price_markup"`)
 	require.NotNil(t, audit.AfterValue)
 	assert.Contains(t, string(*audit.AfterValue), `"price_markup"`)
+}
+
+func TestCreateAdminSkill_NonTokenMarkupOmittedPriceMarkupPersistsZero(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	body := `{"slug":"plan-no-markup","name":"Plan No Markup","short_description":"short","description":"long","category":"writing","required_plan":"pro","monetization_type":"plan_included"}`
+	c, w := testContextWithMethod(http.MethodPost, "/api/v1/admin/skills", body)
+	c.Set("id", 77)
+	c.Set("role", 100)
+
+	CreateAdminSkill(c)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+	var persisted skillmodel.Skill
+	require.NoError(t, db.First(&persisted, "slug = ?", "plan-no-markup").Error)
+	assert.Equal(t, 0.0, persisted.PriceMarkup)
 }
 
 func TestCreateAdminSkill_UnicodeNameWithinLimit(t *testing.T) {
