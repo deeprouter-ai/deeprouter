@@ -834,8 +834,8 @@ func TestCreateAdminSkill_TokenMarkupWithPriceMarkup(t *testing.T) {
 func TestCreateAdminSkill_UnicodeNameWithinLimit(t *testing.T) {
 	db := testSkillDB(t)
 	SetDB(db)
-	// 50 Chinese characters — 150 UTF-8 bytes but only 50 runes, well within VARCHAR(160)
-	chineseName := strings.Repeat("写", 50)
+	// 50 Chinese characters: 150 UTF-8 bytes but only 50 runes, within VARCHAR(160).
+	chineseName := strings.Repeat("\u5199", 50)
 	body := fmt.Sprintf(`{"slug":"unicode-name","name":%q,"short_description":"short","description":"long","category":"writing","required_plan":"pro","monetization_type":"plan_included"}`, chineseName)
 	c, w := testContextWithMethod(http.MethodPost, "/api/v1/admin/skills", body)
 	c.Set("id", 77)

@@ -499,7 +499,11 @@ func adminSkillFromModel(s skillmodel.Skill) AdminSkill {
 }
 
 func rawJSON(value skillmodel.SkillJSONB) json.RawMessage {
-	if len(value) == 0 || !json.Valid(value) {
+	if len(value) == 0 {
+		return json.RawMessage("[]")
+	}
+	var decoded any
+	if err := common.Unmarshal(value, &decoded); err != nil {
 		return json.RawMessage("[]")
 	}
 	return json.RawMessage(value)
