@@ -44,3 +44,5 @@ skills-lock.json
 # Local env files with real API keys / secrets — never commit
 bin/.env.*
 !bin/.env.*.example
+__pycache__/
+*.pyc

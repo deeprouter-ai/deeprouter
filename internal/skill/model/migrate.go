@@ -10,8 +10,14 @@ import (
 // MigrateSkills runs all DB migration steps for the skills table.
 // Order is fixed: AutoMigrate → CHECK constraints → JSONB upgrade (PG only) → indexes → timestamp defaults.
 func MigrateSkills(db *gorm.DB) error {
-	if err := db.AutoMigrate(&Skill{}); err != nil {
-		return err
+	// SQLite's DDL parser in GORM fails on re-read of CHECK constraints containing nested
+	// parentheses (e.g. status IN ('a','b','c')). Skip AutoMigrate when the table already
+	// exists on SQLite — first-run CREATE TABLE is correct; ALTER TABLE is unsupported anyway.
+	skipAutoMigrate := db.Dialector.Name() == "sqlite" && db.Migrator().HasTable("skills")
+	if !skipAutoMigrate {
+		if err := db.AutoMigrate(&Skill{}); err != nil {
+			return err
+		}
 	}
 	if err := migrateSkillsConstraints(db); err != nil {
 		return err
