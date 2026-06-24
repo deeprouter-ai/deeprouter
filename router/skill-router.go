@@ -49,6 +49,7 @@ func SetSkillRouter(router *gin.Engine) {
 		}
 		{
 			downloadRoute.GET("/skills/:id/download", skillhandler.DownloadSkillPackage)
+			downloadRoute.GET("/skill-versions/:skill_version_id/download", skillhandler.DownloadSkillVersionPackage)
 		}
 
 		adminRoute := v1.Group("/admin")
@@ -65,6 +66,7 @@ func SetSkillRouter(router *gin.Engine) {
 			adminRoute.POST("/skills/:skill_id/versions", skillhandler.CreateAdminSkillVersion)
 			adminRoute.GET("/skills/:skill_id/versions/:version_id", skillhandler.GetAdminSkillVersion)
 			adminRoute.POST("/skills/:skill_id/versions/:version_id/activate", skillhandler.ActivateAdminSkillVersion)
+			adminRoute.POST("/skills/:skill_id/publish", skillhandler.PublishAdminSkill)
 		}
 
 		opsRoute := v1.Group("/ops")
@@ -74,6 +76,8 @@ func SetSkillRouter(router *gin.Engine) {
 		}
 		{
 			opsRoute.GET("/skills/summary", skillhandler.GetOpsSkillSummary)
+			opsRoute.GET("/skill-analytics/overview", skillhandler.GetOpsSkillAnalyticsOverview)
+			opsRoute.GET("/skill-analytics/skills", skillhandler.GetOpsSkillAnalyticsSkills)
 		}
 	}
 }

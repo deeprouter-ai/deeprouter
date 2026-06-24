@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,6 +130,20 @@ func TestSkillRouterOpsAuthFailureUsesEnvelope(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), `"success":false`)
 }
 
+func TestSkillRouterSkillAnalyticsAuthFailureUsesEnvelope(t *testing.T) {
+	engine := newSkillTestRouter(t, false)
+
+	overview := performSkillRequest(engine, http.MethodGet, "/api/v1/ops/skill-analytics/overview", "")
+	skills := performSkillRequest(engine, http.MethodGet, "/api/v1/ops/skill-analytics/skills", "")
+
+	require.Equal(t, http.StatusUnauthorized, overview.Code)
+	assert.Contains(t, overview.Body.String(), `"code":"AUTH_REQUIRED"`)
+	assert.Contains(t, overview.Body.String(), `"request_id":`)
+	require.Equal(t, http.StatusUnauthorized, skills.Code)
+	assert.Contains(t, skills.Body.String(), `"code":"AUTH_REQUIRED"`)
+	assert.Contains(t, skills.Body.String(), `"request_id":`)
+}
+
 func TestSkillRouterMySkillsRequiresAuth(t *testing.T) {
 	engine := newSkillTestRouter(t, false)
 
@@ -137,6 +152,19 @@ func TestSkillRouterMySkillsRequiresAuth(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.Contains(t, w.Body.String(), `"code":"AUTH_REQUIRED"`)
 	assert.Contains(t, w.Body.String(), `"request_id":`)
+}
+
+func TestSkillRouterMarketplaceSkillEventRouteUsesExistingHandler(t *testing.T) {
+	engine := newSkillTestRouter(t, false)
+
+	w := performSkillRequestWithBody(
+		engine,
+		http.MethodPost,
+		"/api/v1/marketplace/skills/published-skill/events",
+		`{"event_type":"skill_impression","entry_point":"marketplace_card"}`,
+	)
+
+	require.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func TestSkillRouterRateLimitUsesEnvelopeAndRetryAfter(t *testing.T) {
@@ -209,12 +237,21 @@ func performSkillRequestWithHeaders(engine *gin.Engine, method, url string, head
 	return w
 }
 
+func performSkillRequestWithBody(engine *gin.Engine, method, url string, body string) *httptest.ResponseRecorder {
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(method, url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+	return w
+}
+
 func newSkillRouterTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, skillmodel.MigrateSkills(db))
 	require.NoError(t, skillmodel.MigrateUserEnabledSkills(db))
+	require.NoError(t, skillmodel.MigrateSkillUsageEvents(db))
 	require.NoError(t, db.AutoMigrate(&platformmodel.User{}))
 	published := routerTestSkill("published-skill", enums.SkillStatusPublished)
 	draft := routerTestSkill("draft-skill", enums.SkillStatusDraft)
