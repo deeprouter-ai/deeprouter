@@ -16,10 +16,26 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-
 export type SkillPlan = 'free' | 'pro' | 'enterprise'
 
 export type SkillStatus = 'draft' | 'published' | 'deprecated' | 'archived'
+
+export type MarketplacePlanFilter = 'all' | SkillPlan
+
+export type MarketplaceStatusFilter =
+  | 'all'
+  | 'available'
+  | 'enabled'
+  | 'locked'
+  | 'unavailable'
+
+export interface MarketplaceFilters {
+  query: string
+  category: string
+  plan: MarketplacePlanFilter
+  status: MarketplaceStatusFilter
+  kidsSafeOnly: boolean
+}
 
 export type SkillCTAAction =
   | 'view'
@@ -30,6 +46,7 @@ export type SkillCTAAction =
   | 'renew'
   | 'contact_sales'
   | 'login'
+  | 'remove'
   | 'unavailable'
 
 export type SkillGrowthEntryPoint =
@@ -90,6 +107,27 @@ export interface MarketplaceSkill {
   is_kids_exclusive?: boolean
   ai_disclosure_required?: boolean
   published_at?: string | null
+}
+
+export interface MarketplaceEventPayload {
+  event_type: 'skill_impression' | 'skill_detail_view'
+  skill_id: string
+  entry_point: 'marketplace_card'
+}
+
+export interface DownloadCTA {
+  url: string
+  // Backend returns "GET"; kept as string to tolerate future methods.
+  method: string
+}
+
+// PublicSkillDetail mirrors the backend detail-only response (DR-53):
+// PublicSkill fields plus the runtime-dependency flag and download CTA.
+// Examples/input hints are intentionally absent — the detail API does not
+// expose them yet (DR-53 follow-up).
+export interface PublicSkillDetail extends MarketplaceSkill {
+  requires_deeprouter_key: boolean
+  download_cta: DownloadCTA
 }
 
 export interface MySkill extends MarketplaceSkill {

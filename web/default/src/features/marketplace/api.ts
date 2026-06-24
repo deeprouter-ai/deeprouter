@@ -17,73 +17,55 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+import {
+  DownloadSkillError,
+  extractDownloadError,
+  filenameFromContentDisposition,
+  isSafeDownloadUrl,
+} from './download-utils'
 import type {
+  MarketplaceEventPayload,
+  MarketplaceFilters,
   MarketplaceListResponse,
   MarketplaceSkill,
   MySkill,
+  PublicSkillDetail,
   SkillGrowthEntryPoint,
   SkillGrowthEventType,
 } from './types'
 
+// Re-export so existing importers (e.g. skill-detail.tsx) keep importing the
+// error type from './api'. The implementation now lives in ./download-utils.
+export { DownloadSkillError } from './download-utils'
 export { skillDownloadURL } from './lib/growth-surfaces'
 
-export async function getMarketplaceSkill(
-  slugOrId: string
-): Promise<MarketplaceSkill> {
-  const res = await api.get(
-    `/api/v1/marketplace/skills/${encodeURIComponent(slugOrId)}`,
-    { skipErrorHandler: true } as Record<string, unknown>
-  )
-  return (res.data?.data ?? res.data) as MarketplaceSkill
-}
-
-export async function downloadSkillPackage(
-  slugOrId: string,
-  entryPoint?: SkillGrowthEntryPoint
-): Promise<void> {
-  const params: Record<string, string> = {}
-  if (entryPoint === 'new' || entryPoint === 'recommended') {
-    params.entry_point = entryPoint
-  }
-  const res = await api.get(
-    `/api/v1/marketplace/skills/${encodeURIComponent(slugOrId)}/download`,
-    {
-      params,
-      responseType: 'blob',
-      disableDuplicate: true,
-      skipErrorHandler: true,
-    } as Record<string, unknown>
-  )
-  const disposition = (res.headers as Record<string, string>)[
-    'content-disposition'
-  ]
-  const fileMatch = disposition?.match(/filename="([^"]+)"/)
-  const filename = fileMatch?.[1] ?? `${slugOrId}.zip`
-  const blob = new Blob([res.data as BlobPart], { type: 'application/zip' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 export interface MarketplaceSkillsParams {
-  featured?: boolean
-  limit?: number
   page?: number
-  sort?: string
+  limit?: number
+  sort?: 'name' | 'created_at' | 'featured_rank' | string
+  query?: string
+  category?: string
+  plan?: MarketplaceFilters['plan']
+  kids_safe?: boolean
+  featured?: boolean
 }
 
-export async function getMarketplaceSkills(): Promise<
-  MarketplaceListResponse<MarketplaceSkill>
-> {
-  const res = await api.get('/api/v1/marketplace/skills', {
-    skipErrorHandler: true,
-  } as Record<string, unknown>)
-  return res.data
+export async function getMarketplaceSkills(
+  filters?: Partial<MarketplaceFilters>,
+  page = 1
+): Promise<MarketplaceListResponse<MarketplaceSkill>> {
+  return getMarketplaceSkillsWithParams({
+    page,
+    limit: 100,
+    sort: 'featured_rank',
+    query: filters?.query || undefined,
+    category: filters?.category || undefined,
+    plan:
+      filters?.plan != null && filters.plan !== 'all'
+        ? filters.plan
+        : undefined,
+    kids_safe: filters?.kidsSafeOnly || undefined,
+  })
 }
 
 export async function getMarketplaceSkillsWithParams(
@@ -101,6 +83,77 @@ export async function getMySkills(): Promise<MarketplaceListResponse<MySkill>> {
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data
+}
+
+export async function emitMarketplaceEvent(
+  payload: MarketplaceEventPayload
+): Promise<void> {
+  await recordMarketplaceSkillEvent(payload.skill_id, {
+    event_type: payload.event_type,
+    entry_point: payload.entry_point,
+  })
+}
+
+export async function getMarketplaceSkill(
+  idOrSlug: string
+): Promise<PublicSkillDetail> {
+  const res = await api.get(
+    '/api/v1/marketplace/skills/' + encodeURIComponent(idOrSlug),
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return res.data?.data ?? res.data
+}
+
+/**
+ * Download a Skill package zip. `downloadCtaUrl` must be the backend-provided
+ * `download_cta.url` (not constructed on the frontend). Goes through the axios
+ * `api` client so the `New-Api-User` header is attached — a native `<a download>`
+ * would omit it and be rejected by SkillUserAuth. On failure throws a
+ * DownloadSkillError carrying the backend `error.code`.
+ */
+export async function downloadSkillPackage(
+  downloadCtaUrl: string,
+  fallbackSlug: string
+): Promise<void> {
+  if (!isSafeDownloadUrl(downloadCtaUrl)) {
+    throw new DownloadSkillError('DOWNLOAD_UNAVAILABLE')
+  }
+
+  let res
+  try {
+    res = await api.get(downloadCtaUrl, {
+      responseType: 'blob',
+      skipErrorHandler: true,
+    } as Record<string, unknown>)
+  } catch (error) {
+    const data = (error as { response?: { data?: unknown } })?.response?.data
+    throw await extractDownloadError(data)
+  }
+
+  const filename = filenameFromContentDisposition(
+    res.headers?.['content-disposition'],
+    fallbackSlug
+  )
+  const objectUrl = URL.createObjectURL(res.data as Blob)
+  try {
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+export async function removeMySkill(skillId: string): Promise<void> {
+  await api.delete(
+    `/api/v1/marketplace/my-skills/${encodeURIComponent(skillId)}`,
+    {
+      skipErrorHandler: true,
+    } as Record<string, unknown>
+  )
 }
 
 export async function recordMarketplaceSkillEvent(
