@@ -2,6 +2,14 @@
 
 DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
+## 2026-06-24
+
+- **Fix PR #99 regressions (P1):** Restored `/skills/$slug` route and `SkillDetail` page (`web/default/src/features/marketplace/skill-detail.tsx`, `routes/_authenticated/skills/$slug.tsx`, `routeTree.gen.ts`). Added `getMarketplaceSkill` and `downloadSkillPackage` (axios + blob, attaches `New-Api-User` header) to `marketplace/api.ts`. Marketplace card CTAs now navigate to the detail page instead of directly hitting the download API via `window.location.assign`, restoring auth-header and plan/error-handling semantics. (P2) Fixed non-download CTAs (`upgrade`/`renew` → `/subscriptions`; `login` → `/sign-in`; `contact_sales` → `/help/faq`) that were previously no-ops. (`web/default/src/features/marketplace/index.tsx`, `marketplace/api.ts`, `marketplace/skill-detail.tsx`)
+
+- **Fix PR #99 regressions (P1):** Added backend tri-state `nullableInt` type in `internal/skill/handler/skills.go` to distinguish absent / JSON-null / explicit-value for `free_quota_per_month`, `max_input_tokens`, and `featured_rank` in PATCH requests. Fixed `buildSkillPayload` in `admin-skill-editor.tsx` to send `null` for cleared nullable fields in edit mode (instead of omitting them), so existing values can be cleared to DB NULL. Added regression tests: `TestUpdateAdminSkill_OmittedNullableFieldsAreUnchanged`, `TestUpdateAdminSkill_NullClearsNullableFields`, `TestUpdateAdminSkill_ExplicitZeroFreeQuotaIsPreserved` (`internal/skill/handler/skills.go`, `skills_test.go`, `web/default/src/features/admin-skills/components/admin-skill-editor.tsx`)
+
+- **Fix PR #99 regressions (P2):** Created `fr.json`, `ru.json`, `ja.json`, `vi.json` locale files with all new admin editor strings; registered the four new locales in `web/default/src/i18n/config.ts` (`supportedLngs` and `resources`).
+
 ## 2026-06-23
 
 - DR-50 Skill editor UI：新增 `AdminSkillEditor` Sheet 组件，含 8 个分区表单（Metadata / User Guidance / Entitlement / Execution / Safety / Promotion / Version History / Audit Log）；Create 模式通过 DR-46 API 创建草稿，若填写 instruction template 则同步调用 DR-47 创建首个版本；Edit 模式下 template 字段可编辑，保存时调用 DR-47 新建版本并展示 "version change" 提示；`max_input_tokens` 在 Free/free-quota 配置时实时内联报错；Admin Skills 列表页新增 "Create Skill" 按钮；新增 `createAdminSkill`、`createAdminSkillVersion`、`getAdminSkillVersions` API 函数及对应类型（`web/default/src/features/admin-skills/`）

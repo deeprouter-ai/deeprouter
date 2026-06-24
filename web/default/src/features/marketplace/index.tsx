@@ -18,12 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import {
   getMarketplaceSkills,
   recordMarketplaceSkillEvent,
-  skillDownloadURL,
 } from './api'
 import {
   EmptyState,
@@ -55,6 +55,7 @@ function writeDismissed(key: string): void {
 
 export function Marketplace() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const skillsQuery = useQuery({
     queryKey: ['marketplace-skills'],
     queryFn: getMarketplaceSkills,
@@ -99,16 +100,43 @@ export function Marketplace() {
     entryPoint: SkillGrowthEntryPoint = 'marketplace_card'
   ) => {
     const action = skill.availability?.cta
-    if (action === 'download' || action === 'enable' || action === 'use') {
-      window.location.assign(
-        skillDownloadURL(skill.slug || skill.id, entryPoint)
-      )
-      return
-    }
-    void recordMarketplaceSkillEvent(skill.slug || skill.id, {
+    const skillId = skill.slug || skill.id
+
+    void recordMarketplaceSkillEvent(skillId, {
       event_type: 'skill_detail_view',
       entry_point: entryPoint,
     }).catch(() => undefined)
+
+    if (
+      action === 'download' ||
+      action === 'enable' ||
+      action === 'use' ||
+      action === 'view' ||
+      action == null
+    ) {
+      // Navigate to the detail page; it handles the authenticated download.
+      void navigate({ to: '/skills/$slug', params: { slug: skillId } })
+      return
+    }
+
+    if (action === 'upgrade' || action === 'renew') {
+      void navigate({ to: '/subscriptions' })
+      return
+    }
+
+    if (action === 'login') {
+      void navigate({ to: '/sign-in' })
+      return
+    }
+
+    if (action === 'contact_sales') {
+      void navigate({ to: '/help/faq' })
+      return
+    }
+
+    // For 'unavailable' and any unknown action: navigate to detail page so the
+    // user sees context instead of a silent no-op.
+    void navigate({ to: '/skills/$slug', params: { slug: skillId } })
   }
 
   return (

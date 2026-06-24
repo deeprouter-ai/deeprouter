@@ -1647,6 +1647,102 @@ func testContextWithMethod(method, url, body string) (*gin.Context, *httptest.Re
 	return c, w
 }
 
+func TestUpdateAdminSkill_OmittedNullableFieldsAreUnchanged(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	quota := 20
+	maxTok := 1024
+	rank := 3
+	s := testSkill("patch-omit", "draft")
+	s.RequiredPlan = enums.RequiredPlanFree
+	s.MonetizationType = enums.MonetizationTypeFree
+	s.FreeQuotaPerMonth = &quota
+	s.MaxInputTokens = &maxTok
+	s.FeaturedRank = &rank
+	s.FeaturedFlag = true
+	s.IconURL = ptr("https://example.com/icon.png")
+	require.NoError(t, db.Create(&s).Error)
+
+	// PATCH with only name — all nullable fields omitted entirely.
+	body := `{"name":"Patched Name"}`
+	c, w := testContextWithMethod(http.MethodPatch, "/api/v1/admin/skills/"+s.ID, body)
+	c.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	c.Set("id", int64(88))
+	c.Set("role", 100)
+	UpdateAdminSkill(c)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var persisted skillmodel.Skill
+	require.NoError(t, db.First(&persisted, "id = ?", s.ID).Error)
+	require.NotNil(t, persisted.FreeQuotaPerMonth, "omitted free_quota_per_month must remain set")
+	assert.Equal(t, 20, *persisted.FreeQuotaPerMonth)
+	require.NotNil(t, persisted.MaxInputTokens, "omitted max_input_tokens must remain set")
+	assert.Equal(t, 1024, *persisted.MaxInputTokens)
+	require.NotNil(t, persisted.FeaturedRank, "omitted featured_rank must remain set")
+	assert.Equal(t, 3, *persisted.FeaturedRank)
+	require.NotNil(t, persisted.IconURL, "omitted icon_url must remain set")
+	assert.Equal(t, "https://example.com/icon.png", *persisted.IconURL)
+}
+
+func TestUpdateAdminSkill_NullClearsNullableFields(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	quota := 20
+	maxTok := 1024
+	rank := 3
+	s := testSkill("patch-null-clear", "draft")
+	s.RequiredPlan = enums.RequiredPlanFree
+	s.MonetizationType = enums.MonetizationTypeFree
+	s.FreeQuotaPerMonth = &quota
+	s.MaxInputTokens = &maxTok
+	s.FeaturedRank = &rank
+	s.IconURL = ptr("https://example.com/icon.png")
+	require.NoError(t, db.Create(&s).Error)
+
+	// Clearing max_input_tokens to null on a free skill would fail validation
+	// (free requires max_input_tokens). Switch to plan_included/pro first so we
+	// can freely null it for clear semantics testing.
+	body := `{"required_plan":"pro","monetization_type":"plan_included","free_quota_per_month":null,"max_input_tokens":null,"featured_rank":null,"icon_url":""}`
+	c, w := testContextWithMethod(http.MethodPatch, "/api/v1/admin/skills/"+s.ID, body)
+	c.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	c.Set("id", int64(88))
+	c.Set("role", 100)
+	UpdateAdminSkill(c)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var persisted skillmodel.Skill
+	require.NoError(t, db.First(&persisted, "id = ?", s.ID).Error)
+	assert.Nil(t, persisted.FreeQuotaPerMonth, "null free_quota_per_month must clear to DB NULL")
+	assert.Nil(t, persisted.MaxInputTokens, "null max_input_tokens must clear to DB NULL")
+	assert.Nil(t, persisted.FeaturedRank, "null featured_rank must clear to DB NULL")
+	assert.Nil(t, persisted.IconURL, `empty icon_url "" must clear to DB NULL`)
+}
+
+func TestUpdateAdminSkill_ExplicitZeroFreeQuotaIsPreserved(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	maxTok := 512
+	s := testSkill("patch-zero-quota", "draft")
+	s.RequiredPlan = enums.RequiredPlanFree
+	s.MonetizationType = enums.MonetizationTypeFree
+	s.MaxInputTokens = &maxTok
+	require.NoError(t, db.Create(&s).Error)
+
+	// Explicitly setting free_quota_per_month to 0 must be stored (not treated as null/omitted).
+	body := `{"free_quota_per_month":0}`
+	c, w := testContextWithMethod(http.MethodPatch, "/api/v1/admin/skills/"+s.ID, body)
+	c.Params = gin.Params{{Key: "skill_id", Value: s.ID}}
+	c.Set("id", int64(88))
+	c.Set("role", 100)
+	UpdateAdminSkill(c)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var persisted skillmodel.Skill
+	require.NoError(t, db.First(&persisted, "id = ?", s.ID).Error)
+	require.NotNil(t, persisted.FreeQuotaPerMonth, "explicit 0 must be stored as non-null pointer")
+	assert.Equal(t, 0, *persisted.FreeQuotaPerMonth)
+}
+
 func testSkill(slug string, status string) skillmodel.Skill {
 	now := time.Now().UTC()
 	return skillmodel.Skill{
