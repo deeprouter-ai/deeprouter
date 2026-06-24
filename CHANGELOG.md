@@ -2,6 +2,14 @@
 
 DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
+## 2026-06-25 (feat/skill-content-deepseek)
+
+- **Skill ZIP 自動嵌入用戶 API Key**（`internal/skill/handler/download.go`）：新增 `lookupUserRelayKey(userID)` 查詢用戶首條活躍 relay token；`setupFilesForKey(key)` 生成 `.env`（`DEEPROUTER_API_KEY=<key>`）、`setup.sh`、`setup.bat`、`requirements.txt`（`mcp>=1.0.0 openai>=1.0.0`）並打包進 ZIP；`buildSkillPackage` 接受 `userAPIKey string` 參數；`skillManifest` 新增 `Description` 字段
+- **Skill ZIP 內建 MCP Server**（`internal/skill/handler/download.go`）：新增 `mcpServerPy` 常量（通用 MCP server，啟動時讀 `manifest.json` + `SKILL.md` 自動配置，從 `.env` 自動加載 API key）；新增 `mcpFiles(slug)` 生成 `mcp_server.py` + `.mcp.json`；用戶解壓後在 Claude Code 打開文件夾即自動彈 MCP 信任對話框，無需修改全局配置
+- **SQLite 重啟崩潰修復**（`internal/skill/model/migrate.go`）：`MigrateSkills` 新增 `skipAutoMigrate` 守衛——SQLite 下若 `skills` 表已存在則跳過 `AutoMigrate`，避免 GORM 解析含嵌套括號 CHECK constraint DDL 時拋出 `invalid DDL, unbalanced brackets`
+- **前端下載按鈕接線**（`web/default/src/features/marketplace/api.ts`、`index.tsx`）：新增 `downloadSkillPackage(skillId)` 用 axios blob 模式下載 ZIP；`Marketplace` 組件新增 `handleCTA` 並傳給 `SkillCard.onCTA`，點擊觸發瀏覽器保存對話框
+- **Python 腳本 `.env` 自動加載**（全部 8 個 `internal/skill/packages/*/scripts/*.py`）：在 import 守衛之後插入 `_load_dotenv()` 函數，讀取腳本上兩層目錄的 `.env`，用戶無需手動 `export` 即可直接運行腳本
+
 ## 2026-06-24
 
 - 新增 DR-50 Admin Skill editor UI：管理端支持创建 Skill 草稿、分区编辑 Metadata/User Guidance/Entitlement/Execution/Safety/Promotion，保存 metadata/config 到 admin create/patch API，instruction template 变更时提示并创建 DR-47 draft version；新增 Version History/Audit Log 读取，补 Free/free-quota `max_input_tokens` 前后端校验、PATCH/audit-log 管理端接口、聚焦回归测试与 en/zh 文案（`internal/skill/handler/skills.go`, `router/skill-router.go`, `web/default/src/features/admin-skills/`, `web/default/src/i18n/locales/`, `internal/skill/handler/skills_test.go`）
@@ -49,6 +57,28 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 - 更新 DR-63 外部客户端契约文档：Skill package public routing API 需使用 runner key + `deeprouter.skill_id`/`skill_version_id`，服务端校验版本 pin、强制 `entry_point=skill_package`，且不信任 package-provided identity/Kids/routing hints（`docs/skill-marketplace/tasks/03_Data_Model_and_API_Spec.md`, `internal/skill/packageassets/runtime/README.md`）
 - 实现 DR-63 public routing 版本 pin：`deeprouter.skill_version_id` 通过 server-side 校验后绑定 active SkillVersion snapshot，cross-skill / missing / inactive pin fail-closed；public routing 继续只信任 runner key 身份并强制 `entry_point=skill_package`；补 resolver、relay 回归测试并记录覆盖率（`internal/skill/relay/resolver.go`, `middleware/skill_distributor.go`, `relay/compatible_handler.go`, `*_test.go`, `docs/test-results/dr63-public-routing-api-contract.txt`）
 - 修复 DR-52 PR review 问题：Marketplace list 搜索在 PostgreSQL 使用 DR-81 `idx_skills_public_search` 对齐的全文检索表达式；公开列表路由支持 session/access-token 可选认证；列表 DB 查询改为最小字段白名单，并补 PG 搜索、LIKE fallback、字段白名单和 token-auth availability 回归测试（`middleware/skill-auth.go`, `router/skill-router.go`, `internal/skill/handler/skills.go`, `*_test.go`）
+## 2026-06-23 (feat/skill-content-deepseek)
+
+- 新增 5 個改造自社群 Skill 的 DeepRouter Marketplace 商品（`internal/skill/packages/`）：
+  1. **prompt-optimizer**（Prompt 優化器）— deepseek-chat，含 `scripts/optimize.py`（分析並重寫用戶粗糙 prompt、輸出 What Changed / Why / Tip 三節分析、支援 file/stdin/inline 三種輸入模式）和 `reference/techniques.md`（Clarity/Specificity/XML/CoT/Few-Shot/Prefill 完整速查）
+  2. **youtube-analyzer**（YouTube 分析師）— deepseek-chat + 免費 YouTube Data API v3，含 `scripts/analyze.py`（video/comments/channel/search/script 五個子命令）和 `reference/api_reference.md`（Quota 成本表、端點速查、Category IDs）
+  3. **agent-memory**（智能記憶庫）— deepseek-chat + SQLite FTS5，含 `scripts/memory.py`（remember/recall/smart-recall/learn/synthesize/suggest/forget-stale 完整 CLI，本地 SQLite 儲存，AI 分析透過 DeepRouter）和 `reference/usage.md`（Claude Code hook 整合、資料庫 schema 說明）
+  4. **self-improving-agent**（自我進化 Agent）— deepseek-chat，含 `scripts/analyze_learnings.py`（讀取 `.learnings/` 目錄，AI 分析模式 analyze/promote，focus all/errors/features）和 `reference/logging_format.md`（LEARNINGS.md/ERRORS.md/FEATURE_REQUESTS.md 完整 entry format + 狀態值 + promotion 工作流）
+  5. **self-reflection**（結構化反思）— deepseek-chat，含 `scripts/reflect.py`（dev/agent/learning 三種反思風格、file/stdin/interactive 輸入、--out 保存、加日期標題頭）和 `reference/reflection_guide.md`（各風格說明、最佳 input 格式、anti-patterns 表）
+- `internal/skill/packages.go` `//go:embed` 指令新增 5 個新 slug（packages/prompt-optimizer packages/youtube-analyzer packages/agent-memory packages/self-improving-agent packages/self-reflection）
+- `scripts/seed-skills/seed.sql` 新增 Skills 4-8 的 PostgreSQL idempotent INSERT；MySQL 變體說明更新為「eight INSERT INTO」
+
+
+## 2026-06-22 (feat/skill-content-deepseek)
+
+- 新增 3 個 DeepSeek 驅動的 Skill Marketplace 商品（`internal/skill/packages/`）：
+  1. **academic-polish**（學術論文潤色）— deepseek-chat，含 `scripts/polish.py`（支援 EN/ZH、長文分塊、stdin/file/interactive 模式）和 `reference/style_guide.md`（時態、段落 PEEL、學術用語、引用規範等 10 節）
+  2. **code-review-ds**（代碼安全審查）— deepseek-coder，含 `scripts/review.py`（覆蓋 Correctness/Security/Performance/Maintainability/Style，支援 30+ 語言、--focus security、--strict CI 模式、遞歸目錄掃描）和 `reference/review_checklist.md`（OWASP Top 10 + 並發/資料完整性/FP 指南）
+  3. **smart-translate**（智能翻譯引擎）— deepseek-chat，含 `scripts/translate.py`（28 語言、domain glossary 支援、Markdown/HTML/LaTeX 格式保留、批量目錄翻譯）和 `reference/glossary_tech.txt`（120+ AI/ML/網絡術語）、`reference/glossary_domains.txt`（100+ 法律/醫療/金融術語）
+- 擴展 `internal/skill/handler/download.go`：新增 `embeddedPackageFiles(slug)` 透過 `//go:embed` 將 `packages/<slug>/scripts/` 和 `packages/<slug>/reference/` 注入下載 ZIP；不含 embedded package 的 slug 靜默回傳 nil（向後相容既有 legacy skills）
+- 新增 `internal/skill/packages.go`：`package skill` 持有 `var PackageAssets embed.FS`，handler 透過 `skill.PackageAssets` 引用
+- 新增 `scripts/seed-skills/seed.sql`：PostgreSQL idempotent INSERT（ON CONFLICT DO NOTHING）種入 3 個 published skill DB 記錄；附 MySQL/SQLite 移植說明
+- 新增 `docs/tasks/skill-content-deepseek-prd.md`
 
 ## 2026-06-22
 
