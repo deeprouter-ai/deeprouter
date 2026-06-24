@@ -303,7 +303,7 @@ export function AdminSkillEditor({
   }
 
   async function createSkillDraft(values: EditorValues) {
-    const payload = buildSkillPayload(values) as CreateSkillPayload
+    const payload = buildSkillPayload(values, false) as CreateSkillPayload
 
     try {
       const created = await createSkillMutation.mutateAsync(payload)
@@ -324,7 +324,7 @@ export function AdminSkillEditor({
 
   async function saveExistingSkill(values: EditorValues) {
     if (!skill) return
-    const updatePayload = buildSkillPayload(values) as UpdateSkillPayload
+    const updatePayload = buildSkillPayload(values, true) as UpdateSkillPayload
     const shouldCreateVersion =
       templateDirty && Boolean(values.instruction_template?.trim())
     let updated: AdminSkill | null = null
@@ -812,16 +812,32 @@ function skillToDefaults(skill: AdminSkill): EditorValues {
 }
 
 function buildSkillPayload(
-  values: EditorValues
+  values: EditorValues,
+  isEditMode: boolean
 ): CreateSkillPayload | UpdateSkillPayload {
-  return {
+  // In edit mode, send null for cleared nullable fields so the backend can
+  // distinguish "user intentionally cleared this" from "field was not sent".
+  const nullableInt = (v?: string): number | null | undefined =>
+    isEditMode
+      ? hasNumberValue(v)
+        ? Number(v)
+        : null
+      : hasNumberValue(v)
+        ? Number(v)
+        : undefined
+
+  // icon_url: always send in edit mode (empty string signals clear on backend).
+  const iconUrl: string | null | undefined = isEditMode
+    ? (values.icon_url?.trim() || null)
+    : (values.icon_url?.trim() || undefined)
+
+  const payload: CreateSkillPayload | UpdateSkillPayload = {
     slug: values.slug,
     name: values.name,
     short_description: values.short_description,
     description: values.description,
     category: values.category,
     tags: parseCommaList(values.tags),
-    ...(values.icon_url?.trim() ? { icon_url: values.icon_url.trim() } : {}),
     input_hints: parseLineList(values.input_hints),
     example_inputs: parseLineList(values.example_inputs),
     example_outputs: parseLineList(values.example_outputs),
@@ -831,12 +847,6 @@ function buildSkillPayload(
     hasNumberValue(values.price_markup)
       ? { price_markup: Number(values.price_markup) }
       : {}),
-    ...(hasNumberValue(values.free_quota_per_month)
-      ? { free_quota_per_month: Number(values.free_quota_per_month) }
-      : {}),
-    ...(hasNumberValue(values.max_input_tokens)
-      ? { max_input_tokens: Number(values.max_input_tokens) }
-      : {}),
     model_whitelist: parseLineList(values.model_whitelist),
     ...(hasNumberValue(values.timeout_seconds)
       ? { timeout_seconds: Number(values.timeout_seconds) }
@@ -845,10 +855,17 @@ function buildSkillPayload(
     is_kids_exclusive: values.is_kids_exclusive ?? false,
     kids_approval_status: values.kids_approval_status,
     featured_flag: values.featured_flag ?? false,
-    ...(hasNumberValue(values.featured_rank)
-      ? { featured_rank: Number(values.featured_rank) }
-      : {}),
   }
+
+  if (iconUrl !== undefined) payload.icon_url = iconUrl
+  const fqpm = nullableInt(values.free_quota_per_month)
+  if (fqpm !== undefined) payload.free_quota_per_month = fqpm
+  const mit = nullableInt(values.max_input_tokens)
+  if (mit !== undefined) payload.max_input_tokens = mit
+  const fr = nullableInt(values.featured_rank)
+  if (fr !== undefined) payload.featured_rank = fr
+
+  return payload
 }
 
 function buildVersionPayload(values: EditorValues): CreateVersionPayload {

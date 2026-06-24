@@ -27,6 +27,49 @@ import type {
 
 export { skillDownloadURL } from './lib/growth-surfaces'
 
+export async function getMarketplaceSkill(
+  slugOrId: string
+): Promise<MarketplaceSkill> {
+  const res = await api.get(
+    `/api/v1/marketplace/skills/${encodeURIComponent(slugOrId)}`,
+    { skipErrorHandler: true } as Record<string, unknown>
+  )
+  return (res.data?.data ?? res.data) as MarketplaceSkill
+}
+
+export async function downloadSkillPackage(
+  slugOrId: string,
+  entryPoint?: SkillGrowthEntryPoint
+): Promise<void> {
+  const params: Record<string, string> = {}
+  if (entryPoint === 'new' || entryPoint === 'recommended') {
+    params.entry_point = entryPoint
+  }
+  const res = await api.get(
+    `/api/v1/marketplace/skills/${encodeURIComponent(slugOrId)}/download`,
+    {
+      params,
+      responseType: 'blob',
+      disableDuplicate: true,
+      skipErrorHandler: true,
+    } as Record<string, unknown>
+  )
+  const disposition = (res.headers as Record<string, string>)[
+    'content-disposition'
+  ]
+  const fileMatch = disposition?.match(/filename="([^"]+)"/)
+  const filename = fileMatch?.[1] ?? `${slugOrId}.zip`
+  const blob = new Blob([res.data as BlobPart], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 export interface MarketplaceSkillsParams {
   featured?: boolean
   limit?: number

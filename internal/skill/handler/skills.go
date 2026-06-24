@@ -980,6 +980,35 @@ type createSkillRequest struct {
 	FeaturedRank       *int                      `json:"featured_rank"`
 }
 
+// nullableInt distinguishes three JSON states for a nullable integer PATCH field:
+//   - field absent → Set=false → do not update the column
+//   - field is JSON null → Set=true, Null=true → clear the column to DB NULL
+//   - field is a number → Set=true, Null=false, Value=n → update to n
+type nullableInt struct {
+	Set   bool
+	Null  bool
+	Value int
+}
+
+func (n *nullableInt) UnmarshalJSON(data []byte) error {
+	n.Set = true
+	if string(data) == "null" {
+		n.Null = true
+		return nil
+	}
+	return common.Unmarshal(data, &n.Value)
+}
+
+// toIntPtr returns nil when the field is absent or explicitly null, otherwise
+// returns a pointer to Value. Used to feed validation helpers that operate on *int.
+func (n nullableInt) toIntPtr() *int {
+	if !n.Set || n.Null {
+		return nil
+	}
+	v := n.Value
+	return &v
+}
+
 type updateSkillRequest struct {
 	Name               *string                   `json:"name"`
 	ShortDescription   *string                   `json:"short_description"`
@@ -993,15 +1022,15 @@ type updateSkillRequest struct {
 	RequiredPlan       *enums.RequiredPlan       `json:"required_plan"`
 	MonetizationType   *enums.MonetizationType   `json:"monetization_type"`
 	PriceMarkup        *float64                  `json:"price_markup"`
-	FreeQuotaPerMonth  *int                      `json:"free_quota_per_month"`
-	MaxInputTokens     *int                      `json:"max_input_tokens"`
+	FreeQuotaPerMonth  nullableInt               `json:"free_quota_per_month"`
+	MaxInputTokens     nullableInt               `json:"max_input_tokens"`
 	ModelWhitelist     *json.RawMessage          `json:"model_whitelist"`
 	TimeoutSeconds     *int                      `json:"timeout_seconds"`
 	IsKidsSafe         *bool                     `json:"is_kids_safe"`
 	IsKidsExclusive    *bool                     `json:"is_kids_exclusive"`
 	KidsApprovalStatus *enums.KidsApprovalStatus `json:"kids_approval_status"`
 	FeaturedFlag       *bool                     `json:"featured_flag"`
-	FeaturedRank       *int                      `json:"featured_rank"`
+	FeaturedRank       nullableInt               `json:"featured_rank"`
 }
 
 type AdminSkillAuditEntry struct {
@@ -1297,13 +1326,14 @@ func validateUpdateSkillRequest(req updateSkillRequest, existing skillmodel.Skil
 	if req.PriceMarkup != nil {
 		priceMarkup = *req.PriceMarkup
 	}
+	// nullableInt: absent → existing value; explicit null → cleared (nil); number → new value.
 	freeQuotaPerMonth := existing.FreeQuotaPerMonth
-	if req.FreeQuotaPerMonth != nil {
-		freeQuotaPerMonth = req.FreeQuotaPerMonth
+	if req.FreeQuotaPerMonth.Set {
+		freeQuotaPerMonth = req.FreeQuotaPerMonth.toIntPtr()
 	}
 	maxInputTokens := existing.MaxInputTokens
-	if req.MaxInputTokens != nil {
-		maxInputTokens = req.MaxInputTokens
+	if req.MaxInputTokens.Set {
+		maxInputTokens = req.MaxInputTokens.toIntPtr()
 	}
 	isKidsSafe := existing.IsKidsSafe
 	if req.IsKidsSafe != nil {
@@ -1343,7 +1373,7 @@ func validateUpdateSkillRequest(req updateSkillRequest, existing skillmodel.Skil
 		return "INVALID_MAX_INPUT_TOKENS"
 	case req.TimeoutSeconds != nil && (*req.TimeoutSeconds < 1 || *req.TimeoutSeconds > 120):
 		return "INVALID_TIMEOUT_SECONDS"
-	case req.FeaturedRank != nil && *req.FeaturedRank < 0:
+	case req.FeaturedRank.Set && !req.FeaturedRank.Null && req.FeaturedRank.Value < 0:
 		return "INVALID_FEATURED_RANK"
 	case isKidsExclusive && !isKidsSafe:
 		return "KIDS_EXCLUSIVE_REQUIRES_SAFE"
@@ -1417,11 +1447,19 @@ func buildSkillUpdates(req updateSkillRequest, existing skillmodel.Skill, actorI
 	} else if req.MonetizationType != nil && *req.MonetizationType != enums.MonetizationTypeTokenMarkup && existing.PriceMarkup != 0 {
 		add("price_markup", 0)
 	}
-	if req.FreeQuotaPerMonth != nil {
-		add("free_quota_per_month", *req.FreeQuotaPerMonth)
+	if req.FreeQuotaPerMonth.Set {
+		if req.FreeQuotaPerMonth.Null {
+			add("free_quota_per_month", nil)
+		} else {
+			add("free_quota_per_month", req.FreeQuotaPerMonth.Value)
+		}
 	}
-	if req.MaxInputTokens != nil {
-		add("max_input_tokens", *req.MaxInputTokens)
+	if req.MaxInputTokens.Set {
+		if req.MaxInputTokens.Null {
+			add("max_input_tokens", nil)
+		} else {
+			add("max_input_tokens", req.MaxInputTokens.Value)
+		}
 	}
 	if req.ModelWhitelist != nil {
 		add("model_whitelist", skillJSONBOrDefault(req.ModelWhitelist, "[]"))
@@ -1441,8 +1479,12 @@ func buildSkillUpdates(req updateSkillRequest, existing skillmodel.Skill, actorI
 	if req.FeaturedFlag != nil {
 		add("featured_flag", *req.FeaturedFlag)
 	}
-	if req.FeaturedRank != nil {
-		add("featured_rank", *req.FeaturedRank)
+	if req.FeaturedRank.Set {
+		if req.FeaturedRank.Null {
+			add("featured_rank", nil)
+		} else {
+			add("featured_rank", req.FeaturedRank.Value)
+		}
 	}
 	if len(updates) > 0 {
 		updates["updated_by"] = actorID

@@ -71,6 +71,7 @@ import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './r
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
 import { Route as AuthenticatedSkillsMyIndexRouteImport } from './routes/_authenticated/skills/my/index'
 import { Route as AuthenticatedSkillsAdminIndexRouteImport } from './routes/_authenticated/skills/admin/index'
+import { Route as AuthenticatedSkillsSlugRouteImport } from './routes/_authenticated/skills/$slug'
 import { Route as AuthenticatedSystemSettingsSiteSectionRouteImport } from './routes/_authenticated/system-settings/site/$section'
 import { Route as AuthenticatedSystemSettingsSecuritySectionRouteImport } from './routes/_authenticated/system-settings/security/$section'
 import { Route as AuthenticatedSystemSettingsOperationsSectionRouteImport } from './routes/_authenticated/system-settings/operations/$section'
@@ -414,6 +415,11 @@ const AuthenticatedSkillsAdminIndexRoute =
     path: '/skills/admin/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSkillsSlugRoute = AuthenticatedSkillsSlugRouteImport.update({
+  id: '/_authenticated/skills/$slug',
+  path: '/skills/$slug',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSystemSettingsSiteSectionRoute =
   AuthenticatedSystemSettingsSiteSectionRouteImport.update({
     id: '/site/$section',
@@ -518,6 +524,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/skills/admin/': typeof AuthenticatedSkillsAdminIndexRoute
   '/skills/my/': typeof AuthenticatedSkillsMyIndexRoute
+  '/skills/$slug': typeof AuthenticatedSkillsSlugRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -586,6 +593,7 @@ export interface FileRoutesByTo {
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/skills/admin': typeof AuthenticatedSkillsAdminIndexRoute
   '/skills/my': typeof AuthenticatedSkillsMyIndexRoute
+  '/skills/$slug': typeof AuthenticatedSkillsSlugRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -658,6 +666,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
   '/_authenticated/skills/admin/': typeof AuthenticatedSkillsAdminIndexRoute
   '/_authenticated/skills/my/': typeof AuthenticatedSkillsMyIndexRoute
+  '/_authenticated/skills/$slug': typeof AuthenticatedSkillsSlugRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -729,6 +738,7 @@ export interface FileRouteTypes {
     | '/system-settings/site/$section'
     | '/skills/admin/'
     | '/skills/my/'
+    | '/skills/$slug'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -797,6 +807,7 @@ export interface FileRouteTypes {
     | '/system-settings/site/$section'
     | '/skills/admin'
     | '/skills/my'
+    | '/skills/$slug'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -868,6 +879,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/site/$section'
     | '/_authenticated/skills/admin/'
     | '/_authenticated/skills/my/'
+    | '/_authenticated/skills/$slug'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -1338,6 +1350,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSkillsAdminIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/skills/$slug': {
+      id: '/_authenticated/skills/$slug'
+      path: '/skills/$slug'
+      fullPath: '/skills/$slug'
+      preLoaderRoute: typeof AuthenticatedSkillsSlugRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/system-settings/site/$section': {
       id: '/_authenticated/system-settings/site/$section'
       path: '/site/$section'
@@ -1497,6 +1516,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
   AuthenticatedSkillsAdminIndexRoute: typeof AuthenticatedSkillsAdminIndexRoute
   AuthenticatedSkillsMyIndexRoute: typeof AuthenticatedSkillsMyIndexRoute
+  AuthenticatedSkillsSlugRoute: typeof AuthenticatedSkillsSlugRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1527,6 +1547,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
   AuthenticatedSkillsAdminIndexRoute: AuthenticatedSkillsAdminIndexRoute,
   AuthenticatedSkillsMyIndexRoute: AuthenticatedSkillsMyIndexRoute,
+  AuthenticatedSkillsSlugRoute: AuthenticatedSkillsSlugRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
