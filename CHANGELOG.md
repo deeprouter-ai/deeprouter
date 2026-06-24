@@ -4,6 +4,7 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-24
 
+- DR-58 Track B 测试扩展：新增 `SkillDetail` 组件测试 `skill-detail.test.tsx`（Vitest + RTL，8 例），覆盖下载 error-mapping 全分支——`AUTH_REQUIRED`/`SKILL_AUTH_REQUIRED` → `auth.reset()` + 跳 `/sign-in?redirect=`（会话失效重登,非缺 runner key）、`SKILL_PLAN_REQUIRED` → 升级文案、`DOWNLOAD_UNAVAILABLE` → 不可用文案、非 `DownloadSkillError`/未知 → 通用 "Download failed" 文案；以及 A1 runtime-key 文案存在、A2 Download CTA 无 Enable 开关、下载成功 → success toast、详情加载失败 → ErrorBanner。mock `./api`(含 `DownloadSkillError` 以满足 `instanceof`)、`@tanstack/react-router`、`@/stores/auth-store`、`sonner`，QueryClientProvider 包裹。纯前端测试,无生产代码改动（`web/default/src/features/marketplace/skill-detail.test.tsx`）(DR-58)
 - 更新 DR-74 PRD 状态为 eval，符合任务 PRD 生命周期并记录当前 awaiting review 状态（`docs/tasks/dr74-event-schema-version-occurred-at-prd.md`）
 
 ## 2026-06-23
