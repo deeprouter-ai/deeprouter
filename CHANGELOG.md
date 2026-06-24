@@ -4,6 +4,8 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-24
 
+- DR-58 Track B 测试扩展：新增 `SkillDetail` 组件测试 `skill-detail.test.tsx`（Vitest + RTL，8 例），覆盖下载 error-mapping 全分支——`AUTH_REQUIRED`/`SKILL_AUTH_REQUIRED` → `auth.reset()` + 跳 `/sign-in?redirect=`（会话失效重登,非缺 runner key）、`SKILL_PLAN_REQUIRED` → 升级文案、`DOWNLOAD_UNAVAILABLE` → 不可用文案、非 `DownloadSkillError`/未知 → 通用 "Download failed" 文案；以及 A1 runtime-key 文案存在、A2 Download CTA 无 Enable 开关、下载成功 → success toast、详情加载失败 → ErrorBanner。mock `./api`(含 `DownloadSkillError` 以满足 `instanceof`)、`@tanstack/react-router`、`@/stores/auth-store`、`sonner`，QueryClientProvider 包裹。纯前端测试,无生产代码改动（`web/default/src/features/marketplace/skill-detail.test.tsx`）(DR-58)
+
 - 新增 DR-50 Admin Skill editor UI：管理端支持创建 Skill 草稿、分区编辑 Metadata/User Guidance/Entitlement/Execution/Safety/Promotion，保存 metadata/config 到 admin create/patch API，instruction template 变更时提示并创建 DR-47 draft version；新增 Version History/Audit Log 读取，补 Free/free-quota `max_input_tokens` 前后端校验、PATCH/audit-log 管理端接口、聚焦回归测试与 en/zh 文案（`internal/skill/handler/skills.go`, `router/skill-router.go`, `web/default/src/features/admin-skills/`, `web/default/src/i18n/locales/`, `internal/skill/handler/skills_test.go`）
 - 新增 DR-50 Admin Skill editor UI 任务 PRD，锁定分区编辑器、DR-46/DR-47 接口串联、Free/free-quota `max_input_tokens` 校验与版本变更提示范围（`docs/tasks/dr50-admin-skill-editor-ui-prd.md`）
 - 撤回 DR-77 Per-Skill Analytics Table UI 合并内容，恢复 DR-75 per-skill analytics 与 Skill Analytics 页面到合并前状态（`internal/skill/handler/analytics.go`, `web/default/src/features/skill-analytics/`, `docs/tasks/dr77-per-skill-analytics-table-ui-prd.md`）
