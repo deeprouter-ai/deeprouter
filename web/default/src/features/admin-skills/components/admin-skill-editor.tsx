@@ -826,9 +826,9 @@ function buildSkillPayload(
         ? Number(v)
         : undefined
 
-  // icon_url: always send in edit mode (empty string signals clear on backend).
-  const iconUrl: string | null | undefined = isEditMode
-    ? (values.icon_url?.trim() || null)
+  // icon_url: always send in edit mode; empty string is the backend sentinel to clear.
+  const iconUrl: string | undefined = isEditMode
+    ? (values.icon_url?.trim() ?? '')
     : (values.icon_url?.trim() || undefined)
 
   const payload: CreateSkillPayload | UpdateSkillPayload = {
