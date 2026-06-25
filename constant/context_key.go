@@ -87,6 +87,21 @@ const (
 	// not need a second DB lookup to read BillingWebhookURL / WebhookSecret.
 	ContextKeyAirbotixUser ContextKey = "airbotix_user"
 
+	// ContextKeyOutputFilterViolations stores []string of triggered output-filter
+	// category IDs (e.g. ["nsfw"]) for the current request, set by
+	// relay/airbotix_policy.go's outputFilterWriter when EnforceStrictOutputFilter
+	// blocks a response. Read by service/airbotix_billing.go (follow-up) to
+	// populate billing.Event.PolicyViolations and by PRD §6.2's quota-exemption
+	// logic (follow-up, not implemented by DR-30).
+	ContextKeyOutputFilterViolations ContextKey = "airbotix_output_filter_violations"
+	// ContextKeyOutputFilterBufferOverflow stores true when outputFilterWriter
+	// stops buffering a response because maxOutputFilterBufferBytes was exceeded.
+	// For 2xx responses this causes fail-closed fallback; for non-2xx responses
+	// the truncated body is passed through for debugging. This is separate from
+	// ContextKeyOutputFilterViolations because overflow is not a content-policy
+	// category hit; it means the output could not be fully verified.
+	ContextKeyOutputFilterBufferOverflow ContextKey = "airbotix_output_filter_buffer_overflow"
+
 	// Set by middleware/distributor.go when smart-router resolves a deeprouter-auto
 	// request. The Reason / Strategy fields are logged for observability and exposed
 	// in the X-DeepRouter-Routed-Reason / X-DeepRouter-Routed-Strategy response
