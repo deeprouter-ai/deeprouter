@@ -4,6 +4,11 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-29
 
+- 新增 DR-99 tiered Skill pricing model 任务 PRD，定义 Basic/PLUS、USD 2 one-time、PLUS-exclusive、PLUS 抵扣与 Skill entitlement matrix 范围（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
+- 更新 DR-99 tiered Skill pricing model 任务 PRD 状态为 build，进入实现阶段（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
+- 实现 DR-99 tiered Skill pricing model：新增共享 Basic/PLUS/one-time/PLUS-exclusive entitlement matrix、`plus_exclusive` Skill monetization tier、USD 2 PLUS upgrade credit helper、download/runtime/Marketplace/My Skills 共用 tier 判定，并在 Skill enable/purchase/use/block 事件写入 plan/tier attribution；管理端 Skill monetization 下拉支持 `one_time` 与 `plus_exclusive`（`internal/skill/{pricing,enums,model,availability,handler,relay}`, `web/default/src/features/admin-skills/`）
+- 记录 DR-99 聚焦、相关 Skill 回归、admin Skills 前端 typecheck/test 与 full Go suite 测试结果和覆盖率；full suite 前构建 classic/default frontend dist 以满足 root package embed 前置条件（`docs/test-results/dr99-tiered-pricing-model.txt`）
+- 更新 DR-99 tiered Skill pricing model 任务 PRD 状态为 eval，进入 PR review/checks 阶段（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
 - 新增 DR-96 monetization-linked Skill funnels 任务 PRD，定义充值后首次使用 Skill 转化、Skill 使用后复购充值留存、aggregate-only 与 attribution 标注范围（`docs/tasks/dr96-monetization-linked-skill-funnels-prd.md`）
 - 实现 DR-96 monetization-linked Skill funnels：Skill Analytics overview/per-skill API 连接成功充值 `top_ups` 与 `skill_first_use`/成功 `skill_used`，新增 recharge→first-use conversion、median time-to-first-use、skill-use→repeat-recharge retention 与 attribution revenue；所有商业化指标仅在充值配置启用时返回/展示，前端新增归因卡片与按 Skill/plan 分组表格，保持 aggregate-only（`internal/skill/handler/analytics.go`, `web/default/src/features/skill-analytics/`, `web/default/src/i18n/locales/`）
 - 记录 DR-96 聚焦、相关回归、前端 typecheck/build 与 full Go suite 测试结果和覆盖率；full suite 前构建 classic/default frontend dist 以满足 root package embed 前置条件（`docs/test-results/dr96-monetization-linked-skill-funnels.txt`）
