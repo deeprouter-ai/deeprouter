@@ -193,6 +193,9 @@ const (
 	SkillUsageEventTypeFirstUse            SkillUsageEventType = "skill_first_use"
 	SkillUsageEventTypeRepeatUse           SkillUsageEventType = "skill_repeat_use"
 	SkillUsageEventTypePurchased           SkillUsageEventType = "skill_purchased"
+	SkillUsageEventTypeNotificationSent    SkillUsageEventType = "skill_notification_sent"
+	SkillUsageEventTypeNotificationOpened  SkillUsageEventType = "skill_notification_opened"
+	SkillUsageEventTypeNotificationClicked SkillUsageEventType = "skill_notification_clicked"
 )
 
 var validSkillUsageEventTypes = map[SkillUsageEventType]struct{}{
@@ -214,6 +217,9 @@ var validSkillUsageEventTypes = map[SkillUsageEventType]struct{}{
 	SkillUsageEventTypeFirstUse:            {},
 	SkillUsageEventTypeRepeatUse:           {},
 	SkillUsageEventTypePurchased:           {},
+	SkillUsageEventTypeNotificationSent:    {},
+	SkillUsageEventTypeNotificationOpened:  {},
+	SkillUsageEventTypeNotificationClicked: {},
 }
 
 func (e SkillUsageEventType) Valid() bool { _, ok := validSkillUsageEventTypes[e]; return ok }
@@ -223,18 +229,24 @@ func (e SkillUsageEventType) Valid() bool { _, ok := validSkillUsageEventTypes[e
 type EntryPoint string
 
 const (
-	EntryPointMarketplaceCard EntryPoint = "marketplace_card"
-	EntryPointSkillDetail     EntryPoint = "skill_detail"
-	EntryPointMySkills        EntryPoint = "my_skills"
-	EntryPointSavedList       EntryPoint = "saved_list"
-	EntryPointFeatured        EntryPoint = "featured"
-	EntryPointPopular         EntryPoint = "popular"
-	EntryPointNew             EntryPoint = "new"
-	EntryPointRecommended     EntryPoint = "recommended"
-	EntryPointRecoPersonal    EntryPoint = "reco_personal"
-	EntryPointRecoCodownload  EntryPoint = "reco_codownload"
-	EntryPointAdminPreview    EntryPoint = "admin_preview"
-	EntryPointSearchResults   EntryPoint = "search_results"
+	EntryPointMarketplaceCard    EntryPoint = "marketplace_card"
+	EntryPointSkillDetail        EntryPoint = "skill_detail"
+	EntryPointMySkills           EntryPoint = "my_skills"
+	EntryPointSavedList          EntryPoint = "saved_list"
+	EntryPointFeatured           EntryPoint = "featured"
+	EntryPointPopular            EntryPoint = "popular"
+	EntryPointNew                EntryPoint = "new"
+	EntryPointNewWeek            EntryPoint = "new_week"
+	EntryPointTrending           EntryPoint = "trending"
+	EntryPointRecommended        EntryPoint = "recommended"
+	EntryPointRecoPersonal       EntryPoint = "reco_personal"
+	EntryPointRecoCodownload     EntryPoint = "reco_codownload"
+	EntryPointLeaderboardWeekly  EntryPoint = "leaderboard_weekly"
+	EntryPointLeaderboardMonthly EntryPoint = "leaderboard_monthly"
+	EntryPointDigest             EntryPoint = "digest"
+	EntryPointReengage           EntryPoint = "reengage"
+	EntryPointAdminPreview       EntryPoint = "admin_preview"
+	EntryPointSearchResults      EntryPoint = "search_results"
 	// EntryPointSkillPackage is the primary R2 execution entry for downloaded
 	// Skill packages calling the public routing API. It is also used by the
 	// package-download skill_enabled event.
@@ -252,22 +264,28 @@ const (
 )
 
 var validEntryPoints = map[EntryPoint]struct{}{
-	EntryPointMarketplaceCard:  {},
-	EntryPointSkillDetail:      {},
-	EntryPointMySkills:         {},
-	EntryPointSavedList:        {},
-	EntryPointPlaygroundPicker: {},
-	EntryPointFeatured:         {},
-	EntryPointPopular:          {},
-	EntryPointNew:              {},
-	EntryPointRecommended:      {},
-	EntryPointRecoPersonal:     {},
-	EntryPointRecoCodownload:   {},
-	EntryPointAdminPreview:     {},
-	EntryPointSearchResults:    {},
-	EntryPointSkillPackage:     {},
-	EntryPointAPIToken:         {},
-	EntryPointDownloadedRunner: {},
+	EntryPointMarketplaceCard:    {},
+	EntryPointSkillDetail:        {},
+	EntryPointMySkills:           {},
+	EntryPointSavedList:          {},
+	EntryPointPlaygroundPicker:   {},
+	EntryPointFeatured:           {},
+	EntryPointPopular:            {},
+	EntryPointNew:                {},
+	EntryPointNewWeek:            {},
+	EntryPointTrending:           {},
+	EntryPointRecommended:        {},
+	EntryPointRecoPersonal:       {},
+	EntryPointRecoCodownload:     {},
+	EntryPointLeaderboardWeekly:  {},
+	EntryPointLeaderboardMonthly: {},
+	EntryPointDigest:             {},
+	EntryPointReengage:           {},
+	EntryPointAdminPreview:       {},
+	EntryPointSearchResults:      {},
+	EntryPointSkillPackage:       {},
+	EntryPointAPIToken:           {},
+	EntryPointDownloadedRunner:   {},
 }
 
 func (e EntryPoint) Valid() bool { _, ok := validEntryPoints[e]; return ok }

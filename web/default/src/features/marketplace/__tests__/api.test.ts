@@ -8,7 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/lib/api'
 import {
   emitMarketplaceEvent,
+  getDownloadLeaderboardSkills,
   getSavedSkills,
+  getMarketplaceRailSkills,
   getMarketplaceSkills,
   recordMarketplaceSkillEvent,
   saveSkill,
@@ -122,20 +124,77 @@ describe('Marketplace API review regressions', () => {
     )
   })
 
+  it('passes DR-90 rail parameters to the marketplace list API', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        data: [],
+        pagination: { page: 1, limit: 6, total: 0, has_next: false },
+      },
+    })
+
+    await getMarketplaceRailSkills('trending', {
+      query: 'growth',
+      category: 'writing',
+      plan: 'free',
+      kidsSafeOnly: true,
+    })
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/marketplace/skills',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          rail: 'trending',
+          page: 1,
+          limit: 6,
+          query: 'growth',
+          category: 'writing',
+          plan: 'free',
+          kids_safe: true,
+        }),
+      })
+    )
+  })
+
+  it('requests download leaderboards with window and category filters', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        data: [],
+        pagination: { page: 1, limit: 6, total: 0, has_next: false },
+      },
+    })
+
+    await getDownloadLeaderboardSkills({
+      window: '7d',
+      category: 'writing',
+      limit: 6,
+    })
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/marketplace/leaderboards/downloads',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          window: '7d',
+          category: 'writing',
+          limit: 6,
+        }),
+      })
+    )
+  })
+
   it('records marketplace events through the existing skill-scoped endpoint', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({})
 
     await emitMarketplaceEvent({
       event_type: 'skill_impression',
       skill_id: 'writing-helper',
-      entry_point: 'marketplace_card',
+      entry_point: 'trending',
     })
 
     expect(api.post).toHaveBeenCalledWith(
       '/api/v1/marketplace/skills/writing-helper/events',
       {
         event_type: 'skill_impression',
-        entry_point: 'marketplace_card',
+        entry_point: 'trending',
       },
       expect.objectContaining({
         skipErrorHandler: true,

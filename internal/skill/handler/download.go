@@ -219,12 +219,20 @@ func downloadEntryPoint(c *gin.Context) enums.EntryPoint {
 	switch enums.EntryPoint(strings.TrimSpace(raw)) {
 	case enums.EntryPointNew:
 		return enums.EntryPointNew
+	case enums.EntryPointNewWeek:
+		return enums.EntryPointNewWeek
+	case enums.EntryPointTrending:
+		return enums.EntryPointTrending
 	case enums.EntryPointRecommended:
 		return enums.EntryPointRecommended
 	case enums.EntryPointRecoPersonal:
 		return enums.EntryPointRecoPersonal
 	case enums.EntryPointRecoCodownload:
 		return enums.EntryPointRecoCodownload
+	case enums.EntryPointLeaderboardWeekly:
+		return enums.EntryPointLeaderboardWeekly
+	case enums.EntryPointLeaderboardMonthly:
+		return enums.EntryPointLeaderboardMonthly
 	default:
 		return enums.EntryPointSkillPackage
 	}

@@ -29,6 +29,64 @@ Coverage:
 
 Result: PASS
 
+## Final Post-merge Regression
+
+Commands:
+
+```bash
+make build-all-frontends
+GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go test ./... -count=1
+cd web/default && bun run typecheck
+cd web/default && bun run test:dr49-admin-skills
+```
+
+Dataset/fixtures:
+
+- Latest `origin/main` merged into DR-99 before final verification.
+- Generated default/classic frontend dist artifacts for root package embed.
+- Full repository Go unit/regression fixtures plus admin Skills frontend Vitest fixtures.
+
+Verified:
+
+- Full repository Go regression after the DR-99 branch was reconciled with current main.
+- Admin Skills TypeScript still accepts the expanded `monetization_type` values after main frontend changes.
+- Existing admin Skills table/editor behavior remains passing.
+
+Coverage:
+
+- Not collected for the final full-suite rerun.
+- Final focused coverage after main merge is recorded above.
+
+Result: PASS
+
+## Post-main-merge Verification
+
+Commands:
+
+```bash
+GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go vet ./internal/... ./middleware/...
+GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go test ./internal/skill/pricing ./internal/skill/enums ./internal/skill/model ./internal/skill/availability ./internal/skill/handler ./internal/skill/relay -count=1 -coverprofile=/tmp/dr99-focused-after-main.cover
+GOCACHE=$PWD/.gocache GOMODCACHE=$PWD/.gomodcache go test ./internal/skill/... -count=1 -coverprofile=/tmp/dr99-internal-skill-after-main.cover
+```
+
+Dataset/fixtures:
+
+- Latest `origin/main` merged into the DR-99 branch, including current Marketplace leaderboard/admin usage/notification fixtures.
+- Full `internal/skill` SQLite fixtures, package runner fixtures, relay resolver fixtures, and analytics fixtures.
+
+Verified:
+
+- CI vet target compiles the merged branch after resolving new `marketplaceSkillFromModel` call sites from main.
+- DR-99 tier matrix remains enforced for download/runtime/Marketplace availability after merging current main.
+- Related `internal/skill/...` regressions remain compatible with the one-time entitlement lookup and PLUS/Basic attribution changes.
+
+Coverage:
+
+- Total selected-package coverage: 69.5%.
+- Total `internal/skill/...` coverage: 70.2%.
+
+Result: PASS
+
 ## Related Skill Regression
 
 Command:

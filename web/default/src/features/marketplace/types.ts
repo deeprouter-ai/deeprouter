@@ -55,7 +55,13 @@ export type SkillGrowthEntryPoint =
   | 'saved_list'
   | 'search_results'
   | 'new'
+  | 'new_week'
+  | 'trending'
   | 'recommended'
+  | 'reco_personal'
+  | 'reco_codownload'
+  | 'leaderboard_weekly'
+  | 'leaderboard_monthly'
 
 export type SkillGrowthEventType = 'skill_impression' | 'skill_detail_view'
 
@@ -111,10 +117,18 @@ export interface MarketplaceSkill {
   published_at?: string | null
 }
 
+export type DownloadLeaderboardWindow = '7d' | '30d'
+
+export interface DownloadLeaderboardSkill extends MarketplaceSkill {
+  download_count: number
+  rank: number
+  window: DownloadLeaderboardWindow
+}
+
 export interface MarketplaceEventPayload {
   event_type: 'skill_impression' | 'skill_detail_view'
   skill_id: string
-  entry_point: 'marketplace_card'
+  entry_point: SkillGrowthEntryPoint
 }
 
 export interface DownloadCTA {

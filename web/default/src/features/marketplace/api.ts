@@ -24,6 +24,8 @@ import {
   isSafeDownloadUrl,
 } from './download-utils'
 import type {
+  DownloadLeaderboardSkill,
+  DownloadLeaderboardWindow,
   MarketplaceEventPayload,
   MarketplaceFilters,
   MarketplaceListResponse,
@@ -44,11 +46,30 @@ export interface MarketplaceSkillsParams {
   page?: number
   limit?: number
   sort?: 'name' | 'created_at' | 'featured_rank' | string
+  rail?: 'new_week' | 'trending'
   query?: string
   category?: string
   plan?: MarketplaceFilters['plan']
   kids_safe?: boolean
   featured?: boolean
+}
+
+export async function getMarketplaceRailSkills(
+  rail: 'new_week' | 'trending',
+  filters?: Partial<MarketplaceFilters>
+): Promise<MarketplaceListResponse<MarketplaceSkill>> {
+  return getMarketplaceSkillsWithParams({
+    rail,
+    page: 1,
+    limit: 6,
+    query: filters?.query || undefined,
+    category: filters?.category || undefined,
+    plan:
+      filters?.plan != null && filters.plan !== 'all'
+        ? filters.plan
+        : undefined,
+    kids_safe: filters?.kidsSafeOnly || undefined,
+  })
 }
 
 export async function getMarketplaceSkills(
@@ -74,6 +95,22 @@ export async function getMarketplaceSkillsWithParams(
 ): Promise<MarketplaceListResponse<MarketplaceSkill>> {
   const res = await api.get('/api/v1/marketplace/skills', {
     params,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function getDownloadLeaderboardSkills(params: {
+  window: DownloadLeaderboardWindow
+  category?: string
+  limit?: number
+}): Promise<MarketplaceListResponse<DownloadLeaderboardSkill>> {
+  const res = await api.get('/api/v1/marketplace/leaderboards/downloads', {
+    params: {
+      window: params.window,
+      category: params.category || undefined,
+      limit: params.limit ?? 6,
+    },
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data
