@@ -245,6 +245,7 @@ const (
 	EntryPointReengage           EntryPoint = "reengage"
 	EntryPointAdminPreview       EntryPoint = "admin_preview"
 	EntryPointSearchResults      EntryPoint = "search_results"
+	EntryPointPaywall            EntryPoint = "paywall"
 	// EntryPointSkillPackage is the primary R2 execution entry for downloaded
 	// Skill packages calling the public routing API. It is also used by the
 	// package-download skill_enabled event.
@@ -281,6 +282,7 @@ var validEntryPoints = map[EntryPoint]struct{}{
 	EntryPointReengage:           {},
 	EntryPointAdminPreview:       {},
 	EntryPointSearchResults:      {},
+	EntryPointPaywall:            {},
 	EntryPointSkillPackage:       {},
 	EntryPointAPIToken:           {},
 	EntryPointDownloadedRunner:   {},
