@@ -375,7 +375,7 @@ func TestListModelsTokenLimitIncludesTieredBillingModel(t *testing.T) {
 	require.NotContains(t, ids, "zz-token-unpriced-model")
 }
 
-// TestListModelsTokenLimitWildcardExpandsAgainstGroup verifies the DR-1001
+// TestListModelsTokenLimitWildcardExpandsAgainstGroup verifies the DR-85
 // listing fix: a wildcard whitelist entry ("claude-*") is never listed
 // literally — it expands against the account/group's enabled models, and only
 // matching models appear. Non-matching group models stay hidden.

@@ -2,7 +2,7 @@ package model
 
 import "testing"
 
-// TestMatchModelLimit covers the DR-1001 wildcard whitelist matcher: exact-first,
+// TestMatchModelLimit covers the DR-85 wildcard whitelist matcher: exact-first,
 // trailing-"*" prefix, bare "*", and the negative cases that must stay forbidden.
 func TestMatchModelLimit(t *testing.T) {
 	limitsOf := func(entries ...string) map[string]bool {
@@ -22,7 +22,7 @@ func TestMatchModelLimit(t *testing.T) {
 		{"exact match", limitsOf("claude-opus-4-8"), "claude-opus-4-8", true},
 		{"exact miss", limitsOf("claude-opus-4-8"), "claude-sonnet-4-6", false},
 
-		// The DR-1001 bug: claude-* must match every concrete claude model.
+		// The DR-85 bug: claude-* must match every concrete claude model.
 		{"wildcard claude-* matches opus", limitsOf("claude-*"), "claude-opus-4-8", true},
 		{"wildcard claude-* matches sonnet", limitsOf("claude-*"), "claude-sonnet-4-6", true},
 		{"wildcard claude-* matches haiku", limitsOf("claude-*"), "claude-haiku-4-5-20251001", true},

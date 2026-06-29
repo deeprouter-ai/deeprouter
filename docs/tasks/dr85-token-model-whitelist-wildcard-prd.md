@@ -4,7 +4,7 @@
 > **Author**: Kaitao Lai + Claude
 > **Date**: 2026-06-27
 > **Owner**: DeepRouter Platform + Frontend
-> **Ticket**: DR-1001
+> **Ticket**: DR-85
 > **Parent**: [`docs/PRD.md`](../PRD.md) · 关联 [`api-key-simple-advanced-prd.md`](./api-key-simple-advanced-prd.md)
 > **范围**: 调用密钥的 per-key 模型白名单(`token.ModelLimits`)鉴权语义 + 创建/编辑表单(`web/default/src/features/keys/`)
 
