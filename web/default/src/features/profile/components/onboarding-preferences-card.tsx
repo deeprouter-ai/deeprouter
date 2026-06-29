@@ -41,16 +41,6 @@ type Props = {
 }
 
 type BrandValue = 'claude' | 'openai' | 'gemini' | 'deepseek' | ''
-type ClientValue =
-  | 'cherry-studio'
-  | 'chatbox'
-  | 'lobechat'
-  | 'cursor'
-  | 'claude-code'
-  | 'code'
-  | 'playground'
-  | 'dashboard'
-  | ''
 
 const PERSONA_OPTIONS: ReadonlyArray<{ value: Persona; label: string }> = [
   { value: 'casual', label: 'Casual — chat, write, translate' },
@@ -66,24 +56,17 @@ const BRAND_OPTIONS: ReadonlyArray<{ value: BrandValue; label: string }> = [
   { value: 'deepseek', label: 'DeepSeek' },
 ]
 
-const CLIENT_OPTIONS: ReadonlyArray<{ value: ClientValue; label: string }> = [
-  { value: '', label: 'Not set' },
-  { value: 'cherry-studio', label: 'Cherry Studio' },
-  { value: 'chatbox', label: 'Chatbox' },
-  { value: 'lobechat', label: 'LobeChat' },
-  { value: 'cursor', label: 'Cursor' },
-  { value: 'claude-code', label: 'Claude Code' },
-  { value: 'code', label: 'Python / Node' },
-  { value: 'playground', label: 'In-browser Playground' },
-  { value: 'dashboard', label: 'Just the dashboard' },
-]
-
 /**
- * Lets the user change persona / brand / preferred client after the
+ * Lets the user change persona / favourite AI provider after the
  * onboarding wizard. Hidden when no value has ever been set — keeps
  * /profile uncluttered for the early-stage account that hasn't done
  * the wizard yet (the PersonaPickerHost redirect will pull them to
  * /welcome instead).
+ *
+ * Per CLAUDE.md §0 Rule 1, no third-party client brand names are
+ * surfaced here — the old "Preferred client" selector (Cherry Studio /
+ * Chatbox / …) was removed. The `preferred_client` setting still exists
+ * in the data model but is no longer user-editable from this card.
  */
 export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
   const { t } = useTranslation()
@@ -105,12 +88,7 @@ export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
   const [brand, setBrand] = useState<BrandValue>(
     (initial.brand_preference as BrandValue) ?? ''
   )
-  const [client, setClient] = useState<ClientValue>(
-    (initial.preferred_client as ClientValue) ?? ''
-  )
-  const [saving, setSaving] = useState<null | 'persona' | 'brand' | 'client'>(
-    null
-  )
+  const [saving, setSaving] = useState<null | 'persona' | 'brand'>(null)
 
   // Keep local state in sync when the user record refreshes from
   // another tab / external save.
@@ -123,8 +101,7 @@ export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
       setPersona(initial.persona)
     }
     setBrand((initial.brand_preference as BrandValue) ?? '')
-    setClient((initial.preferred_client as ClientValue) ?? '')
-  }, [initial.persona, initial.brand_preference, initial.preferred_client])
+  }, [initial.persona, initial.brand_preference])
 
   // Only show the card after the user has gone through the wizard at
   // least once. New / OAuth-just-created users land on /welcome via the
@@ -194,23 +171,6 @@ export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
     toast.success(t('Preferences updated'))
   }
 
-  const handleClientChange = async (next: string | null) => {
-    const nextClient = (next ?? '') as ClientValue
-    if (nextClient === client) return
-    const previous = client
-    setClient(nextClient)
-    setSaving('client')
-    const res = await updateUserSettings({ preferred_client: nextClient })
-    setSaving(null)
-    if (!res.success) {
-      setClient(previous)
-      toast.error(res.message || t('Could not save your selection.'))
-      return
-    }
-    onProfileUpdate()
-    toast.success(t('Preferences updated'))
-  }
-
   return (
     <TitledCard
       icon={<Sparkles className='size-4' aria-hidden='true' />}
@@ -219,7 +179,7 @@ export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
         'Set during signup. Change these any time — they only affect the UI, not your billing or access.'
       )}
     >
-      <div className='grid gap-4 sm:grid-cols-3'>
+      <div className='grid gap-4 sm:grid-cols-2'>
         <Row label={t('Persona')} saving={saving === 'persona'}>
           <Select value={persona} onValueChange={handlePersonaChange}>
             <SelectTrigger className='w-full'>
@@ -247,22 +207,6 @@ export function OnboardingPreferencesCard({ profile, onProfileUpdate }: Props) {
             <SelectContent>
               <SelectGroup>
                 {BRAND_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value || 'none'} value={opt.value}>
-                    {t(opt.label)}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </Row>
-        <Row label={t('Preferred client')} saving={saving === 'client'}>
-          <Select value={client} onValueChange={handleClientChange}>
-            <SelectTrigger className='w-full'>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {CLIENT_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value || 'none'} value={opt.value}>
                     {t(opt.label)}
                   </SelectItem>

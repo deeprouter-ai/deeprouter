@@ -174,9 +174,9 @@ export function ApiKeyIntegrationDialog({
               ))}
 
               <TabsContent value='gui' className='mt-3'>
-                <p className='text-muted-foreground text-xs'>
+                <p className='text-muted-foreground text-xs leading-relaxed'>
                   {t(
-                    'Prefer a ready-made app? Open its settings, find the "API key" and "Base URL" (sometimes "Endpoint") fields, paste both, and save.'
+                    'Already use an AI app? Open its settings, find the "API key" and "Base URL" (sometimes "Endpoint") fields, paste both from step 1, and save.'
                   )}
                 </p>
               </TabsContent>

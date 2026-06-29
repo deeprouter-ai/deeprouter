@@ -133,8 +133,8 @@ export function HelpFab() {
             <HelpRow
               icon={<ScrollText className='h-4 w-4' />}
               title={t('Read the setup guides')}
-              subtitle={t('Cherry Studio, Cursor, Code, and more')}
-              to='/onboarding/cherry-studio'
+              subtitle={t('Step-by-step help getting set up')}
+              to='/keys'
             />
             <HelpRow
               icon={<Mail className='h-4 w-4' />}

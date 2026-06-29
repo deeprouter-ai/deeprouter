@@ -57,7 +57,8 @@ type FaqEntry = {
 const FAQS: FaqEntry[] = [
   {
     id: 'what-is-this',
-    question: 'Is this a chat product? How do I start using AI after topping up?',
+    question:
+      'Is this a chat product? How do I start using AI after topping up?',
     answer:
       "No, DeepRouter is not a chat app. It's a single account + wallet that lets you call GPT, Claude, Gemini, DeepSeek and more from any AI tool you already use. After topping up, copy your API key from the Keys page and paste it into your AI tool's settings.",
   },
@@ -71,7 +72,7 @@ const FAQS: FaqEntry[] = [
     id: 'how-billed',
     question: 'How is the billing calculated? How much does ¥1 get me?',
     answer:
-      'Pay per use — every call shows the exact charge in your billing history. Roughly: ¥1 gives you ~6 万字 of Claude Sonnet, ~8 万字 of GPT-4o, or ~70 万字 of DeepSeek V3 (input). Actual cost depends on the model and conversation length.',
+      'Pay per use — every call shows the exact charge in your billing history. Roughly: ¥1 gives you ~4 万字 of Claude Opus 4.8, ~8 万字 of GPT-4o, or ~70 万字 of DeepSeek V3 (input). Actual cost depends on the model and conversation length.',
   },
   {
     id: 'lost-key',
@@ -129,7 +130,7 @@ export function FaqPage() {
       </SectionPageLayout.Description>
       <SectionPageLayout.Content>
         {/* Contact strip — surfaces support upfront so users with urgent
-          * issues don't have to scroll the FAQ first. */}
+         * issues don't have to scroll the FAQ first. */}
         <div className='bg-muted/30 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm'>
           <div className='flex items-center gap-2'>
             <HelpCircle className='text-muted-foreground h-4 w-4' />
