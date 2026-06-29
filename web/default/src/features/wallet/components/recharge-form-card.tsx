@@ -37,6 +37,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { calculateAirwallexAmount, isApiSuccess } from '../api'
+import { QUOTA_PER_DOLLAR } from '../constants'
 import {
   formatCurrency,
   getDiscountLabel,
@@ -364,8 +365,12 @@ export function RechargeFormCard({
                             * order-of-magnitude — see usage-estimate.ts
                             * for the multiplier math. */}
                           {(() => {
+                            // estimateCharsByModel expects raw quota units
+                            // (500_000 = $1), but preset.value is the dollar
+                            // amount — convert first or every model shows a
+                            // nonsense "1 字". Mirrors value-calculator.tsx.
                             const breakdown = estimateCharsByModel(
-                              preset.value
+                              preset.value * QUOTA_PER_DOLLAR
                             )
                             if (breakdown.length === 0) return null
                             return (

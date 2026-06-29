@@ -39,10 +39,12 @@ function defaultBaseUrl(): string {
  * until dismissed (localStorage), so the casual flow is end-to-end:
  *   1. Create key
  *   2. Copy Base URL (visible right here)
- *   3. Paste into Cherry Studio / Chatbox / Claude Code
+ *   3. Paste it into whatever AI tool the user already has
  *
  * Only renders for persona === 'casual'. Dev / team personas don't need
- * this scaffolding.
+ * this scaffolding. Per CLAUDE.md §0 Rule 1, casual surfaces MUST NOT name
+ * third-party client brands (Cherry Studio / Chatbox / …) — those live behind
+ * Developer mode only. Keep this card brand-free.
  */
 export function ApiKeysTutorialCard() {
   const { t } = useTranslation()
@@ -90,7 +92,7 @@ export function ApiKeysTutorialCard() {
       </h3>
       <p className='text-muted-foreground mt-1 pr-8 text-xs'>
         {t(
-          'One key, any AI client. Paste it into Cherry Studio, Chatbox, or Claude Code to chat with Claude / GPT / Gemini / DeepSeek.'
+          'One key, any AI tool. Paste it into the app you already use to chat with Claude / GPT / Gemini / DeepSeek.'
         )}
       </p>
       <ol className='mt-3 space-y-3 text-xs'>
@@ -141,10 +143,10 @@ export function ApiKeysTutorialCard() {
             3
           </span>
           <div className='flex-1'>
-            <p className='font-medium'>{t('Paste into an AI client')}</p>
+            <p className='font-medium'>{t('Paste it into your AI tool')}</p>
             <p className='text-muted-foreground'>
               {t(
-                'Find the "API key" and "Base URL" (sometimes called "Endpoint") fields in your client\'s settings, paste both, and save.'
+                'Open the AI app you already use, find the "API key" and "Base URL" (sometimes called "Endpoint") fields in its settings, paste both, and save.'
               )}
             </p>
           </div>

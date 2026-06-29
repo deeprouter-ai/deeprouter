@@ -47,6 +47,9 @@ func MigrateSkillVersions(db *gorm.DB) error {
 	if err := migrateSkillVersionsConstraints(db); err != nil {
 		return err
 	}
+	if err := migrateSkillVersionInstructionColumns(db); err != nil {
+		return err
+	}
 	if err := createSkillVersionsJSONBColumns(db); err != nil {
 		return err
 	}
@@ -87,6 +90,11 @@ func createSkillVersionsSQLiteTable(db *gorm.DB) error {
 			instruction_template_sha256 char(64) NOT NULL,
 			prompt_guard_template text,
 			output_schema text,
+			download_instructions text NOT NULL DEFAULT '',
+			usage_instructions text NOT NULL DEFAULT '',
+			prerequisites text NOT NULL DEFAULT '[]',
+			quickstart text NOT NULL DEFAULT '[]',
+			example_io text NOT NULL DEFAULT '[]',
 			model_whitelist_snapshot text NOT NULL,
 			required_plan_snapshot varchar(32) NOT NULL,
 			monetization_snapshot text NOT NULL,
@@ -121,6 +129,11 @@ func createSkillVersionsMySQLTable(db *gorm.DB) error {
 			instruction_template_sha256 char(64) NOT NULL,
 			prompt_guard_template text,
 			output_schema text,
+			download_instructions text NOT NULL,
+			usage_instructions text NOT NULL,
+			prerequisites text NOT NULL,
+			quickstart text NOT NULL,
+			example_io text NOT NULL,
 			model_whitelist_snapshot text NOT NULL,
 			required_plan_snapshot varchar(32) NOT NULL,
 			monetization_snapshot text NOT NULL,
@@ -155,6 +168,48 @@ func migrateSkillVersionPackageColumns(db *gorm.DB) error {
 	return nil
 }
 
+func migrateSkillVersionInstructionColumns(db *gorm.DB) error {
+	cols := []struct {
+		name        string
+		sqliteMySQL string
+		postgres    string
+	}{
+		{"download_instructions", "text", "text"},
+		{"usage_instructions", "text", "text"},
+		{"prerequisites", "text", "jsonb"},
+		{"quickstart", "text", "jsonb"},
+		{"example_io", "text", "jsonb"},
+	}
+	for _, col := range cols {
+		if db.Migrator().HasColumn(&SkillVersion{}, col.name) {
+			continue
+		}
+		var sql string
+		switch db.Dialector.Name() {
+		case "postgres":
+			sql = fmt.Sprintf("ALTER TABLE skill_versions ADD COLUMN %s %s", col.name, col.postgres)
+		default:
+			sql = fmt.Sprintf("ALTER TABLE skill_versions ADD COLUMN %s %s", col.name, col.sqliteMySQL)
+		}
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("add skill_versions %s: %w", col.name, err)
+		}
+	}
+	updates := map[string]string{
+		"download_instructions": "''",
+		"usage_instructions":    "''",
+		"prerequisites":         "'[]'",
+		"quickstart":            "'[]'",
+		"example_io":            "'[]'",
+	}
+	for col, value := range updates {
+		if err := db.Exec(fmt.Sprintf("UPDATE skill_versions SET %s = %s WHERE %s IS NULL", col, value, col)).Error; err != nil {
+			return fmt.Errorf("backfill skill_versions %s: %w", col, err)
+		}
+	}
+	return nil
+}
+
 // migrateSkillsConstraints adds the 9 hand-written CHECK constraints to PG and MySQL >= 8.0.16.
 // MySQL < 8.0.16: no-op — named CHECK constraints are parsed but silently ignored by the engine,
 // and the ALTER TABLE ADD CONSTRAINT syntax may not be supported reliably; app-layer
@@ -182,7 +237,7 @@ func migrateSkillsConstraints(db *gorm.DB) error {
 	}{
 		{"chk_skills_status", "status IN ('draft','published','deprecated','archived')"},
 		{"chk_skills_required_plan", "required_plan IN ('free','pro','enterprise')"},
-		{"chk_skills_monetization_type", "monetization_type IN ('free','plan_included','token_markup')"},
+		{"chk_skills_monetization_type", "monetization_type IN ('free','plan_included','token_markup','one_time','plus_exclusive')"},
 		{"chk_skills_kids_approval_status", "kids_approval_status IN ('not_required','pending','approved','emergency_approved','rejected','revoked')"},
 		{"chk_skills_timeout_seconds", "timeout_seconds BETWEEN 1 AND 120"},
 		{"chk_skills_free_quota", "free_quota_per_month IS NULL OR free_quota_per_month >= 0"},
@@ -192,6 +247,11 @@ func migrateSkillsConstraints(db *gorm.DB) error {
 	}
 
 	for _, c := range constraints {
+		if c.name == "chk_skills_monetization_type" && db.Migrator().HasConstraint(&Skill{}, c.name) {
+			if err := db.Migrator().DropConstraint(&Skill{}, c.name); err != nil {
+				return fmt.Errorf("drop constraint %s: %w", c.name, err)
+			}
+		}
 		if db.Migrator().HasConstraint(&Skill{}, c.name) {
 			continue
 		}
@@ -258,6 +318,9 @@ func createSkillVersionsJSONBColumns(db *gorm.DB) error {
 		defaultVal string
 	}{
 		{"output_schema", ""}, // NULL = no output schema (PRD §4.2)
+		{"prerequisites", "'[]'::jsonb"},
+		{"quickstart", "'[]'::jsonb"},
+		{"example_io", "'[]'::jsonb"},
 		{"model_whitelist_snapshot", "'[]'::jsonb"},
 		{"monetization_snapshot", "'{}'::jsonb"}, // object shape, not array
 	}

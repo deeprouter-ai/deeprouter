@@ -31,6 +31,8 @@ func newTestDB(t *testing.T) *gorm.DB {
 		&skillmodel.Skill{},
 		&skillmodel.SkillVersion{},
 		&skillmodel.UserEnabledSkill{},
+		&skillmodel.SkillPurchaseOrder{},
+		&skillmodel.SkillEntitlement{},
 		&platformmodel.User{},
 		&platformmodel.SubscriptionPlan{},
 		&platformmodel.UserSubscription{},
@@ -396,7 +398,9 @@ func TestResolve_DR67_FreeUser_ProSnapshot_ReturnsPlanRequired_NoCharge(t *testi
 	setContextUser(c, user)
 
 	database := newTestDB(t)
-	skill := insertSkill(t, database, defaultSkill())
+	fixture := defaultSkill()
+	fixture.MonetizationType = enums.MonetizationTypeOneTime
+	skill := insertSkill(t, database, fixture)
 	require.NotNil(t, skill.ActiveVersionID)
 	version := defaultSkillVersion(skill.ID, *skill.ActiveVersionID)
 	version.RequiredPlanSnapshot = enums.RequiredPlanPro
@@ -413,6 +417,77 @@ func TestResolve_DR67_FreeUser_ProSnapshot_ReturnsPlanRequired_NoCharge(t *testi
 	var charges int64
 	require.NoError(t, database.Model(&platformmodel.SubscriptionPreConsumeRecord{}).Count(&charges).Error)
 	assert.Equal(t, int64(0), charges, "entitlement block must create no subscription charge/pre-consume record")
+}
+
+func TestResolve_DR100_OneTimeEntitlement_ProSnapshot_SucceedsWithoutSubscription(t *testing.T) {
+	c := newTestContext(t)
+	user := enabledUser(127)
+	user.Group = "default"
+	setContextUser(c, user)
+
+	database := newTestDB(t)
+	fixture := defaultSkill()
+	fixture.MonetizationType = enums.MonetizationTypeOneTime
+	skill := insertSkill(t, database, fixture)
+	require.NotNil(t, skill.ActiveVersionID)
+	version := defaultSkillVersion(skill.ID, *skill.ActiveVersionID)
+	version.RequiredPlanSnapshot = enums.RequiredPlanPro
+	insertSkillVersion(t, database, version)
+	enableSkillRow(t, database, 127, skill.ID)
+	require.NoError(t, skillmodel.GrantOneTimeEntitlement(database, 127, 127, skill.ID, "order-127"))
+
+	skillCtx, code := resolve(c, database, skill.ID)
+	require.Equal(t, errcodes.ErrorCode(""), code)
+	require.NotNil(t, skillCtx)
+	assert.Equal(t, enums.RequiredPlanFree, skillCtx.Plan)
+	assert.True(t, skillCtx.SubActive)
+}
+
+func TestResolve_DR99_ActivePlusUnlocksOneTimeSkillWithoutPurchase(t *testing.T) {
+	c := newTestContext(t)
+	user := enabledUser(227)
+	user.Group = "pro"
+	setContextUser(c, user)
+
+	database := newTestDB(t)
+	fixture := defaultSkill()
+	fixture.MonetizationType = enums.MonetizationTypeOneTime
+	skill := insertSkill(t, database, fixture)
+	require.NotNil(t, skill.ActiveVersionID)
+	version := defaultSkillVersion(skill.ID, *skill.ActiveVersionID)
+	version.RequiredPlanSnapshot = enums.RequiredPlanFree
+	insertSkillVersion(t, database, version)
+	enableSkillRow(t, database, 227, skill.ID)
+	addActiveSubscription(t, database, 227, "pro")
+
+	skillCtx, code := resolve(c, database, skill.ID)
+	require.Equal(t, errcodes.ErrorCode(""), code)
+	require.NotNil(t, skillCtx)
+	assert.Equal(t, enums.RequiredPlanPro, skillCtx.Plan)
+	assert.True(t, skillCtx.SubActive)
+}
+
+func TestResolve_DR99_ExpiredPlusRevokesPlusExclusiveSkill(t *testing.T) {
+	c := newTestContext(t)
+	user := enabledUser(228)
+	user.Group = "pro"
+	setContextUser(c, user)
+
+	database := newTestDB(t)
+	fixture := defaultSkill()
+	fixture.RequiredPlan = enums.RequiredPlanPro
+	fixture.MonetizationType = enums.MonetizationTypePlusExclusive
+	skill := insertSkill(t, database, fixture)
+	require.NotNil(t, skill.ActiveVersionID)
+	version := defaultSkillVersion(skill.ID, *skill.ActiveVersionID)
+	version.RequiredPlanSnapshot = enums.RequiredPlanPro
+	insertSkillVersion(t, database, version)
+	enableSkillRow(t, database, 228, skill.ID)
+	addExpiredSubscription(t, database, 228, "pro")
+
+	skillCtx, code := resolve(c, database, skill.ID)
+	assert.Nil(t, skillCtx)
+	assert.Equal(t, errcodes.ErrSkillSubscriptionInactive, code)
 }
 
 func TestResolve_DR67_ProUser_ActiveSubscription_ProSnapshot_Succeeds(t *testing.T) {

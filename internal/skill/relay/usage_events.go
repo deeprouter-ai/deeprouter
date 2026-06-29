@@ -149,12 +149,16 @@ func buildSuccessfulExecutionEvent(input SuccessfulExecutionEventInput, eventTyp
 		TotalTokens:          totalTokens,
 		LatencyMS:            &latencyMS,
 		Success:              &success,
-		Metadata:             successMetadata(repeatIndex),
+		Metadata:             successMetadata(ctx, repeatIndex),
 	}
 }
 
 func normalizedSuccessEntryPoint(entryPoint string) enums.EntryPoint {
-	// DR-73: successful server-side Skill executions are package executions.
+	if enums.EntryPoint(entryPoint) == enums.EntryPointAPIToken {
+		return enums.EntryPointAPIToken
+	}
+	// DR-73: successful server-side Skill executions are package executions unless
+	// the API token itself is the auth+entitlement principal (DR-101).
 	// Client-provided discovery entry points remain valid for marketplace events,
 	// but must not label execution lifecycle events.
 	return enums.EntryPointSkillPackage
@@ -179,10 +183,15 @@ func tokenCounts(usage *dto.Usage) (*int, *int, *int) {
 	return &inputTokens, &outputTokens, &totalTokens
 }
 
-func successMetadata(repeatIndex *int) skillmodel.SkillJSONB {
+func successMetadata(ctx *SkillRelayContext, repeatIndex *int) skillmodel.SkillJSONB {
 	metadata := map[string]any{
 		"schema_version": "1.0",
 		"producer":       "relay",
+	}
+	if ctx != nil && ctx.Skill != nil {
+		metadata["skill_tier"] = string(ctx.Skill.MonetizationType)
+		metadata["monetization_type"] = string(ctx.Skill.MonetizationType)
+		metadata["user_plan"] = string(ctx.Plan)
 	}
 	if repeatIndex != nil {
 		metadata["repeat_index"] = *repeatIndex

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,6 +74,12 @@ var kidsApprovalFilterValues = map[string]struct{}{
 	string(enums.KidsApprovalStatusRevoked):           {},
 }
 
+var publicRailValues = map[string]struct{}{
+	"":         {},
+	"new_week": {},
+	"trending": {},
+}
+
 const (
 	createSkillSlugMaxLength             = 128
 	createSkillNameMaxLength             = 160
@@ -98,20 +105,41 @@ type PublicSkill struct {
 	FeaturedFlag         bool               `json:"featured_flag"`
 	FeaturedRank         *int               `json:"featured_rank,omitempty"`
 	PublishedAt          *time.Time         `json:"published_at,omitempty"`
+	RatingSummary        RatingSummary      `json:"rating_summary"`
+	DownloadCount        int64              `json:"download_count"`
+	Badges               []string           `json:"badges,omitempty"`
 }
 
 type MarketplaceSkill struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Category         string             `json:"category"`
-	ShortDescription string             `json:"short_description"`
-	RequiredPlan     enums.RequiredPlan `json:"required_plan"`
-	Availability     SkillAvailability  `json:"availability"`
-	Badges           []string           `json:"badges"`
-	Featured         bool               `json:"featured"`
-	IsKidsSafe       bool               `json:"is_kids_safe"`
-	IsKidsExclusive  bool               `json:"is_kids_exclusive"`
+	ID                      string             `json:"id"`
+	Slug                    string             `json:"slug"`
+	Name                    string             `json:"name"`
+	Category                string             `json:"category"`
+	ShortDescription        string             `json:"short_description"`
+	RequiredPlan            enums.RequiredPlan `json:"required_plan"`
+	Availability            SkillAvailability  `json:"availability"`
+	Badges                  []string           `json:"badges"`
+	Featured                bool               `json:"featured"`
+	HotCategoryBoost        bool               `json:"hot_category_boost"`
+	CategoryDemand7D        int64              `json:"category_demand_7d,omitempty"`
+	MerchandisingEntryPoint *enums.EntryPoint  `json:"merchandising_entry_point,omitempty"`
+	Saved                   *bool              `json:"saved,omitempty"`
+	IsKidsSafe              bool               `json:"is_kids_safe"`
+	IsKidsExclusive         bool               `json:"is_kids_exclusive"`
+	RatingSummary           RatingSummary      `json:"rating_summary"`
+	DownloadCount           int64              `json:"download_count"`
+}
+
+type RatingSummary struct {
+	Average float64 `json:"average"`
+	Count   int64   `json:"count"`
+}
+
+type DownloadLeaderboardSkill struct {
+	MarketplaceSkill
+	DownloadCount int64  `json:"download_count"`
+	Rank          int    `json:"rank"`
+	Window        string `json:"window"`
 }
 
 type SkillAvailability struct {
@@ -142,6 +170,8 @@ type AdminSkill struct {
 	ExampleInputs      json.RawMessage          `json:"example_inputs,omitempty"`
 	ExampleOutputs     json.RawMessage          `json:"example_outputs,omitempty"`
 	ModelWhitelist     json.RawMessage          `json:"model_whitelist,omitempty"`
+	Downloads7D        int64                    `json:"downloads_7d"`
+	Downloads30D       int64                    `json:"downloads_30d"`
 }
 
 // DownloadCTA is the download entry-point advertised on the Skill detail
@@ -151,13 +181,23 @@ type DownloadCTA struct {
 	Method string `json:"method"`
 }
 
+type SkillVersionInstructions struct {
+	DownloadInstructions string          `json:"download_instructions"`
+	UsageInstructions    string          `json:"usage_instructions"`
+	Prerequisites        json.RawMessage `json:"prerequisites"`
+	Quickstart           json.RawMessage `json:"quickstart"`
+	ExampleIO            json.RawMessage `json:"example_io"`
+}
+
 // PublicSkillDetail extends PublicSkill with detail-page-only fields:
 // the DeepRouter runtime-dependency flag and the download entry point (DR-53).
 // Only returned by GetMarketplaceSkill, not by the list endpoint.
 type PublicSkillDetail struct {
 	PublicSkill
-	RequiresDeepRouterKey bool        `json:"requires_deeprouter_key"`
-	DownloadCTA           DownloadCTA `json:"download_cta"`
+	RequiresDeepRouterKey bool                     `json:"requires_deeprouter_key"`
+	DownloadCTA           DownloadCTA              `json:"download_cta"`
+	Instructions          SkillVersionInstructions `json:"instructions"`
+	Saved                 bool                     `json:"saved"`
 }
 
 type OpsSkillSummary struct {
@@ -181,6 +221,19 @@ type MySkill struct {
 	Availability MySkillAvailability `json:"availability"`
 }
 
+type SavedSkill struct {
+	SkillID          string             `json:"skill_id"`
+	Slug             string             `json:"slug"`
+	Name             string             `json:"name"`
+	Category         string             `json:"category"`
+	ShortDescription string             `json:"short_description"`
+	SkillStatus      enums.SkillStatus  `json:"skill_status"`
+	RequiredPlan     enums.RequiredPlan `json:"required_plan"`
+	SavedAt          time.Time          `json:"saved_at"`
+	LastUsedAt       *time.Time         `json:"last_used_at"`
+	Enabled          bool               `json:"enabled"`
+}
+
 type MySkillAvailability struct {
 	Executable bool                `json:"executable"`
 	Locked     bool                `json:"locked"`
@@ -199,11 +252,20 @@ var marketplaceEventTypeValues = map[enums.SkillUsageEventType]struct{}{
 }
 
 var marketplaceEventEntryPointValues = map[enums.EntryPoint]struct{}{
-	enums.EntryPointMarketplaceCard: {},
-	enums.EntryPointSkillDetail:     {},
-	enums.EntryPointSearchResults:   {},
-	enums.EntryPointNew:             {},
-	enums.EntryPointRecommended:     {},
+	enums.EntryPointMarketplaceCard:    {},
+	enums.EntryPointSkillDetail:        {},
+	enums.EntryPointSearchResults:      {},
+	enums.EntryPointNew:                {},
+	enums.EntryPointNewWeek:            {},
+	enums.EntryPointTrending:           {},
+	enums.EntryPointRecommended:        {},
+	enums.EntryPointRecoPersonal:       {},
+	enums.EntryPointRecoCodownload:     {},
+	enums.EntryPointLeaderboardWeekly:  {},
+	enums.EntryPointLeaderboardMonthly: {},
+	enums.EntryPointPaywall:            {},
+	enums.EntryPointCategoryDemand:     {},
+	enums.EntryPointUserHome:           {},
 }
 
 func ListMarketplaceSkills(c *gin.Context) {
@@ -220,6 +282,10 @@ func ListMarketplaceSkills(c *gin.Context) {
 		skillapi.AbortQueryError(c, validationErr)
 		return
 	}
+	if validationErr := skillapi.ValidateFilter("rail", c.Query("rail"), publicRailValues); validationErr != nil {
+		skillapi.AbortQueryError(c, validationErr)
+		return
+	}
 	featured, validationErr := optionalBoolFilter(c.Query("featured"), "featured")
 	if validationErr != nil {
 		skillapi.AbortQueryError(c, validationErr)
@@ -233,6 +299,14 @@ func ListMarketplaceSkills(c *gin.Context) {
 
 	db, ok := skillDB(c)
 	if !ok {
+		return
+	}
+	switch c.Query("rail") {
+	case "new_week":
+		listMarketplaceNewWeek(c, db, page, featured, kidsSafe)
+		return
+	case "trending":
+		listMarketplaceTrending(c, db, page, featured, kidsSafe)
 		return
 	}
 	query := listMarketplaceSkillsPublicQuery(db).Where("status = ?", enums.SkillStatusPublished)
@@ -259,6 +333,199 @@ func ListMarketplaceSkills(c *gin.Context) {
 		return
 	}
 
+	hotCategories, err := loadHotCategoryDemandSet(db, analyticsNow(), 3)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills, total, hotCategories)
+}
+
+func listMarketplaceNewWeek(c *gin.Context, db *gorm.DB, page skillapi.PageParams, featured, kidsSafe *bool) {
+	weekStart := time.Now().UTC().AddDate(0, 0, -7)
+	query := listMarketplaceSkillsPublicQuery(db).
+		Where("status = ?", enums.SkillStatusPublished).
+		Where("published_at IS NOT NULL AND published_at >= ?", weekStart)
+	query = applyPublicSkillFilters(query, c)
+	if featured != nil {
+		query = query.Where("featured_flag = ?", *featured)
+	}
+	if kidsSafe != nil {
+		query = query.Where("is_kids_safe = ?", *kidsSafe)
+	}
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		writeDBError(c, err)
+		return
+	}
+
+	var skills []skillmodel.Skill
+	if err := query.Find(&skills).Error; err != nil {
+		writeDBError(c, err)
+		return
+	}
+	hotCategories, err := loadHotCategoryDemandSet(db, analyticsNow(), 3)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		left := hotCategories[skills[i].Category]
+		right := hotCategories[skills[j].Category]
+		if (left != nil) != (right != nil) {
+			return left != nil
+		}
+		if left != nil && right != nil && left.DemandScore7D != right.DemandScore7D {
+			return left.DemandScore7D > right.DemandScore7D
+		}
+		leftPublished := time.Time{}
+		rightPublished := time.Time{}
+		if skills[i].PublishedAt != nil {
+			leftPublished = *skills[i].PublishedAt
+		}
+		if skills[j].PublishedAt != nil {
+			rightPublished = *skills[j].PublishedAt
+		}
+		if !leftPublished.Equal(rightPublished) {
+			return leftPublished.After(rightPublished)
+		}
+		if !skills[i].CreatedAt.Equal(skills[j].CreatedAt) {
+			return skills[i].CreatedAt.After(skills[j].CreatedAt)
+		}
+		return skills[i].Name < skills[j].Name
+	})
+	start := page.Offset
+	if start >= len(skills) {
+		writeMarketplaceSkillListWithCategoryDemand(c, db, page, nil, total, hotCategories)
+		return
+	}
+	end := start + page.Limit
+	if end > len(skills) {
+		end = len(skills)
+	}
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills[start:end], total, hotCategories)
+}
+
+func listMarketplaceTrending(c *gin.Context, db *gorm.DB, page skillapi.PageParams, featured, kidsSafe *bool) {
+	type trendRow struct {
+		SkillID  string
+		Recent   int64
+		Previous int64
+	}
+	now := time.Now().UTC()
+	recentStart := now.AddDate(0, 0, -7)
+	previousStart := now.AddDate(0, 0, -14)
+	var rows []trendRow
+	if err := db.Model(&skillmodel.SkillUsageEvent{}).
+		Select(`skill_id,
+			SUM(CASE WHEN occurred_at >= ? THEN 1 ELSE 0 END) AS recent,
+			SUM(CASE WHEN occurred_at < ? THEN 1 ELSE 0 END) AS previous`, recentStart, recentStart).
+		Where("skill_id IS NOT NULL").
+		Where("event_type IN ?", []enums.SkillUsageEventType{
+			enums.SkillUsageEventTypeEnabled,
+			enums.SkillUsageEventTypeUsed,
+		}).
+		Where("success = ?", true).
+		Where("occurred_at >= ? AND occurred_at < ?", previousStart, now).
+		Group("skill_id").
+		Scan(&rows).Error; err != nil {
+		writeDBError(c, err)
+		return
+	}
+
+	type trendScore struct {
+		SkillID  string
+		Recent   int64
+		Previous int64
+		Score    float64
+	}
+	scores := make([]trendScore, 0, len(rows))
+	for _, row := range rows {
+		if row.SkillID == "" || row.Recent <= 0 {
+			continue
+		}
+		baseline := row.Previous
+		if baseline < 1 {
+			baseline = 1
+		}
+		recentForRate := row.Recent
+		if recentForRate > 20 {
+			recentForRate = 20
+		}
+		scores = append(scores, trendScore{
+			SkillID:  row.SkillID,
+			Recent:   row.Recent,
+			Previous: row.Previous,
+			Score:    float64(recentForRate-row.Previous) / float64(baseline),
+		})
+	}
+	sort.SliceStable(scores, func(i, j int) bool {
+		if scores[i].Score != scores[j].Score {
+			return scores[i].Score > scores[j].Score
+		}
+		if scores[i].Recent != scores[j].Recent {
+			return scores[i].Recent > scores[j].Recent
+		}
+		return scores[i].SkillID < scores[j].SkillID
+	})
+	ids := make([]string, 0, len(scores))
+	scoreByID := make(map[string]trendScore, len(scores))
+	for _, score := range scores {
+		ids = append(ids, score.SkillID)
+		scoreByID[score.SkillID] = score
+	}
+	if len(ids) == 0 {
+		writeMarketplaceSkillList(c, db, page, nil, 0)
+		return
+	}
+
+	query := listMarketplaceSkillsPublicQuery(db).
+		Where("status = ?", enums.SkillStatusPublished).
+		Where("id IN ?", ids)
+	query = applyPublicSkillFilters(query, c)
+	if featured != nil {
+		query = query.Where("featured_flag = ?", *featured)
+	}
+	if kidsSafe != nil {
+		query = query.Where("is_kids_safe = ?", *kidsSafe)
+	}
+
+	var skills []skillmodel.Skill
+	if err := query.Find(&skills).Error; err != nil {
+		writeDBError(c, err)
+		return
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		left := scoreByID[skills[i].ID]
+		right := scoreByID[skills[j].ID]
+		if left.Score != right.Score {
+			return left.Score > right.Score
+		}
+		if left.Recent != right.Recent {
+			return left.Recent > right.Recent
+		}
+		return skills[i].Name < skills[j].Name
+	})
+
+	total := int64(len(skills))
+	start := page.Offset
+	if start >= len(skills) {
+		writeMarketplaceSkillList(c, db, page, nil, total)
+		return
+	}
+	end := start + page.Limit
+	if end > len(skills) {
+		end = len(skills)
+	}
+	writeMarketplaceSkillList(c, db, page, skills[start:end], total)
+}
+
+func writeMarketplaceSkillList(c *gin.Context, db *gorm.DB, page skillapi.PageParams, skills []skillmodel.Skill, total int64) {
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills, total, nil)
+}
+
+func writeMarketplaceSkillListWithCategoryDemand(c *gin.Context, db *gorm.DB, page skillapi.PageParams, skills []skillmodel.Skill, total int64, hotCategories map[string]*CategoryDemandRow) {
 	userInfo, err := marketplaceUserInfo(c, db)
 	if err != nil {
 		writeDBError(c, err)
@@ -269,10 +536,25 @@ func ListMarketplaceSkills(c *gin.Context) {
 		writeDBError(c, err)
 		return
 	}
+	savedBySkillID, err := marketplaceSavedBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	socialProof, err := loadMarketplaceSocialProof(db, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	entitlementBySkillID, err := marketplaceOneTimeEntitlementBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
 
 	out := make([]MarketplaceSkill, 0, len(skills))
 	for _, s := range skills {
-		out = append(out, marketplaceSkillFromModel(s, userInfo, enabledBySkillID[s.ID]))
+		out = append(out, marketplaceSkillFromModelWithCategoryDemand(s, userInfo, enabledBySkillID[s.ID], savedBySkillID[s.ID], entitlementBySkillID[s.ID], socialProof[s.ID], hotCategories[s.Category]))
 	}
 	skillapi.List(c, out, skillapi.NewPagination(page.Page, page.Limit, total))
 }
@@ -290,7 +572,263 @@ func GetMarketplaceSkill(c *gin.Context) {
 		writeSkillLookupError(c, err)
 		return
 	}
-	skillapi.Success(c, publicSkillDetailFromModel(s))
+	instructions := SkillVersionInstructions{
+		Prerequisites: json.RawMessage("[]"),
+		Quickstart:    json.RawMessage("[]"),
+		ExampleIO:     json.RawMessage("[]"),
+	}
+	if s.ActiveVersionID != nil && strings.TrimSpace(*s.ActiveVersionID) != "" {
+		var version skillmodel.SkillVersion
+		if err := db.First(&version, "id = ? AND skill_id = ?", *s.ActiveVersionID, s.ID).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			writeDBError(c, err)
+			return
+		} else if err == nil {
+			instructions = skillVersionInstructionsFromModel(version)
+		}
+	}
+	userInfo, err := marketplaceUserInfo(c, db)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	savedBySkillID, err := marketplaceSavedBySkillID(db, userInfo, []skillmodel.Skill{s})
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	socialProof, err := loadMarketplaceSocialProof(db, []skillmodel.Skill{s})
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	skillapi.Success(c, publicSkillDetailFromModel(s, instructions, savedBySkillID[s.ID], socialProof[s.ID]))
+}
+
+func SaveMarketplaceSkill(c *gin.Context) {
+	saveMarketplaceSkillState(c, true)
+}
+
+func UnsaveMarketplaceSkill(c *gin.Context) {
+	saveMarketplaceSkillState(c, false)
+}
+
+func saveMarketplaceSkillState(c *gin.Context, saved bool) {
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	userID := int64(c.GetInt("id"))
+	if userID <= 0 {
+		skillapi.Error(c, errcodes.ErrAuthRequired, "Authentication required.", nil)
+		return
+	}
+	entryPoint, valid := parseSaveEntryPoint(c.DefaultQuery("entry_point", string(enums.EntryPointSkillDetail)))
+	if !valid {
+		skillapi.Error(c, errcodes.ErrInvalidRequest, "Unsupported entry point.", gin.H{"reason": "INVALID_ENTRY_POINT"})
+		return
+	}
+
+	var s skillmodel.Skill
+	err := db.Select([]string{"id", "status", "active_version_id", "monetization_type"}).
+		Where("status = ?", enums.SkillStatusPublished).
+		Where("id = ? OR slug = ?", c.Param("id"), c.Param("id")).
+		First(&s).Error
+	if err != nil {
+		writeSkillLookupError(c, err)
+		return
+	}
+
+	if saved {
+		err = skillmodel.SaveSkillForUser(db, userID, userID, s.ID, string(entryPoint))
+	} else {
+		err = skillmodel.UnsaveSkillForUser(db, userID, userID, s.ID)
+	}
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	plan := marketplaceGroupToPlan(c.GetString("group"))
+	if err := emitSkillSavedStateEvent(db, userID, s.ID, s.ActiveVersionID, entryPoint, plan, s.MonetizationType, saved); err != nil {
+		writeDBError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+	c.Writer.WriteHeaderNow()
+}
+
+func emitSkillSavedStateEvent(db *gorm.DB, userID int64, skillID string, skillVersionID *string, entryPoint enums.EntryPoint, plan enums.RequiredPlan, monetization enums.MonetizationType, saved bool) error {
+	successVal := true
+	eventType := enums.SkillUsageEventTypeSaved
+	if !saved {
+		eventType = enums.SkillUsageEventTypeUnsaved
+	}
+	event := skillmodel.SkillUsageEvent{
+		EventType:      eventType,
+		SkillID:        &skillID,
+		SkillVersionID: skillVersionID,
+		EntryPoint:     entryPoint,
+		Plan:           &plan,
+		Success:        &successVal,
+		Metadata:       skillmodel.SkillTierEventMetadata(monetization, plan, nil),
+	}
+	if isKidsSession, err := serverResolvedKidsSession(db, userID); err != nil {
+		return err
+	} else if isKidsSession {
+		if err := event.ApplyKidsSessionAnalyticsIdentity(userID, userID, kidsAnalyticsSaltVersion(), kidsAnalyticsDailySalt()); err != nil {
+			return err
+		}
+	} else {
+		uid := userID
+		event.UserID = &uid
+		event.TenantID = &uid
+	}
+	return skillmodel.EmitSkillUsageEvent(db, event)
+}
+
+func parseSaveEntryPoint(raw string) (enums.EntryPoint, bool) {
+	entry := enums.EntryPoint(strings.TrimSpace(raw))
+	switch entry {
+	case enums.EntryPointMarketplaceCard,
+		enums.EntryPointSkillDetail,
+		enums.EntryPointMySkills,
+		enums.EntryPointSavedList,
+		enums.EntryPointFeatured,
+		enums.EntryPointPopular,
+		enums.EntryPointNew,
+		enums.EntryPointRecommended,
+		enums.EntryPointUserHome,
+		enums.EntryPointSearchResults:
+		return entry, true
+	default:
+		return "", false
+	}
+}
+
+func ListPersonalRecommendations(c *gin.Context) {
+	page, validationErr := skillapi.ParsePageParams(c)
+	if validationErr != nil {
+		skillapi.AbortQueryError(c, validationErr)
+		return
+	}
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	userInfo, err := marketplaceUserInfo(c, db)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	if userInfo.IsAnonymous || userInfo.UserID == 0 {
+		skillapi.Error(c, errcodes.ErrAuthRequired, "Authentication required.", nil)
+		return
+	}
+
+	skills, total, err := personalRecommendationSkills(db, userInfo, page.Limit)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	writeMarketplaceRecommendationList(c, db, userInfo, skills, page, total)
+}
+
+func ListCoDownloadRecommendations(c *gin.Context) {
+	page, validationErr := skillapi.ParsePageParams(c)
+	if validationErr != nil {
+		skillapi.AbortQueryError(c, validationErr)
+		return
+	}
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	var target skillmodel.Skill
+	if err := db.Select([]string{"id"}).
+		Where("status = ?", enums.SkillStatusPublished).
+		Where("id = ? OR slug = ?", c.Param("id"), c.Param("id")).
+		First(&target).Error; err != nil {
+		writeSkillLookupError(c, err)
+		return
+	}
+	userInfo, err := marketplaceUserInfo(c, db)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+
+	skills, total, err := coDownloadRecommendationSkills(db, userInfo, target.ID, page.Limit)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	writeMarketplaceRecommendationList(c, db, userInfo, skills, page, total)
+}
+
+func ListDownloadLeaderboards(c *gin.Context) {
+	page, validationErr := skillapi.ParsePageParams(c)
+	if validationErr != nil {
+		skillapi.AbortQueryError(c, validationErr)
+		return
+	}
+	window, duration, valid := parseDownloadLeaderboardWindow(c)
+	if !valid {
+		return
+	}
+	if page.Page != skillapi.DefaultPage {
+		skillapi.AbortQueryError(c, &skillapi.QueryValidationError{
+			Code:    errcodes.ErrInvalidRequest,
+			Message: "download leaderboards support page=1 only",
+			Detail:  gin.H{"reason": "INVALID_PAGINATION"},
+		})
+		return
+	}
+
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	userInfo, err := marketplaceUserInfo(c, db)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	now := analyticsNow()
+	rows, total, err := loadDownloadLeaderboardRows(db, now.Add(-duration), now, strings.TrimSpace(c.Query("category")), page.Limit)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+
+	skills := make([]skillmodel.Skill, 0, len(rows))
+	for _, row := range rows {
+		skills = append(skills, row.Skill)
+	}
+	enabledBySkillID, err := marketplaceEnablementBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	savedBySkillID, err := marketplaceSavedBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	entitlementBySkillID, err := marketplaceOneTimeEntitlementBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+
+	out := make([]DownloadLeaderboardSkill, 0, len(rows))
+	for i, row := range rows {
+		out = append(out, DownloadLeaderboardSkill{
+			MarketplaceSkill: marketplaceSkillFromModel(row.Skill, userInfo, enabledBySkillID[row.Skill.ID], savedBySkillID[row.Skill.ID], entitlementBySkillID[row.Skill.ID], marketplaceSocialProof{DownloadCount: row.DownloadCount}),
+			DownloadCount:    row.DownloadCount,
+			Rank:             i + 1,
+			Window:           window,
+		})
+	}
+	skillapi.List(c, out, skillapi.NewPagination(skillapi.DefaultPage, page.Limit, total))
 }
 
 // RecordMarketplaceSkillEvent ingests privacy-safe client-side discovery events
@@ -319,7 +857,7 @@ func RecordMarketplaceSkillEvent(c *gin.Context) {
 
 	var s skillmodel.Skill
 	err := db.Select([]string{
-		"id", "status", "active_version_id", "is_kids_safe", "is_kids_exclusive",
+		"id", "status", "active_version_id", "monetization_type", "is_kids_safe", "is_kids_exclusive",
 	}).Where("status = ?", enums.SkillStatusPublished).
 		Where("id = ? OR slug = ?", c.Param("id"), c.Param("id")).
 		First(&s).Error
@@ -341,7 +879,7 @@ func RecordMarketplaceSkillEvent(c *gin.Context) {
 		IsKidsSafeSkill:      &s.IsKidsSafe,
 		IsKidsExclusiveSkill: &s.IsKidsExclusive,
 		Success:              &successVal,
-		Metadata:             skillmodel.SkillJSONB(`{}`),
+		Metadata:             skillmodel.SkillTierEventMetadata(s.MonetizationType, plan, nil),
 	}
 	if userID > 0 {
 		if isKidsSession, err := serverResolvedKidsSession(db, userID); err != nil {
@@ -386,6 +924,7 @@ func ListMySkills(c *gin.Context) {
 		Name              string
 		Status            enums.SkillStatus
 		RequiredPlan      enums.RequiredPlan
+		MonetizationType  enums.MonetizationType
 		IsKidsSafe        bool
 		IsKidsExclusive   bool
 		FreeQuotaPerMonth *int
@@ -397,7 +936,7 @@ func ListMySkills(c *gin.Context) {
 	var rows []mySkillRow
 	if err := db.Table("user_enabled_skills AS ues").
 		Select(`skills.id AS skill_id, skills.slug, skills.name, skills.status,
-			skills.required_plan, skills.is_kids_safe, skills.is_kids_exclusive,
+			skills.required_plan, skills.monetization_type, skills.is_kids_safe, skills.is_kids_exclusive,
 			skills.free_quota_per_month, ues.enabled, ues.enabled_at, ues.last_used_at`).
 		Joins("JOIN skills ON skills.id = ues.skill_id").
 		Where("ues.user_id = ? AND ues.tenant_id = ? AND ues.enabled = ? AND ues.removed_at IS NULL", userID, userID, true).
@@ -419,16 +958,33 @@ func ListMySkills(c *gin.Context) {
 		return
 	}
 	userInfo.IsKidsSession = kidsMode
+	mySkillModels := make([]skillmodel.Skill, 0, len(rows))
+	for _, row := range rows {
+		mySkillModels = append(mySkillModels, skillmodel.Skill{ID: row.SkillID})
+	}
+	entitlementBySkillID, err := marketplaceOneTimeEntitlementBySkillID(db, marketplaceUserContext{UserID: userID}, mySkillModels)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
 
 	out := make([]MySkill, 0, len(rows))
 	for _, row := range rows {
 		result := availability.Resolve(availability.SkillInfo{
 			Status:            row.Status,
 			RequiredPlan:      row.RequiredPlan,
+			MonetizationType:  row.MonetizationType,
 			IsKidsSafe:        row.IsKidsSafe,
 			IsKidsExclusive:   row.IsKidsExclusive,
 			FreeQuotaPerMonth: row.FreeQuotaPerMonth,
-		}, userInfo)
+		}, availability.UserInfo{
+			Plan:                  userInfo.Plan,
+			SubActive:             userInfo.SubActive,
+			IsEnabled:             userInfo.IsEnabled,
+			WasEnabled:            userInfo.WasEnabled,
+			IsKidsSession:         userInfo.IsKidsSession,
+			HasOneTimeEntitlement: entitlementBySkillID[row.SkillID],
+		})
 		out = append(out, MySkill{
 			SkillID:      row.SkillID,
 			Slug:         row.Slug,
@@ -442,6 +998,60 @@ func ListMySkills(c *gin.Context) {
 		})
 	}
 
+	skillapi.Success(c, out)
+}
+
+func ListSavedSkills(c *gin.Context) {
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	userID := int64(c.GetInt("id"))
+	if userID <= 0 {
+		skillapi.Error(c, errcodes.ErrAuthRequired, "Authentication required.", nil)
+		return
+	}
+
+	type savedSkillRow struct {
+		SkillID          string
+		Slug             string
+		Name             string
+		Category         string
+		ShortDescription string
+		Status           enums.SkillStatus
+		RequiredPlan     enums.RequiredPlan
+		SavedAt          time.Time
+		LastUsedAt       *time.Time
+		Enabled          bool
+	}
+	var rows []savedSkillRow
+	if err := db.Table("user_saved_skills AS uss").
+		Select(`skills.id AS skill_id, skills.slug, skills.name, skills.category,
+			skills.short_description, skills.status, skills.required_plan,
+			uss.saved_at, ues.last_used_at, COALESCE(ues.enabled, ?) AS enabled`, false).
+		Joins("JOIN skills ON skills.id = uss.skill_id").
+		Joins("LEFT JOIN user_enabled_skills AS ues ON ues.user_id = uss.user_id AND ues.tenant_id = uss.tenant_id AND ues.skill_id = uss.skill_id").
+		Where("uss.user_id = ? AND uss.tenant_id = ? AND uss.saved = ?", userID, userID, true).
+		Order("uss.saved_at DESC, skills.name ASC").
+		Scan(&rows).Error; err != nil {
+		writeDBError(c, err)
+		return
+	}
+	out := make([]SavedSkill, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, SavedSkill{
+			SkillID:          row.SkillID,
+			Slug:             row.Slug,
+			Name:             row.Name,
+			Category:         row.Category,
+			ShortDescription: row.ShortDescription,
+			SkillStatus:      row.Status,
+			RequiredPlan:     row.RequiredPlan,
+			SavedAt:          row.SavedAt,
+			LastUsedAt:       row.LastUsedAt,
+			Enabled:          row.Enabled,
+		})
+	}
 	skillapi.Success(c, out)
 }
 
@@ -561,10 +1171,25 @@ func ListAdminSkills(c *gin.Context) {
 		writeDBError(c, err)
 		return
 	}
+	skillIDs := make([]string, 0, len(skills))
+	for _, s := range skills {
+		skillIDs = append(skillIDs, s.ID)
+	}
+	now := analyticsNow()
+	downloads7D, err := loadDownloadCountsBySkill(db, skillIDs, now.Add(-7*24*time.Hour), now)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	downloads30D, err := loadDownloadCountsBySkill(db, skillIDs, now.Add(-30*24*time.Hour), now)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
 
 	out := make([]AdminSkill, 0, len(skills))
 	for _, s := range skills {
-		out = append(out, adminSkillFromModel(s))
+		out = append(out, adminSkillFromModelWithDownloads(s, downloads7D[s.ID], downloads30D[s.ID]))
 	}
 	skillapi.List(c, out, skillapi.NewPagination(page.Page, page.Limit, total))
 }
@@ -651,8 +1276,12 @@ func listMarketplaceSkillsPublicQuery(db *gorm.DB) *gorm.DB {
 		"free_quota_per_month",
 		"featured_flag",
 		"featured_rank",
+		"published_at",
+		"created_at",
 		"is_kids_safe",
 		"is_kids_exclusive",
+		"published_at",
+		"created_at",
 	})
 }
 
@@ -758,22 +1387,36 @@ type marketplaceUserContext struct {
 	SubActive   bool
 }
 
-func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, enabled bool) MarketplaceSkill {
+type marketplaceSocialProof struct {
+	RatingSummary RatingSummary
+	DownloadCount int64
+	Trending      bool
+}
+
+const marketplacePopularDownloadThreshold int64 = 100
+
+func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, enabled bool, saved bool, hasOneTimeEntitlement bool, proof marketplaceSocialProof) MarketplaceSkill {
+	return marketplaceSkillFromModelWithCategoryDemand(s, user, enabled, saved, hasOneTimeEntitlement, proof, nil)
+}
+
+func marketplaceSkillFromModelWithCategoryDemand(s skillmodel.Skill, user marketplaceUserContext, enabled bool, saved bool, hasOneTimeEntitlement bool, proof marketplaceSocialProof, demand *CategoryDemandRow) MarketplaceSkill {
 	result := availability.Resolve(availability.SkillInfo{
 		Status:            s.Status,
 		RequiredPlan:      s.RequiredPlan,
 		IsKidsSafe:        s.IsKidsSafe,
 		IsKidsExclusive:   s.IsKidsExclusive,
 		FreeQuotaPerMonth: s.FreeQuotaPerMonth,
+		MonetizationType:  s.MonetizationType,
 	}, availability.UserInfo{
-		IsAnonymous:   user.IsAnonymous,
-		IsKidsSession: user.IsKidsMode,
-		Plan:          user.Plan,
-		SubActive:     user.SubActive,
-		IsEnabled:     enabled,
-		WasEnabled:    enabled,
+		IsAnonymous:           user.IsAnonymous,
+		IsKidsSession:         user.IsKidsMode,
+		Plan:                  user.Plan,
+		SubActive:             user.SubActive,
+		IsEnabled:             enabled,
+		WasEnabled:            enabled,
+		HasOneTimeEntitlement: hasOneTimeEntitlement,
 	})
-	return MarketplaceSkill{
+	out := MarketplaceSkill{
 		ID:               s.ID,
 		Slug:             s.Slug,
 		Name:             s.Name,
@@ -781,11 +1424,749 @@ func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, 
 		ShortDescription: s.ShortDescription,
 		RequiredPlan:     s.RequiredPlan,
 		Availability:     skillAvailabilityFromResult(result),
-		Badges:           marketplaceBadges(s),
+		Badges:           marketplaceBadges(s, proof),
 		Featured:         s.FeaturedFlag,
 		IsKidsSafe:       s.IsKidsSafe,
 		IsKidsExclusive:  s.IsKidsExclusive,
+		RatingSummary:    proof.RatingSummary,
+		DownloadCount:    proof.DownloadCount,
 	}
+	if demand != nil && demand.DemandScore7D > 0 {
+		entryPoint := enums.EntryPointCategoryDemand
+		out.HotCategoryBoost = true
+		out.CategoryDemand7D = demand.DemandScore7D
+		out.MerchandisingEntryPoint = &entryPoint
+		out.Badges = append(out.Badges, "hot_category")
+	}
+	if !user.IsAnonymous && user.UserID != 0 {
+		out.Saved = &saved
+	}
+	return out
+}
+
+type categoryAffinityRow struct {
+	Category  string
+	Downloads int64
+}
+
+type CategoryDemandRow struct {
+	Category          string   `json:"category"`
+	Downloads7D       int64    `json:"downloads_7d"`
+	Downloads30D      int64    `json:"downloads_30d"`
+	SuccessfulRuns7D  int64    `json:"successful_runs_7d"`
+	SuccessfulRuns30D int64    `json:"successful_runs_30d"`
+	DemandScore7D     int64    `json:"demand_score_7d"`
+	DemandScore30D    int64    `json:"demand_score_30d"`
+	TrendPct          *float64 `json:"trend_pct"`
+	Hot               bool     `json:"hot"`
+}
+
+type coDownloadRow struct {
+	SkillID string
+	Count   int64
+}
+
+type downloadLeaderboardRow struct {
+	Skill         skillmodel.Skill
+	DownloadCount int64
+}
+
+var downloadAcquisitionEntryPoints = []enums.EntryPoint{
+	enums.EntryPointSkillPackage,
+	enums.EntryPointNew,
+	enums.EntryPointNewWeek,
+	enums.EntryPointRecommended,
+	enums.EntryPointRecoPersonal,
+	enums.EntryPointRecoCodownload,
+	enums.EntryPointLeaderboardWeekly,
+	enums.EntryPointLeaderboardMonthly,
+	enums.EntryPointCategoryDemand,
+}
+
+func parseDownloadLeaderboardWindow(c *gin.Context) (string, time.Duration, bool) {
+	switch strings.TrimSpace(c.DefaultQuery("window", "7d")) {
+	case "7d":
+		return "7d", 7 * 24 * time.Hour, true
+	case "30d":
+		return "30d", 30 * 24 * time.Hour, true
+	default:
+		skillapi.Error(c, errcodes.ErrInvalidRequest, "window must be 7d or 30d", gin.H{"reason": "INVALID_WINDOW"})
+		return "", 0, false
+	}
+}
+
+func downloadCountsQuery(db *gorm.DB, start, end time.Time, skillIDs []string) *gorm.DB {
+	query := db.Model(&skillmodel.SkillUsageEvent{}).
+		Select("skill_id, count(*) AS download_count").
+		Where("occurred_at >= ? AND occurred_at < ?", start.UTC(), end.UTC()).
+		Where("skill_id IS NOT NULL").
+		Where("success = ?", true).
+		Where(
+			db.Where("event_type = ? AND entry_point IN ?", enums.SkillUsageEventTypeEnabled, downloadAcquisitionEntryPoints).
+				Or("event_type = ?", enums.SkillUsageEventTypePurchased),
+		).
+		Group("skill_id")
+	if len(skillIDs) > 0 {
+		query = query.Where("skill_id IN ?", skillIDs)
+	}
+	return query
+}
+
+func categoryDownloadCounts(db *gorm.DB, start, end time.Time, includeKids bool) (map[string]int64, error) {
+	var rows []struct {
+		Category      string
+		DownloadCount int64
+	}
+	query := db.Model(&skillmodel.SkillUsageEvent{}).
+		Select("skills.category AS category, count(*) AS download_count").
+		Joins("JOIN skills ON skills.id = skill_usage_events.skill_id").
+		Where("skill_usage_events.occurred_at >= ? AND skill_usage_events.occurred_at < ?", start.UTC(), end.UTC()).
+		Where("skill_usage_events.skill_id IS NOT NULL").
+		Where("skill_usage_events.success = ?", true).
+		Where("skills.status = ?", enums.SkillStatusPublished).
+		Where(
+			db.Where("skill_usage_events.event_type = ? AND skill_usage_events.entry_point IN ?", enums.SkillUsageEventTypeEnabled, downloadAcquisitionEntryPoints).
+				Or("skill_usage_events.event_type = ?", enums.SkillUsageEventTypePurchased),
+		).
+		Group("skills.category")
+	if !includeKids {
+		query = query.Where("skill_usage_events.is_kids_session = ?", false)
+	}
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Category) == "" {
+			continue
+		}
+		out[row.Category] = row.DownloadCount
+	}
+	return out, nil
+}
+
+func categorySuccessfulRunCounts(db *gorm.DB, start, end time.Time, includeKids bool) (map[string]int64, error) {
+	var rows []struct {
+		Category string
+		RunCount int64
+	}
+	query := analyticsEventsQuery(db, start, end, includeKids).
+		Select("skills.category AS category, count(*) AS run_count").
+		Joins("JOIN skills ON skills.id = skill_usage_events.skill_id").
+		Where("skill_usage_events.event_type = ? AND skill_usage_events.success = ?", enums.SkillUsageEventTypeUsed, true).
+		Where("skill_usage_events.skill_id IS NOT NULL").
+		Where("skills.status = ?", enums.SkillStatusPublished).
+		Group("skills.category")
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Category) == "" {
+			continue
+		}
+		out[row.Category] = row.RunCount
+	}
+	return out, nil
+}
+
+func loadCategoryDemandRows(db *gorm.DB, now time.Time, includeKids bool, limit int) ([]CategoryDemandRow, error) {
+	end := now.UTC()
+	sevenStart := end.Add(-7 * 24 * time.Hour)
+	previousStart := end.Add(-14 * 24 * time.Hour)
+	thirtyStart := end.Add(-30 * 24 * time.Hour)
+
+	downloads7D, err := categoryDownloadCounts(db, sevenStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	downloadsPrevious, err := categoryDownloadCounts(db, previousStart, sevenStart, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	downloads30D, err := categoryDownloadCounts(db, thirtyStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runs7D, err := categorySuccessfulRunCounts(db, sevenStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runsPrevious, err := categorySuccessfulRunCounts(db, previousStart, sevenStart, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runs30D, err := categorySuccessfulRunCounts(db, thirtyStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+
+	categories := map[string]struct{}{}
+	for category := range downloads7D {
+		categories[category] = struct{}{}
+	}
+	for category := range downloads30D {
+		categories[category] = struct{}{}
+	}
+	for category := range runs7D {
+		categories[category] = struct{}{}
+	}
+	for category := range runs30D {
+		categories[category] = struct{}{}
+	}
+
+	rows := make([]CategoryDemandRow, 0, len(categories))
+	for category := range categories {
+		score7D := downloads7D[category] + runs7D[category]
+		score30D := downloads30D[category] + runs30D[category]
+		previousScore := downloadsPrevious[category] + runsPrevious[category]
+		var trend *float64
+		if score7D > 0 || previousScore > 0 {
+			baseline := previousScore
+			if baseline < 1 {
+				baseline = 1
+			}
+			value := float64(score7D-previousScore) / float64(baseline)
+			trend = &value
+		}
+		rows = append(rows, CategoryDemandRow{
+			Category:          category,
+			Downloads7D:       downloads7D[category],
+			Downloads30D:      downloads30D[category],
+			SuccessfulRuns7D:  runs7D[category],
+			SuccessfulRuns30D: runs30D[category],
+			DemandScore7D:     score7D,
+			DemandScore30D:    score30D,
+			TrendPct:          trend,
+		})
+	}
+
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].DemandScore7D != rows[j].DemandScore7D {
+			return rows[i].DemandScore7D > rows[j].DemandScore7D
+		}
+		leftTrend := float64(-1 << 30)
+		rightTrend := float64(-1 << 30)
+		if rows[i].TrendPct != nil {
+			leftTrend = *rows[i].TrendPct
+		}
+		if rows[j].TrendPct != nil {
+			rightTrend = *rows[j].TrendPct
+		}
+		if leftTrend != rightTrend {
+			return leftTrend > rightTrend
+		}
+		if rows[i].DemandScore30D != rows[j].DemandScore30D {
+			return rows[i].DemandScore30D > rows[j].DemandScore30D
+		}
+		return rows[i].Category < rows[j].Category
+	})
+
+	for i := range rows {
+		rows[i].Hot = i < 3 && rows[i].DemandScore7D > 0
+	}
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows, nil
+}
+
+func loadHotCategoryDemandSet(db *gorm.DB, now time.Time, limit int) (map[string]*CategoryDemandRow, error) {
+	rows, err := loadCategoryDemandRows(db, now, false, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*CategoryDemandRow, len(rows))
+	for i := range rows {
+		if !rows[i].Hot {
+			continue
+		}
+		out[rows[i].Category] = &rows[i]
+	}
+	return out, nil
+}
+
+func loadDownloadCountsBySkill(db *gorm.DB, skillIDs []string, start, end time.Time) (map[string]int64, error) {
+	out := make(map[string]int64, len(skillIDs))
+	if len(skillIDs) == 0 {
+		return out, nil
+	}
+	var rows []struct {
+		SkillID       string
+		DownloadCount int64
+	}
+	if err := downloadCountsQuery(db, start, end, skillIDs).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		out[row.SkillID] = row.DownloadCount
+	}
+	return out, nil
+}
+
+func loadTotalDownloadCountsBySkill(db *gorm.DB, skillIDs []string) (map[string]int64, error) {
+	out := make(map[string]int64, len(skillIDs))
+	if len(skillIDs) == 0 {
+		return out, nil
+	}
+	var enabledRows []struct {
+		SkillID       string
+		DownloadCount int64
+	}
+	if err := db.Table("user_enabled_skills").
+		Select("skill_id, COUNT(*) AS download_count").
+		Where("skill_id IN ?", skillIDs).
+		Group("skill_id").
+		Scan(&enabledRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range enabledRows {
+		out[row.SkillID] += row.DownloadCount
+	}
+
+	if !db.Migrator().HasTable("skill_purchase_orders") {
+		return out, nil
+	}
+	var purchaseRows []struct {
+		SkillID       string
+		DownloadCount int64
+	}
+	if err := db.Table("skill_purchase_orders AS spo").
+		Select("spo.skill_id, COUNT(*) AS download_count").
+		Where("spo.skill_id IN ? AND spo.status = ?", skillIDs, skillmodel.SkillPurchaseStatusSucceeded).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM user_enabled_skills AS ues
+			WHERE ues.skill_id = spo.skill_id
+			  AND ues.user_id = spo.user_id
+			  AND ues.tenant_id = spo.tenant_id
+		)`).
+		Group("spo.skill_id").
+		Scan(&purchaseRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range purchaseRows {
+		out[row.SkillID] += row.DownloadCount
+	}
+	return out, nil
+}
+
+func loadMarketplaceSocialProof(db *gorm.DB, skills []skillmodel.Skill) (map[string]marketplaceSocialProof, error) {
+	out := make(map[string]marketplaceSocialProof, len(skills))
+	if len(skills) == 0 {
+		return out, nil
+	}
+	ids := make([]string, 0, len(skills))
+	for _, s := range skills {
+		ids = append(ids, s.ID)
+		out[s.ID] = marketplaceSocialProof{}
+	}
+	downloads, err := loadTotalDownloadCountsBySkill(db, ids)
+	if err != nil {
+		return nil, err
+	}
+	ratings, err := loadApprovedRatingSummariesBySkill(db, ids)
+	if err != nil {
+		return nil, err
+	}
+	trending, err := loadTrendingSkillIDs(db, ids, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		proof := out[id]
+		proof.DownloadCount = downloads[id]
+		proof.RatingSummary = ratings[id]
+		proof.Trending = trending[id]
+		out[id] = proof
+	}
+	return out, nil
+}
+
+func loadTrendingSkillIDs(db *gorm.DB, skillIDs []string, now time.Time) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(skillIDs) == 0 {
+		return out, nil
+	}
+	recentStart := now.AddDate(0, 0, -7)
+	var rows []struct {
+		SkillID string
+		Count   int64
+	}
+	if err := db.Model(&skillmodel.SkillUsageEvent{}).
+		Select("skill_id, COUNT(*) AS count").
+		Where("skill_id IN ?", skillIDs).
+		Where("skill_id IS NOT NULL").
+		Where("success = ?", true).
+		Where("occurred_at >= ? AND occurred_at < ?", recentStart, now).
+		Where("event_type IN ?", []enums.SkillUsageEventType{
+			enums.SkillUsageEventTypeEnabled,
+			enums.SkillUsageEventTypeUsed,
+		}).
+		Group("skill_id").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.Count > 0 {
+			out[row.SkillID] = true
+		}
+	}
+	return out, nil
+}
+
+func loadApprovedRatingSummariesBySkill(db *gorm.DB, skillIDs []string) (map[string]RatingSummary, error) {
+	out := make(map[string]RatingSummary, len(skillIDs))
+	if len(skillIDs) == 0 {
+		return out, nil
+	}
+	table, statusColumn, ok, err := publicRatingSource(db)
+	if err != nil || !ok {
+		return out, err
+	}
+	var rows []struct {
+		SkillID string
+		Average float64
+		Count   int64
+	}
+	if err := db.Table(table).
+		Select("skill_id, AVG(rating) AS average, COUNT(*) AS count").
+		Where("skill_id IN ?", skillIDs).
+		Where(statusColumn+" IN ?", []string{"approved", "published"}).
+		Group("skill_id").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		out[row.SkillID] = RatingSummary{
+			Average: float64(int(row.Average*10+0.5)) / 10,
+			Count:   row.Count,
+		}
+	}
+	return out, nil
+}
+
+func publicRatingSource(db *gorm.DB) (table string, statusColumn string, ok bool, err error) {
+	for _, candidate := range []string{"skill_ratings", "skill_reviews"} {
+		if !db.Migrator().HasTable(candidate) {
+			continue
+		}
+		cols, colsErr := db.Migrator().ColumnTypes(candidate)
+		if colsErr != nil {
+			return "", "", false, colsErr
+		}
+		hasSkillID := false
+		hasRating := false
+		status := ""
+		for _, col := range cols {
+			switch strings.ToLower(col.Name()) {
+			case "skill_id":
+				hasSkillID = true
+			case "rating":
+				hasRating = true
+			case "status":
+				status = col.Name()
+			case "moderation_status", "approval_status", "review_status":
+				if status == "" {
+					status = col.Name()
+				}
+			}
+		}
+		if hasSkillID && hasRating && status != "" {
+			return candidate, status, true, nil
+		}
+	}
+	return "", "", false, nil
+}
+
+func loadDownloadLeaderboardRows(db *gorm.DB, start, end time.Time, category string, limit int) ([]downloadLeaderboardRow, int64, error) {
+	totalQuery := db.Table("skills").
+		Joins("JOIN (?) AS downloads ON downloads.skill_id = skills.id", downloadCountsQuery(db, start, end, nil)).
+		Where("skills.status = ?", enums.SkillStatusPublished)
+	if category != "" {
+		totalQuery = totalQuery.Where("skills.category = ?", category)
+	}
+	var total int64
+	if err := totalQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var rows []struct {
+		ID                string
+		Slug              string
+		Name              string
+		Category          string
+		ShortDescription  string
+		Status            enums.SkillStatus
+		RequiredPlan      enums.RequiredPlan
+		FreeQuotaPerMonth *int
+		FeaturedFlag      bool
+		FeaturedRank      *int
+		IsKidsSafe        bool
+		IsKidsExclusive   bool
+		DownloadCount     int64
+	}
+	query := db.Table("skills").
+		Select(`skills.id, skills.slug, skills.name, skills.category, skills.short_description,
+			skills.status, skills.required_plan, skills.free_quota_per_month,
+			skills.featured_flag, skills.featured_rank, skills.is_kids_safe,
+			skills.is_kids_exclusive, downloads.download_count`).
+		Joins("JOIN (?) AS downloads ON downloads.skill_id = skills.id", downloadCountsQuery(db, start, end, nil)).
+		Where("skills.status = ?", enums.SkillStatusPublished)
+	if category != "" {
+		query = query.Where("skills.category = ?", category)
+	}
+	if err := query.Order("downloads.download_count DESC").
+		Order("LOWER(skills.name) ASC").
+		Order("skills.id ASC").
+		Limit(limit).
+		Scan(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+
+	out := make([]downloadLeaderboardRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, downloadLeaderboardRow{
+			Skill: skillmodel.Skill{
+				ID:                row.ID,
+				Slug:              row.Slug,
+				Name:              row.Name,
+				Category:          row.Category,
+				ShortDescription:  row.ShortDescription,
+				Status:            row.Status,
+				RequiredPlan:      row.RequiredPlan,
+				FreeQuotaPerMonth: row.FreeQuotaPerMonth,
+				FeaturedFlag:      row.FeaturedFlag,
+				FeaturedRank:      row.FeaturedRank,
+				IsKidsSafe:        row.IsKidsSafe,
+				IsKidsExclusive:   row.IsKidsExclusive,
+			},
+			DownloadCount: row.DownloadCount,
+		})
+	}
+	return out, total, nil
+}
+
+func personalRecommendationSkills(db *gorm.DB, user marketplaceUserContext, limit int) ([]skillmodel.Skill, int64, error) {
+	var categoryRows []categoryAffinityRow
+	if err := db.Table("user_enabled_skills AS ues").
+		Select("skills.category AS category, COUNT(*) AS downloads").
+		Joins("JOIN skills ON skills.id = ues.skill_id").
+		Where("ues.user_id = ? AND ues.tenant_id = ? AND ues.enabled = ? AND ues.removed_at IS NULL", user.UserID, user.UserID, true).
+		Group("skills.category").
+		Order("downloads DESC, MAX(COALESCE(ues.last_used_at, ues.enabled_at)) DESC, category ASC").
+		Scan(&categoryRows).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(categoryRows) == 0 {
+		return fallbackRecommendationSkills(db, user, "", limit)
+	}
+
+	categories := make([]string, 0, len(categoryRows))
+	categoryRank := make(map[string]int, len(categoryRows))
+	for i, row := range categoryRows {
+		categories = append(categories, row.Category)
+		categoryRank[row.Category] = i
+	}
+
+	enabledIDs, err := userEnabledSkillIDs(db, user.UserID)
+	if err != nil {
+		return nil, 0, err
+	}
+	query := listMarketplaceSkillsPublicQuery(db).Where("status = ?", enums.SkillStatusPublished).
+		Where("category IN ?", categories)
+	if len(enabledIDs) > 0 {
+		query = query.Where("id NOT IN ?", enabledIDs)
+	}
+	query = applyRecommendationVisibility(query, user)
+
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return fallbackRecommendationSkills(db, user, "", limit)
+	}
+
+	var skills []skillmodel.Skill
+	if err := query.Order("(featured_rank IS NULL) ASC, featured_rank ASC, published_at DESC, created_at DESC").
+		Limit(skillapi.MaxLimit).
+		Find(&skills).Error; err != nil {
+		return nil, 0, err
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		leftRank := categoryRank[skills[i].Category]
+		rightRank := categoryRank[skills[j].Category]
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return recommendationSkillLess(skills[i], skills[j])
+	})
+	if len(skills) > limit {
+		skills = skills[:limit]
+	}
+	return skills, total, nil
+}
+
+func coDownloadRecommendationSkills(db *gorm.DB, user marketplaceUserContext, targetSkillID string, limit int) ([]skillmodel.Skill, int64, error) {
+	var peerRows []struct {
+		UserID   int64
+		TenantID int64
+	}
+	if err := db.Table("user_enabled_skills").
+		Select("user_id, tenant_id").
+		Where("skill_id = ? AND enabled = ? AND removed_at IS NULL", targetSkillID, true).
+		Scan(&peerRows).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(peerRows) == 0 {
+		return fallbackRecommendationSkills(db, user, targetSkillID, limit)
+	}
+	peerUsers := make([]int64, 0, len(peerRows))
+	for _, row := range peerRows {
+		if row.UserID == row.TenantID {
+			peerUsers = append(peerUsers, row.UserID)
+		}
+	}
+	if len(peerUsers) == 0 {
+		return fallbackRecommendationSkills(db, user, targetSkillID, limit)
+	}
+
+	var coRows []coDownloadRow
+	if err := db.Table("user_enabled_skills").
+		Select("skill_id, COUNT(*) AS count").
+		Where("user_id IN ? AND tenant_id = user_id AND enabled = ? AND removed_at IS NULL AND skill_id <> ?", peerUsers, true, targetSkillID).
+		Group("skill_id").
+		Order("count DESC, skill_id ASC").
+		Scan(&coRows).Error; err != nil {
+		return nil, 0, err
+	}
+	if len(coRows) == 0 {
+		return fallbackRecommendationSkills(db, user, targetSkillID, limit)
+	}
+	coRank := make(map[string]int, len(coRows))
+	ids := make([]string, 0, len(coRows))
+	for i, row := range coRows {
+		ids = append(ids, row.SkillID)
+		coRank[row.SkillID] = i
+	}
+
+	query := listMarketplaceSkillsPublicQuery(db).Where("status = ?", enums.SkillStatusPublished).
+		Where("id IN ?", ids)
+	query = applyRecommendationVisibility(query, user)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return fallbackRecommendationSkills(db, user, targetSkillID, limit)
+	}
+
+	var skills []skillmodel.Skill
+	if err := query.Limit(skillapi.MaxLimit).Find(&skills).Error; err != nil {
+		return nil, 0, err
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		leftRank := coRank[skills[i].ID]
+		rightRank := coRank[skills[j].ID]
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return recommendationSkillLess(skills[i], skills[j])
+	})
+	if len(skills) > limit {
+		skills = skills[:limit]
+	}
+	return skills, total, nil
+}
+
+func fallbackRecommendationSkills(db *gorm.DB, user marketplaceUserContext, excludeSkillID string, limit int) ([]skillmodel.Skill, int64, error) {
+	query := listMarketplaceSkillsPublicQuery(db).Where("status = ?", enums.SkillStatusPublished)
+	if excludeSkillID != "" {
+		query = query.Where("id <> ?", excludeSkillID)
+	}
+	query = applyRecommendationVisibility(query, user)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var skills []skillmodel.Skill
+	if err := query.Order("(featured_rank IS NULL) ASC, featured_rank ASC, published_at DESC, created_at DESC").
+		Limit(limit).
+		Find(&skills).Error; err != nil {
+		return nil, 0, err
+	}
+	return skills, total, nil
+}
+
+func applyRecommendationVisibility(query *gorm.DB, user marketplaceUserContext) *gorm.DB {
+	if user.IsKidsMode {
+		return query.Where("is_kids_safe = ?", true)
+	}
+	return query
+}
+
+func userEnabledSkillIDs(db *gorm.DB, userID int64) ([]string, error) {
+	var rows []skillmodel.UserEnabledSkill
+	if err := db.Select("skill_id").
+		Where("user_id = ? AND tenant_id = ? AND enabled = ? AND removed_at IS NULL", userID, userID, true).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		ids = append(ids, row.SkillID)
+	}
+	return ids, nil
+}
+
+func recommendationSkillLess(left, right skillmodel.Skill) bool {
+	if left.FeaturedRank == nil && right.FeaturedRank != nil {
+		return false
+	}
+	if left.FeaturedRank != nil && right.FeaturedRank == nil {
+		return true
+	}
+	if left.FeaturedRank != nil && right.FeaturedRank != nil && *left.FeaturedRank != *right.FeaturedRank {
+		return *left.FeaturedRank < *right.FeaturedRank
+	}
+	if left.PublishedAt != nil && right.PublishedAt != nil && !left.PublishedAt.Equal(*right.PublishedAt) {
+		return left.PublishedAt.After(*right.PublishedAt)
+	}
+	if left.PublishedAt != nil && right.PublishedAt == nil {
+		return true
+	}
+	if left.PublishedAt == nil && right.PublishedAt != nil {
+		return false
+	}
+	return left.CreatedAt.After(right.CreatedAt)
+}
+
+func writeMarketplaceRecommendationList(c *gin.Context, db *gorm.DB, userInfo marketplaceUserContext, skills []skillmodel.Skill, page skillapi.PageParams, total int64) {
+	enabledBySkillID, err := marketplaceEnablementBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	savedBySkillID, err := marketplaceSavedBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	socialProof, err := loadMarketplaceSocialProof(db, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	entitlementBySkillID, err := marketplaceOneTimeEntitlementBySkillID(db, userInfo, skills)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	out := make([]MarketplaceSkill, 0, len(skills))
+	for _, s := range skills {
+		out = append(out, marketplaceSkillFromModel(s, userInfo, enabledBySkillID[s.ID], savedBySkillID[s.ID], entitlementBySkillID[s.ID], socialProof[s.ID]))
+	}
+	skillapi.List(c, out, skillapi.NewPagination(page.Page, page.Limit, total))
 }
 
 func skillAvailabilityFromResult(result availability.Result) SkillAvailability {
@@ -802,10 +2183,20 @@ func skillAvailabilityFromResult(result availability.Result) SkillAvailability {
 	}
 }
 
-func marketplaceBadges(s skillmodel.Skill) []string {
-	badges := make([]string, 0, 4)
+func marketplaceBadges(s skillmodel.Skill, proof marketplaceSocialProof) []string {
+	badges := make([]string, 0, 7)
+	if s.PublishedAt != nil && time.Since(*s.PublishedAt) <= 7*24*time.Hour {
+		badges = append(badges, "new")
+	}
+	if proof.Trending {
+		badges = append(badges, "trending")
+	}
+	if proof.DownloadCount >= marketplacePopularDownloadThreshold {
+		badges = append(badges, "popular")
+	}
 	if s.RequiredPlan != enums.RequiredPlanFree {
 		badges = append(badges, string(s.RequiredPlan))
+		badges = append(badges, "plus_exclusive")
 	}
 	if s.FeaturedFlag {
 		badges = append(badges, "featured")
@@ -876,6 +2267,51 @@ func marketplaceEnablementBySkillID(db *gorm.DB, user marketplaceUserContext, sk
 	return enabled, nil
 }
 
+func marketplaceSavedBySkillID(db *gorm.DB, user marketplaceUserContext, skills []skillmodel.Skill) (map[string]bool, error) {
+	saved := map[string]bool{}
+	if user.IsAnonymous || user.UserID == 0 || len(skills) == 0 {
+		return saved, nil
+	}
+	ids := make([]string, 0, len(skills))
+	for _, s := range skills {
+		ids = append(ids, s.ID)
+	}
+	var rows []skillmodel.UserSavedSkill
+	if err := db.Select([]string{"skill_id", "saved"}).
+		Where("user_id = ? AND tenant_id = ? AND skill_id IN ?", user.UserID, user.UserID, ids).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		saved[row.SkillID] = row.Saved
+	}
+	return saved, nil
+}
+
+func marketplaceOneTimeEntitlementBySkillID(db *gorm.DB, user marketplaceUserContext, skills []skillmodel.Skill) (map[string]bool, error) {
+	entitled := map[string]bool{}
+	if user.IsAnonymous || user.UserID == 0 || len(skills) == 0 {
+		return entitled, nil
+	}
+	if !db.Migrator().HasTable(&skillmodel.SkillEntitlement{}) {
+		return entitled, nil
+	}
+	ids := make([]string, 0, len(skills))
+	for _, s := range skills {
+		ids = append(ids, s.ID)
+	}
+	var rows []skillmodel.SkillEntitlement
+	if err := db.Select([]string{"skill_id"}).
+		Where("user_id = ? AND source = ? AND skill_id IN ?", user.UserID, skillmodel.SkillEntitlementSourceOneTimePurchase, ids).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		entitled[row.SkillID] = true
+	}
+	return entitled, nil
+}
+
 func marketplaceGroupToPlan(group string) enums.RequiredPlan {
 	switch group {
 	case string(enums.RequiredPlanPro):
@@ -891,14 +2327,30 @@ func marketplaceGroupToPlan(group string) enums.RequiredPlan {
 // download_cta.url uses slug (not ID) because slugs are human-readable and
 // stable. DR-81 must accept slug as the {id} path parameter — verify before
 // closing DR-81 or this CTA will produce broken URLs.
-func publicSkillDetailFromModel(s skillmodel.Skill) PublicSkillDetail {
+func skillVersionInstructionsFromModel(version skillmodel.SkillVersion) SkillVersionInstructions {
+	return SkillVersionInstructions{
+		DownloadInstructions: version.DownloadInstructions,
+		UsageInstructions:    version.UsageInstructions,
+		Prerequisites:        rawJSONWithDefault(version.Prerequisites, "[]"),
+		Quickstart:           rawJSONWithDefault(version.Quickstart, "[]"),
+		ExampleIO:            rawJSONWithDefault(version.ExampleIO, "[]"),
+	}
+}
+
+func publicSkillDetailFromModel(s skillmodel.Skill, instructions SkillVersionInstructions, saved bool, proof marketplaceSocialProof) PublicSkillDetail {
+	public := publicSkillFromModel(s, true)
+	public.RatingSummary = proof.RatingSummary
+	public.DownloadCount = proof.DownloadCount
+	public.Badges = marketplaceBadges(s, proof)
 	return PublicSkillDetail{
-		PublicSkill:           publicSkillFromModel(s, true),
+		PublicSkill:           public,
 		RequiresDeepRouterKey: true,
 		DownloadCTA: DownloadCTA{
 			URL:    "/api/v1/marketplace/skills/" + url.PathEscape(s.Slug) + "/download",
 			Method: "GET",
 		},
+		Instructions: instructions,
+		Saved:        saved,
 	}
 }
 
@@ -951,6 +2403,13 @@ func adminSkillFromModel(s skillmodel.Skill) AdminSkill {
 		ExampleOutputs:     rawJSON(s.ExampleOutputs),
 		ModelWhitelist:     rawJSON(s.ModelWhitelist),
 	}
+}
+
+func adminSkillFromModelWithDownloads(s skillmodel.Skill, downloads7D, downloads30D int64) AdminSkill {
+	out := adminSkillFromModel(s)
+	out.Downloads7D = downloads7D
+	out.Downloads30D = downloads30D
+	return out
 }
 
 func rawJSON(value skillmodel.SkillJSONB) json.RawMessage {

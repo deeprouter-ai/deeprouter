@@ -28,7 +28,9 @@ func SetSkillRouter(router *gin.Engine) {
 		}
 		{
 			marketplaceRoute.GET("/skills", skillhandler.ListMarketplaceSkills)
+			marketplaceRoute.GET("/leaderboards/downloads", skillhandler.ListDownloadLeaderboards)
 			marketplaceRoute.GET("/skills/:id", skillhandler.GetMarketplaceSkill)
+			marketplaceRoute.GET("/skills/:id/recommendations", skillhandler.ListCoDownloadRecommendations)
 			marketplaceRoute.POST("/skills/:id/events", skillhandler.RecordMarketplaceSkillEvent)
 		}
 
@@ -39,7 +41,13 @@ func SetSkillRouter(router *gin.Engine) {
 		}
 		{
 			mySkillsRoute.GET("/my-skills", skillhandler.ListMySkills)
+			mySkillsRoute.GET("/user-home", skillhandler.GetUserHome)
+			mySkillsRoute.GET("/recommendations/personal", skillhandler.ListPersonalRecommendations)
+			mySkillsRoute.GET("/saved-skills", skillhandler.ListSavedSkills)
+			mySkillsRoute.POST("/skills/:id/save", skillhandler.SaveMarketplaceSkill)
+			mySkillsRoute.DELETE("/skills/:id/save", skillhandler.UnsaveMarketplaceSkill)
 			mySkillsRoute.DELETE("/my-skills/:id", skillhandler.RemoveMySkill)
+			mySkillsRoute.POST("/skills/:id/purchase", skillhandler.PurchaseMarketplaceSkill)
 		}
 
 		downloadRoute := v1.Group("/marketplace")
@@ -50,6 +58,15 @@ func SetSkillRouter(router *gin.Engine) {
 		{
 			downloadRoute.GET("/skills/:id/download", skillhandler.DownloadSkillPackage)
 			downloadRoute.GET("/skill-versions/:skill_version_id/download", skillhandler.DownloadSkillVersionPackage)
+		}
+
+		telemetryRoute := v1.Group("/telemetry")
+		telemetryRoute.Use(middleware.TokenAuth())
+		if common.GlobalApiRateLimitEnable {
+			telemetryRoute.Use(middleware.SkillUserRateLimit(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "SKT"))
+		}
+		{
+			telemetryRoute.POST("/skill-usage", skillhandler.RecordRunnerSkillUsage)
 		}
 
 		adminRoute := v1.Group("/admin")
@@ -67,6 +84,7 @@ func SetSkillRouter(router *gin.Engine) {
 			adminRoute.GET("/skills/:skill_id/versions/:version_id", skillhandler.GetAdminSkillVersion)
 			adminRoute.POST("/skills/:skill_id/versions/:version_id/activate", skillhandler.ActivateAdminSkillVersion)
 			adminRoute.POST("/skills/:skill_id/publish", skillhandler.PublishAdminSkill)
+			adminRoute.GET("/users/:user_id/skill-usage", skillhandler.GetAdminUserSkillUsage)
 		}
 
 		opsRoute := v1.Group("/ops")
@@ -78,6 +96,7 @@ func SetSkillRouter(router *gin.Engine) {
 			opsRoute.GET("/skills/summary", skillhandler.GetOpsSkillSummary)
 			opsRoute.GET("/skill-analytics/overview", skillhandler.GetOpsSkillAnalyticsOverview)
 			opsRoute.GET("/skill-analytics/skills", skillhandler.GetOpsSkillAnalyticsSkills)
+			opsRoute.GET("/skill-analytics/category-demand", skillhandler.GetOpsSkillAnalyticsCategoryDemand)
 		}
 	}
 }

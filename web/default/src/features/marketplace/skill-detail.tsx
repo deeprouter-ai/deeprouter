@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { ArrowLeft, Download, KeyRound, Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
+import { ArrowLeft, Bookmark, Download, KeyRound, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { SectionPageLayout } from '@/components/layout'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -32,13 +32,22 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useAuthStore } from '@/stores/auth-store'
+import { SectionPageLayout } from '@/components/layout'
 import {
   DownloadSkillError,
   downloadSkillPackage,
   getMarketplaceSkill,
+  saveSkill,
+  unsaveSkill,
 } from './api'
-import { ErrorBanner, KidsBadge, PlanBadge } from './components'
+import {
+  ErrorBanner,
+  KidsBadge,
+  MarketplaceTrustBadges,
+  PlanBadge,
+  SkillPaywallDialog,
+  SocialProofRow,
+} from './components'
 
 interface SkillDetailProps {
   slug: string
@@ -47,18 +56,45 @@ interface SkillDetailProps {
 export function SkillDetail({ slug }: SkillDetailProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const href = useRouterState({ select: (s) => s.location.href })
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [paywallOpen, setPaywallOpen] = useState(false)
 
   const detailQuery = useQuery({
     queryKey: ['marketplace-skill', slug],
     queryFn: () => getMarketplaceSkill(slug),
   })
   const detail = detailQuery.data
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!detail) return
+      if (detail.saved === true) {
+        await unsaveSkill(detail.slug || detail.id, 'skill_detail')
+      } else {
+        await saveSkill(detail.slug || detail.id, 'skill_detail')
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ['marketplace-skill', slug],
+        }),
+        queryClient.invalidateQueries({ queryKey: ['marketplace-skills'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['marketplace-saved-skills'],
+        }),
+      ])
+    },
+  })
 
   async function handleDownload() {
     if (!detail) return
+    if (detail.availability?.locked === true) {
+      setPaywallOpen(true)
+      return
+    }
     setDownloading(true)
     setDownloadError(null)
     try {
@@ -79,9 +115,7 @@ export function SkillDetail({ slug }: SkillDetailProps) {
         return
       }
       if (code === 'SKILL_PLAN_REQUIRED') {
-        setDownloadError(
-          t('This Skill requires a higher plan. Upgrade to download it.')
-        )
+        setPaywallOpen(true)
         return
       }
       if (code === 'DOWNLOAD_UNAVAILABLE') {
@@ -132,6 +166,7 @@ export function SkillDetail({ slug }: SkillDetailProps) {
                 <CardHeader>
                   <div className='flex flex-wrap items-center gap-2'>
                     <PlanBadge plan={detail.required_plan} />
+                    <MarketplaceTrustBadges badges={detail.badges} />
                     {detail.is_kids_safe === true && (
                       <KidsBadge state='kids_safe' />
                     )}
@@ -139,12 +174,31 @@ export function SkillDetail({ slug }: SkillDetailProps) {
                       <KidsBadge state='kids_exclusive' />
                     )}
                   </div>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    className='self-start'
+                    disabled={saveMutation.isPending}
+                    onClick={() => saveMutation.mutate()}
+                  >
+                    <Bookmark
+                      data-icon='inline-start'
+                      className={detail.saved === true ? 'fill-current' : ''}
+                    />
+                    {detail.saved === true ? t('Saved') : t('Save')}
+                  </Button>
                   <CardTitle>{detail.name}</CardTitle>
                   <CardDescription>
                     {detail.description ||
                       detail.short_description ||
                       t('No description provided.')}
                   </CardDescription>
+                  <SocialProofRow
+                    rating={detail.rating_summary}
+                    downloadCount={detail.download_count}
+                    className='text-sm'
+                  />
                 </CardHeader>
                 <CardContent className='flex flex-col gap-4'>
                   {/* A1: runtime-dependency copy (R2). Always state the key
@@ -171,7 +225,10 @@ export function SkillDetail({ slug }: SkillDetailProps) {
 
                   {detail.ai_disclosure_required === true && (
                     <div className='text-muted-foreground flex items-center gap-2 text-sm'>
-                      <Sparkles className='size-4 shrink-0' aria-hidden='true' />
+                      <Sparkles
+                        className='size-4 shrink-0'
+                        aria-hidden='true'
+                      />
                       {t('Generated by AI. Review before use.')}
                     </div>
                   )}
@@ -184,13 +241,60 @@ export function SkillDetail({ slug }: SkillDetailProps) {
                       disabled={downloading}
                       onClick={() => void handleDownload()}
                     >
-                      <Download data-icon='inline-start' />
-                      {downloading ? t('Downloading…') : t('Download')}
+                      {detail.availability?.locked === true ? (
+                        <Sparkles data-icon='inline-start' />
+                      ) : (
+                        <Download data-icon='inline-start' />
+                      )}
+                      {detail.availability?.locked === true
+                        ? t('Unlock $2')
+                        : downloading
+                          ? t('Downloading…')
+                          : t('Download')}
                     </Button>
                     {downloadError != null && (
-                      <p className='text-destructive text-sm'>{downloadError}</p>
+                      <p className='text-destructive text-sm'>
+                        {downloadError}
+                      </p>
                     )}
                   </div>
+                </CardContent>
+              </Card>
+
+              <SkillPaywallDialog
+                skill={detail}
+                open={paywallOpen}
+                onOpenChange={setPaywallOpen}
+                onContinue={() => void detailQuery.refetch()}
+              />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className='text-base'>
+                    {t('Download and usage')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className='grid gap-4 md:grid-cols-2'>
+                  <InstructionBlock
+                    title={t('Download Instructions')}
+                    body={detail.instructions.download_instructions}
+                  />
+                  <InstructionBlock
+                    title={t('Usage Instructions')}
+                    body={detail.instructions.usage_instructions}
+                  />
+                  <InstructionList
+                    title={t('Prerequisites')}
+                    items={detail.instructions.prerequisites}
+                  />
+                  <InstructionList
+                    title={t('Quickstart')}
+                    items={detail.instructions.quickstart}
+                  />
+                  <InstructionList
+                    title={t('Example I/O')}
+                    items={detail.instructions.example_io}
+                  />
                 </CardContent>
               </Card>
 
@@ -204,7 +308,9 @@ export function SkillDetail({ slug }: SkillDetailProps) {
                 </CardHeader>
                 <CardContent>
                   <ol className='text-muted-foreground flex list-decimal flex-col gap-1 pl-5 text-sm'>
-                    <li>{t('Extract the zip to your .claude/skills/ directory.')}</li>
+                    <li>
+                      {t('Extract the zip to your .claude/skills/ directory.')}
+                    </li>
                     <li>
                       {t('Type /{{slug}} in Claude Code to use it.', {
                         slug: detail.slug,
@@ -224,6 +330,60 @@ export function SkillDetail({ slug }: SkillDetailProps) {
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )
+}
+
+function InstructionBlock({ title, body }: { title: string; body?: string }) {
+  if (!body?.trim()) return null
+  return (
+    <section className='space-y-2'>
+      <h3 className='text-sm font-semibold'>{title}</h3>
+      <p className='text-muted-foreground text-sm whitespace-pre-wrap'>
+        {body.trim()}
+      </p>
+    </section>
+  )
+}
+
+function InstructionList({
+  title,
+  items,
+}: {
+  title: string
+  items?: unknown[]
+}) {
+  const values = instructionItems(items)
+  if (values.length === 0) return null
+  return (
+    <section className='space-y-2'>
+      <h3 className='text-sm font-semibold'>{title}</h3>
+      <ul className='text-muted-foreground list-disc space-y-1 pl-5 text-sm'>
+        {values.map((value, index) => (
+          <li key={`${title}-${index}`}>{value}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function instructionItems(items?: unknown[]): string[] {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((item) => {
+      if (typeof item === 'string') return item
+      if (item && typeof item === 'object') {
+        const record = item as Record<string, unknown>
+        if (typeof record.text === 'string') return record.text
+        if (
+          typeof record.input === 'string' ||
+          typeof record.output === 'string'
+        ) {
+          return [record.input, record.output].filter(Boolean).join(' -> ')
+        }
+      }
+      return ''
+    })
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 function SkillDetailSkeleton() {

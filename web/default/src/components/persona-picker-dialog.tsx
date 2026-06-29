@@ -79,7 +79,7 @@ export function PersonaPickerDialog({
             icon={<MessageSquare className='h-5 w-5' />}
             title={t('Casual')}
             description={t(
-              'Chat, write, translate, generate images — use AI clients like Cherry Studio.'
+              'Chat, write, translate, generate images — using AI apps you already have.'
             )}
             footnote={t('No code required.')}
             onClick={() => onPick('casual')}

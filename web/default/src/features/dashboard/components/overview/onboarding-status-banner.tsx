@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { CreditCard, PackageOpen, Sparkles, X } from 'lucide-react'
+import { CreditCard, MessageCircle, PackageOpen, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -49,29 +49,6 @@ function writeDismissed(key: string): void {
     window.localStorage.setItem(key, '1')
   } catch {
     /* private mode — silent */
-  }
-}
-
-type ClientSlug =
-  | 'cherry-studio'
-  | 'chatbox'
-  | 'lobechat'
-  | 'cursor'
-  | 'claude-code'
-  | 'code'
-
-function asClientSlug(value: unknown): ClientSlug | null {
-  if (typeof value !== 'string') return null
-  switch (value) {
-    case 'cherry-studio':
-    case 'chatbox':
-    case 'lobechat':
-    case 'cursor':
-    case 'claude-code':
-    case 'code':
-      return value
-    default:
-      return null
   }
 }
 
@@ -120,7 +97,6 @@ export function OnboardingStatusBanner() {
     useState(() => readDismissed(MARKETPLACE_POINTER_DISMISS_KEY))
 
   const setting = useMemo(() => parseSettingRaw(user?.setting), [user?.setting])
-  const preferredClient = asClientSlug(setting?.preferred_client)
 
   const requestCount = Number(user?.request_count ?? 0)
   const remainingQuota = Number(user?.quota ?? 0)
@@ -180,26 +156,18 @@ export function OnboardingStatusBanner() {
           icon={<Sparkles className='size-4' aria-hidden='true' />}
           title={t("You haven't called the API yet.")}
           description={t(
-            'Your trial credit is sitting unused. Follow the setup guide to paste your key into your AI tool.'
+            'Your trial credit is sitting unused. Try a 1-click playground request, or see the setup steps on your Keys page.'
           )}
           actions={
-            preferredClient ? (
-              <Button
-                size='sm'
-                render={
-                  <Link
-                    to='/onboarding/$slug'
-                    params={{ slug: preferredClient }}
-                  />
-                }
-              >
-                {t('Open setup guide')}
+            <>
+              <Button size='sm' variant='outline' render={<Link to='/playground' />}>
+                <MessageCircle className='mr-1.5 size-3.5' aria-hidden='true' />
+                {t('Try Playground')}
               </Button>
-            ) : (
               <Button size='sm' render={<Link to='/keys' />}>
-                {t('View your key & setup')}
+                {t('Set up my key')}
               </Button>
-            )
+            </>
           }
           onDismiss={() => {
             setNeverCalledDismissed(true)

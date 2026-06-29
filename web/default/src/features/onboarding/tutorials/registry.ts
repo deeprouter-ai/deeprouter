@@ -63,8 +63,10 @@ export type Tutorial = {
 export type TutorialVars = {
   /** Pulled from useStatus() at render time. */
   baseUrl: string
-  /** What model name to suggest in the client config. Defaults to
-   *  `deeprouter` (the virtual alias). */
+  /** What model name to suggest in the client config. The only name the
+   *  gateway routes today is `deeprouter-auto` (the smart-router virtual
+   *  model); the bare `deeprouter` alias returns 503. See
+   *  `keys/lib/integration.ts::modelNameForPurpose`. */
   modelName: string
 }
 

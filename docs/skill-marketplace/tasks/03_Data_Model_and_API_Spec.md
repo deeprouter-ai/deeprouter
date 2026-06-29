@@ -55,9 +55,9 @@ V1 assumes existing platform tables exist for users, tenants, sessions, subscrip
 | `kids_approval_status` | `not_required`, `pending`, `approved`, `emergency_approved`, `rejected`, `revoked` |
 | `evaluation_status` | `pending`, `running`, `passed`, `failed`, `warning` |
 | `evaluation_issue_type` | `format`, `completeness`, `task_completion`, `violation` |
-| `save_type` | `saved`, `favorited` |
+| `save_type` | `saved` |
 | `block_reason` | `auth_required`, `skill_not_found`, `skill_not_published`, `skill_not_enabled`, `plan_required`, `subscription_inactive`, `quota_exceeded`, `kids_mode_blocked`, `context_too_long`, `rate_limited`, `timeout` |
-| `entry_point` | `marketplace_card`, `skill_detail`, `my_skills`, `saved_list`, `featured`, `popular`, `new`, `recommended`, `admin_preview`, `search_results`, `skill_package`, `playground_picker` (legacy parse only) |
+| `entry_point` | `marketplace_card`, `skill_detail`, `my_skills`, `saved_list`, `featured`, `popular`, `new`, `new_week`, `trending`, `recommended`, `reco_personal`, `reco_codownload`, `leaderboard_weekly`, `leaderboard_monthly`, `user_home`, `digest`, `reengage`, `admin_preview`, `search_results`, `paywall`, `skill_package`, `api_token`, `downloaded_runner`, `playground_picker` (legacy parse only) |
 | `tier2_event_type` | `skill_installed`, `skill_used_local` |
 
 ---
@@ -278,7 +278,7 @@ Rules:
 - Any required user-level safety/audit trace must live in restricted audit/support systems, not business analytics.
 - `metadata` is allowlisted, not free-form. V1 allowed analytics metadata keys are `source_entry_point`, `repeat_index`, `surface_id`, `card_position`, `query_hash`, `filter_hash`, `schema_version`, `producer`, and `client_event_time`.
 - `metadata.source_entry_point` must use the same `entry_point` enum when present.
-- New R2 Skill package execution producers must emit `entry_point=skill_package`. `playground_picker` remains in the enum only so historical Playground analytics rows and legacy payloads continue to parse; new V1/R2 flows must not emit it.
+- New R2 Skill package execution producers must emit `entry_point=skill_package` for browser/session package flows and `entry_point=api_token` when a DeepRouter API token is the auth+entitlement principal. `playground_picker` remains in the enum only so historical Playground analytics rows and legacy payloads continue to parse; new V1/R2 flows must not emit it.
 - `skill_blocked.block_reason` is a narrow runtime taxonomy for mapped pre-provider block outcomes only. `INVALID_REQUEST`, `FORBIDDEN`, `SKILL_EVALUATION_NOT_PASSED`, `SKILL_INTERNAL_ERROR`, and `SKILL_SAFETY_VIOLATION` remain outside the default DR-70 `skill_blocked` mapping unless a future spec explicitly adds them.
 - `metadata.repeat_index` must be a positive integer when present and is required for `skill_repeat_use` until promoted to a first-class column.
 - Restricted keys such as `instruction_template`, `prompt`, `system_prompt`, `raw_messages`, `provider_payload`, `kids_raw_input`, `full_user_input`, `raw_output`, and `model_output` must be rejected or quarantined.
@@ -348,20 +348,23 @@ Rules:
 - `comment` is optional, max 280 chars; no raw user input or PII.
 - Rating aggregate (avg_stars, rating_count) is computed and cached on `skills` table or a materialized view for dashboard performance.
 
-### 4.5c `skill_saves`
+### 4.5c `user_saved_skills`
 
-用户收藏（save/favorite）行为记录。
+用户保存/bookmark 状态。该表独立于 `user_enabled_skills`，不是执行授权。
 
 ```sql
-CREATE TABLE skill_saves (
+CREATE TABLE user_saved_skills (
   user_id UUID NOT NULL,
   tenant_id UUID NOT NULL,
   skill_id UUID NOT NULL REFERENCES skills(id),
-  save_type VARCHAR(32) NOT NULL DEFAULT 'saved'
-    CHECK (save_type IN ('saved', 'favorited')),
+  saved BOOLEAN NOT NULL DEFAULT true,
+  saved_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  unsaved_at TIMESTAMPTZ,
+  source VARCHAR(64) NOT NULL DEFAULT 'marketplace',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  PRIMARY KEY (user_id, tenant_id, skill_id, save_type)
+  PRIMARY KEY (user_id, tenant_id, skill_id)
 );
 ```
 
@@ -727,7 +730,7 @@ The Detail response is public metadata only and must not include provider raw co
 - Returns the versioned zip package (manifest + published `instruction_template` + thin client) for the active published version, pinned to `skill_version_id`.
 - Requires a logged-in, entitled user; archived/draft are 403/404 per the entitlement table.
 - The package must not contain provider credentials, server routing/model-selection logic, or draft templates.
-- Emits `skill_enabled` (download) with `entry_point=skill_package`; the originating surface, when needed, belongs in allowlisted `metadata.source_entry_point`.
+- Emits `skill_enabled` (download) with `entry_point=skill_package` for browser/session package flows, or `entry_point=api_token` when a DeepRouter API token is the auth+entitlement principal; the originating surface, when needed, belongs in allowlisted `metadata.source_entry_point`.
 - The package's bundled client targets the public routing API (§8.7) and authenticates with the runner's own DeepRouter credential at runtime.
 
 ### 8.7 Public Routing / Execution API
@@ -760,7 +763,7 @@ Rules:
 - `deeprouter.skill_id` is required.
 - `deeprouter.skill_version_id` pins execution to the manifest version when present. The server accepts the pin only when that version belongs to the requested Skill and is active; otherwise it fails closed with `SKILL_NOT_PUBLISHED`.
 - Missing `skill_version_id` falls back to the Skill's current active version for legacy callers.
-- Public routing forces `entry_point=skill_package`; package-provided `deeprouter.entry_point` is ignored.
+- Public routing forces `entry_point=api_token` for DeepRouter API-token package execution; package-provided `deeprouter.entry_point` is ignored.
 - Request-body identity/policy fields are not trusted. The package must not send `user_id`, `tenant_id`, Kids fields, or trusted identity objects; if present, they are ignored as identity sources.
 - The server rebuilds the provider payload from the server-owned SkillVersion snapshot and strips `deeprouter` before forwarding upstream.
 

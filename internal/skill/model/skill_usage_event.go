@@ -41,7 +41,7 @@ type SkillUsageEvent struct {
 	SkillID        *string          `gorm:"column:skill_id;type:char(36)"`
 	SkillVersionID *string          `gorm:"column:skill_version_id;type:char(36)"`
 	FirstUseKey    *string          `gorm:"column:first_use_key;type:varchar(128)"`
-	EntryPoint     enums.EntryPoint `gorm:"column:entry_point;type:varchar(64);not null;check:chk_sue_entry_point,entry_point IN ('marketplace_card','skill_detail','my_skills','saved_list','playground_picker','featured','popular','new','recommended','admin_preview','search_results','skill_package')"`
+	EntryPoint     enums.EntryPoint `gorm:"column:entry_point;type:varchar(64);not null;check:chk_sue_entry_point,entry_point IN ('marketplace_card','skill_detail','my_skills','saved_list','playground_picker','featured','popular','new','new_week','trending','recommended','reco_personal','reco_codownload','leaderboard_weekly','leaderboard_monthly','category_demand','user_home','digest','reengage','admin_preview','search_results','paywall','skill_package','api_token','downloaded_runner')"`
 
 	Plan               *enums.RequiredPlan `gorm:"column:plan;type:varchar(32)"`
 	SubscriptionStatus *string             `gorm:"column:subscription_status;type:varchar(32)"`
@@ -267,8 +267,25 @@ func EmitSkillUsageEvent(db *gorm.DB, event SkillUsageEvent) error {
 	return db.Create(&event).Error
 }
 
+func SkillTierEventMetadata(monetization enums.MonetizationType, userPlan enums.RequiredPlan, extra map[string]any) SkillJSONB {
+	metadata := map[string]any{
+		"schema_version":    SkillEventSchemaVersion,
+		"skill_tier":        string(monetization),
+		"monetization_type": string(monetization),
+		"user_plan":         string(userPlan),
+	}
+	for key, value := range extra {
+		metadata[key] = value
+	}
+	data, err := common.Marshal(metadata)
+	if err != nil {
+		return SkillJSONB(`{"schema_version":"1.0"}`)
+	}
+	return SkillJSONB(data)
+}
+
 // EmitSkillEnabled inserts a skill_enabled event.
-func EmitSkillEnabled(db *gorm.DB, userID int64, skillID string, skillVersionID *string, entryPoint, plan string) error {
+func EmitSkillEnabled(db *gorm.DB, userID int64, skillID string, skillVersionID *string, entryPoint, plan string, monetization enums.MonetizationType) error {
 	uid := userID
 	resolvedPlan := enums.RequiredPlan(plan)
 	successVal := true
@@ -282,6 +299,6 @@ func EmitSkillEnabled(db *gorm.DB, userID int64, skillID string, skillVersionID 
 		Plan:           &resolvedPlan,
 		IsKidsSession:  false,
 		Success:        &successVal,
-		Metadata:       SkillJSONB(`{}`),
+		Metadata:       SkillTierEventMetadata(monetization, resolvedPlan, nil),
 	})
 }

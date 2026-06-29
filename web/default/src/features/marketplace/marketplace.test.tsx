@@ -1,13 +1,22 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { skillDownloadURL } from './api'
+import { recordMarketplaceSkillEvent, skillDownloadURL } from './api'
 import { Marketplace } from './index'
-import type { MarketplaceSkill } from './types'
+import type { DownloadLeaderboardSkill, MarketplaceSkill } from './types'
 
-const { navigateMock, mockGetMarketplaceSkills } = vi.hoisted(() => ({
+const {
+  navigateMock,
+  mockGetDownloadLeaderboardSkills,
+  mockGetMarketplaceRailSkills,
+  mockGetMarketplaceSkills,
+  mockRecordMarketplaceSkillEvent,
+} = vi.hoisted(() => ({
   navigateMock: vi.fn(),
+  mockGetDownloadLeaderboardSkills: vi.fn(),
+  mockGetMarketplaceRailSkills: vi.fn(),
   mockGetMarketplaceSkills: vi.fn(),
+  mockRecordMarketplaceSkillEvent: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -28,9 +37,23 @@ vi.mock('@/stores/auth-store', () => ({
 }))
 
 vi.mock('./api', () => ({
+  getDownloadLeaderboardSkills: mockGetDownloadLeaderboardSkills,
   getMarketplaceSkills: mockGetMarketplaceSkills,
+  getMarketplaceRailSkills: mockGetMarketplaceRailSkills,
   emitMarketplaceEvent: vi.fn().mockResolvedValue(undefined),
-  recordMarketplaceSkillEvent: vi.fn().mockResolvedValue(undefined),
+  purchaseSkill: vi.fn().mockResolvedValue({
+    order_id: 'order-1',
+    skill_id: 'skill-1',
+    status: 'succeeded',
+    entitled: true,
+    amount_usd: 2,
+    currency: 'USD',
+    quota_charged: 1000,
+    monetization_type: 'one_time',
+  }),
+  recordMarketplaceSkillEvent: mockRecordMarketplaceSkillEvent,
+  saveSkill: vi.fn().mockResolvedValue(undefined),
+  unsaveSkill: vi.fn().mockResolvedValue(undefined),
   skillDownloadURL: vi.fn(
     (idOrSlug: string) => `/api/v1/marketplace/skills/${idOrSlug}/download`
   ),
@@ -51,6 +74,17 @@ function setMarketplaceSkills(skills: MarketplaceSkill[]) {
     data: skills,
     pagination: { page: 1, limit: 100, total: skills.length, has_next: false },
   })
+  mockGetMarketplaceRailSkills.mockResolvedValue({
+    data: [],
+    pagination: { page: 1, limit: 6, total: 0, has_next: false },
+  })
+}
+
+function setDownloadLeaderboards(skills: DownloadLeaderboardSkill[] = []) {
+  mockGetDownloadLeaderboardSkills.mockResolvedValue({
+    data: skills,
+    pagination: { page: 1, limit: 6, total: skills.length, has_next: false },
+  })
 }
 
 function renderMarketplace() {
@@ -66,6 +100,7 @@ function renderMarketplace() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  setDownloadLeaderboards()
   const store = new Map<string, string>()
   vi.stubGlobal('localStorage', {
     getItem: vi.fn((key: string) => store.get(key) ?? null),
@@ -89,21 +124,6 @@ describe('Marketplace list card CTA matrix', () => {
       {
         ...baseSkill,
         availability: { cta: 'use', enabled: true, executable: true },
-      },
-    ],
-    [
-      'Upgrade',
-      {
-        ...baseSkill,
-        required_plan: 'enterprise',
-        availability: { cta: 'upgrade', locked: true },
-      },
-    ],
-    [
-      'Renew',
-      {
-        ...baseSkill,
-        availability: { cta: 'renew', locked: true },
       },
     ],
     [
@@ -151,6 +171,28 @@ describe('Marketplace list card CTA matrix', () => {
     ).toBeDisabled()
   })
 
+  it.each([
+    ['upgrade', 'Upgrade Skill'],
+    ['renew', 'Renew Skill'],
+  ] as const)('shows the dual paywall CTA for %s locks', async (cta, name) => {
+    setMarketplaceSkills([
+      {
+        ...baseSkill,
+        id: cta,
+        slug: cta,
+        name,
+        availability: { cta, locked: true },
+      },
+    ])
+
+    renderMarketplace()
+
+    expect(
+      await screen.findByRole('button', { name: 'Unlock $2' })
+    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Get PLUS' })).toBeEnabled()
+  })
+
   it('uses the resolved fallback Enable CTA when the API omits availability.cta', async () => {
     setMarketplaceSkills([baseSkill])
 
@@ -159,7 +201,28 @@ describe('Marketplace list card CTA matrix', () => {
     expect(await screen.findByRole('button', { name: 'Enable' })).toBeEnabled()
   })
 
-  it('navigates to the detail route when an actionable card CTA is clicked', async () => {
+  it('renders DR-89 social proof and derived badges on skill cards', async () => {
+    setMarketplaceSkills([
+      {
+        ...baseSkill,
+        name: 'Trusted Skill',
+        rating_summary: { average: 4.5, count: 8 },
+        download_count: 1234,
+        badges: ['new', 'trending', 'popular', 'plus_exclusive'],
+      },
+    ])
+
+    renderMarketplace()
+
+    expect(await screen.findByText('4.5 (8)')).toBeInTheDocument()
+    expect(screen.getByText('1.2k downloads')).toBeInTheDocument()
+    expect(screen.getByText('New')).toBeInTheDocument()
+    expect(screen.getByText('Trending')).toBeInTheDocument()
+    expect(screen.getByText('Popular')).toBeInTheDocument()
+    expect(screen.getByText('PLUS-exclusive')).toBeInTheDocument()
+  })
+
+  it('opens the paywall when a buyable locked card CTA is clicked', async () => {
     setMarketplaceSkills([
       {
         ...baseSkill,
@@ -172,12 +235,9 @@ describe('Marketplace list card CTA matrix', () => {
     ])
 
     renderMarketplace()
-    fireEvent.click(await screen.findByRole('button', { name: 'Upgrade' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Unlock $2' }))
 
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/skills/$slug',
-      params: { slug: 'upgrade-skill' },
-    })
+    expect(await screen.findByText('Paywall')).toBeInTheDocument()
   })
 })
 
@@ -203,5 +263,131 @@ describe('Marketplace new-skill banner CTA', () => {
       params: { slug: 'my-skill' },
     })
     expect(skillDownloadURL).not.toHaveBeenCalled()
+  })
+})
+
+describe('Marketplace DR-90 discovery rails', () => {
+  it('renders rails and attributes detail clicks to the rail entry point', async () => {
+    setMarketplaceSkills([baseSkill])
+    mockGetMarketplaceRailSkills.mockImplementation((rail: string) => {
+      if (rail === 'new_week') {
+        return Promise.resolve({
+          data: [
+            {
+              ...baseSkill,
+              id: 'new-week',
+              slug: 'new-week',
+              name: 'New Week Skill',
+            },
+          ],
+          pagination: { page: 1, limit: 6, total: 1, has_next: false },
+        })
+      }
+      return Promise.resolve({
+        data: [
+          {
+            ...baseSkill,
+            id: 'trending',
+            slug: 'trending',
+            name: 'Trending Skill',
+          },
+        ],
+        pagination: { page: 1, limit: 6, total: 1, has_next: false },
+      })
+    })
+
+    renderMarketplace()
+
+    expect(await screen.findByText('New this week')).toBeInTheDocument()
+    expect(await screen.findByText('Trending')).toBeInTheDocument()
+    fireEvent.click(await screen.findByText('Trending Skill'))
+
+    expect(mockRecordMarketplaceSkillEvent).toHaveBeenCalledWith('trending', {
+      event_type: 'skill_detail_view',
+      entry_point: 'trending',
+    })
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/skills/$slug',
+      params: { slug: 'trending' },
+    })
+  })
+
+  it('renders hot-category badges and attributes boosted detail clicks to category demand', async () => {
+    setMarketplaceSkills([baseSkill])
+    mockGetMarketplaceRailSkills.mockImplementation((rail: string) => {
+      if (rail === 'new_week') {
+        return Promise.resolve({
+          data: [
+            {
+              ...baseSkill,
+              id: 'hot-video',
+              slug: 'hot-video',
+              name: 'Hot Video Skill',
+              category: 'video',
+              hot_category_boost: true,
+              merchandising_entry_point: 'category_demand',
+              badges: ['hot_category'],
+            },
+          ],
+          pagination: { page: 1, limit: 6, total: 1, has_next: false },
+        })
+      }
+      return Promise.resolve({
+        data: [],
+        pagination: { page: 1, limit: 6, total: 0, has_next: false },
+      })
+    })
+
+    renderMarketplace()
+
+    expect(await screen.findByText('Hot category')).toBeInTheDocument()
+    fireEvent.click(await screen.findByText('Hot Video Skill'))
+
+    expect(mockRecordMarketplaceSkillEvent).toHaveBeenCalledWith('hot-video', {
+      event_type: 'skill_detail_view',
+      entry_point: 'category_demand',
+    })
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/skills/$slug',
+      params: { slug: 'hot-video' },
+    })
+  })
+})
+
+describe('Marketplace download leaderboards', () => {
+  it('renders weekly and monthly rails and opens detail with leaderboard attribution', async () => {
+    setMarketplaceSkills([baseSkill])
+    mockGetDownloadLeaderboardSkills.mockImplementation(
+      (params: { window: '7d' | '30d' }) =>
+        Promise.resolve({
+          data: [
+            {
+              ...baseSkill,
+              id: `${params.window}-skill`,
+              slug: `${params.window}-skill`,
+              name: params.window === '7d' ? 'Weekly Skill' : 'Monthly Skill',
+              download_count: params.window === '7d' ? 9 : 30,
+              rank: 1,
+              window: params.window,
+            },
+          ],
+          pagination: { page: 1, limit: 6, total: 1, has_next: false },
+        })
+    )
+
+    renderMarketplace()
+
+    expect(await screen.findByText('This Week')).toBeInTheDocument()
+    expect(await screen.findByText('This Month')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /Weekly Skill/ }))
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/skills/$slug',
+      params: { slug: '7d-skill' },
+    })
+    expect(recordMarketplaceSkillEvent).toHaveBeenCalledWith('7d-skill', {
+      event_type: 'skill_detail_view',
+      entry_point: 'leaderboard_weekly',
+    })
   })
 })

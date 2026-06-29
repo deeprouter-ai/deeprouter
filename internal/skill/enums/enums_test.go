@@ -55,6 +55,7 @@ func TestRequiredPlan_StringValues(t *testing.T) {
 func TestMonetizationType_Valid(t *testing.T) {
 	valid := []MonetizationType{
 		MonetizationTypeFree, MonetizationTypePlanIncluded, MonetizationTypeTokenMarkup,
+		MonetizationTypeOneTime, MonetizationTypePlusExclusive,
 	}
 	for _, m := range valid {
 		assert.True(t, m.Valid(), "expected %q to be valid", m)
@@ -70,6 +71,8 @@ func TestMonetizationType_StringValues(t *testing.T) {
 	assert.Equal(t, "free", string(MonetizationTypeFree))
 	assert.Equal(t, "plan_included", string(MonetizationTypePlanIncluded))
 	assert.Equal(t, "token_markup", string(MonetizationTypeTokenMarkup))
+	assert.Equal(t, "one_time", string(MonetizationTypeOneTime))
+	assert.Equal(t, "plus_exclusive", string(MonetizationTypePlusExclusive))
 }
 
 // --- SkillVersionStatus ---
@@ -197,9 +200,12 @@ func TestEntryPoint_Valid(t *testing.T) {
 	valid := []EntryPoint{
 		EntryPointMarketplaceCard, EntryPointSkillDetail, EntryPointMySkills,
 		EntryPointSavedList, EntryPointFeatured, EntryPointPopular,
-		EntryPointNew, EntryPointRecommended, EntryPointAdminPreview,
-		EntryPointSearchResults, EntryPointSkillPackage,
-		EntryPointPlaygroundPicker,
+		EntryPointNew, EntryPointNewWeek, EntryPointTrending,
+		EntryPointRecommended, EntryPointRecoPersonal,
+		EntryPointRecoCodownload, EntryPointAdminPreview,
+		EntryPointSearchResults, EntryPointPaywall,
+		EntryPointSkillPackage, EntryPointAPIToken,
+		EntryPointDownloadedRunner, EntryPointPlaygroundPicker,
 	}
 	for _, e := range valid {
 		assert.True(t, e.Valid(), "expected %q to be valid", e)
@@ -219,10 +225,19 @@ func TestEntryPoint_StringValues(t *testing.T) {
 	assert.Equal(t, "featured", string(EntryPointFeatured))
 	assert.Equal(t, "popular", string(EntryPointPopular))
 	assert.Equal(t, "new", string(EntryPointNew))
+	assert.Equal(t, "new_week", string(EntryPointNewWeek))
+	assert.Equal(t, "trending", string(EntryPointTrending))
 	assert.Equal(t, "recommended", string(EntryPointRecommended))
+	assert.Equal(t, "reco_personal", string(EntryPointRecoPersonal))
+	assert.Equal(t, "reco_codownload", string(EntryPointRecoCodownload))
+	assert.Equal(t, "digest", string(EntryPointDigest))
+	assert.Equal(t, "reengage", string(EntryPointReengage))
 	assert.Equal(t, "admin_preview", string(EntryPointAdminPreview))
 	assert.Equal(t, "search_results", string(EntryPointSearchResults))
+	assert.Equal(t, "paywall", string(EntryPointPaywall))
 	assert.Equal(t, "skill_package", string(EntryPointSkillPackage))
+	assert.Equal(t, "api_token", string(EntryPointAPIToken))
+	assert.Equal(t, "downloaded_runner", string(EntryPointDownloadedRunner))
 	assert.Equal(t, "playground_picker", string(EntryPointPlaygroundPicker))
 }
 

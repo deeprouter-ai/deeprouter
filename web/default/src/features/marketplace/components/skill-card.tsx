@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   LockKeyhole,
   PackageOpen,
+  Bookmark,
   Star,
   TriangleAlert,
 } from 'lucide-react'
@@ -37,7 +38,12 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MarketplaceSkill, SkillCTAAction } from '../types'
-import { KidsBadge, PlanBadge } from './badges'
+import {
+  KidsBadge,
+  MarketplaceTrustBadges,
+  PlanBadge,
+  SocialProofRow,
+} from './badges'
 import { LockState } from './lock-state'
 import { normalizeLockState } from './lock-state-utils'
 import { SkillCTA } from './skill-cta'
@@ -55,7 +61,9 @@ interface SkillCardProps {
   variant?: SkillCardVariant
   cta?: SkillCTAAction
   onCTA?: (skill: MarketplaceSkill) => void
+  onPlusCTA?: (skill: MarketplaceSkill) => void
   onOpen?: (skill: MarketplaceSkill) => void
+  onSaveToggle?: (skill: MarketplaceSkill) => void
   cardRef?: (node: HTMLDivElement | null) => void
   className?: string
   ctaDisabled?: boolean
@@ -95,7 +103,9 @@ export function SkillCard({
   variant,
   cta,
   onCTA,
+  onPlusCTA,
   onOpen,
+  onSaveToggle,
   cardRef,
   className,
   ctaDisabled,
@@ -110,6 +120,8 @@ export function SkillCard({
 
   const lockState = normalizeLockState(skill.availability?.lock_code)
   const action = cta ?? getSkillCTA(skill)
+  const showPaywallCTA =
+    resolvedVariant === 'locked' && (action === 'upgrade' || action === 'renew')
   const statusLabel =
     resolvedVariant === 'enabled'
       ? t('Enabled')
@@ -167,6 +179,26 @@ export function SkillCard({
           </div>
         </div>
         <CardAction>
+          {skill.saved != null && (
+            <button
+              type='button'
+              className='text-muted-foreground hover:text-foreground focus-visible:ring-ring bg-background inline-flex size-8 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none'
+              aria-label={skill.saved ? t('Unsave Skill') : t('Save Skill')}
+              aria-pressed={skill.saved === true}
+              onClick={(event) => {
+                event.stopPropagation()
+                onSaveToggle?.(skill)
+              }}
+            >
+              <Bookmark
+                className={cn(
+                  'size-4',
+                  skill.saved === true && 'text-primary fill-current'
+                )}
+                aria-hidden='true'
+              />
+            </button>
+          )}
           {resolvedVariant === 'enabled' && (
             <Badge variant='secondary'>
               <CheckCircle2 data-icon='inline-start' />
@@ -193,12 +225,24 @@ export function SkillCard({
             skill.description ||
             t('No description provided.')}
         </p>
+        <SocialProofRow
+          rating={skill.rating_summary}
+          downloadCount={skill.download_count}
+        />
         <div className='flex min-h-14 flex-wrap content-start items-start gap-1.5'>
           <PlanBadge plan={skill.required_plan} />
+          <MarketplaceTrustBadges badges={skill.badges} />
           {skill.featured_flag === true || skill.featured === true ? (
             <Badge variant='outline'>
               <Star data-icon='inline-start' />
               {t('Featured')}
+            </Badge>
+          ) : null}
+          {skill.hot_category_boost === true ||
+          skill.badges?.includes('hot_category') === true ? (
+            <Badge variant='secondary'>
+              <Star data-icon='inline-start' />
+              {t('Hot category')}
             </Badge>
           ) : null}
           {skill.is_kids_safe === true && <KidsBadge state='kids_safe' />}
@@ -212,16 +256,40 @@ export function SkillCard({
       </CardContent>
       <CardFooter className='justify-between gap-3'>
         <span className='text-muted-foreground min-w-0 truncate text-xs'>
-          {statusLabel}
+          {showPaywallCTA ? t('$2 unlock') : statusLabel}
         </span>
-        <SkillCTA
-          action={action}
-          disabled={ctaDisabled}
-          onClick={(event) => {
-            event.stopPropagation()
-            onCTA?.(skill)
-          }}
-        />
+        {showPaywallCTA ? (
+          <div className='flex shrink-0 items-center gap-2'>
+            <SkillCTA
+              action='upgrade'
+              label={t('Unlock $2')}
+              disabled={ctaDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onCTA?.(skill)
+              }}
+            />
+            <SkillCTA
+              action='upgrade'
+              label={t('Get PLUS')}
+              variant='outline'
+              disabled={ctaDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onPlusCTA?.(skill)
+              }}
+            />
+          </div>
+        ) : (
+          <SkillCTA
+            action={action}
+            disabled={ctaDisabled}
+            onClick={(event) => {
+              event.stopPropagation()
+              onCTA?.(skill)
+            }}
+          />
+        )}
       </CardFooter>
     </Card>
   )

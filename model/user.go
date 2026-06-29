@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	referralmodel "github.com/QuantumNous/new-api/internal/referral/model"
 	"github.com/QuantumNous/new-api/logger"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -72,6 +74,10 @@ type User struct {
 	// HMAC-SHA256 secret used to sign billing webhook payloads (header: X-DeepRouter-Signature).
 	// Per-tenant; never logged. Empty disables signing (and effectively the dispatch in V0).
 	WebhookSecret string `json:"webhook_secret,omitempty" gorm:"type:varchar(128);column:webhook_secret"`
+	// Tier 2 local runner telemetry consent. Off by default; runner telemetry ingest
+	// reads this server-side on every upload so revocation immediately blocks new events.
+	Tier2TelemetryConsent     bool       `json:"tier2_telemetry_consent" gorm:"type:boolean;default:false;column:tier2_telemetry_consent"`
+	Tier2TelemetryConsentedAt *time.Time `json:"tier2_telemetry_consented_at,omitempty" gorm:"column:tier2_telemetry_consented_at"`
 
 	// Auto top-up — OpenAI-style "credit running low, auto-charge saved card" UX.
 	// Requires StripeCustomer set (handled by the regular Stripe checkout flow,
@@ -370,6 +376,17 @@ func inviteUser(inviterId int) (err error) {
 	return DB.Save(user).Error
 }
 
+func getInviteCodeForUser(inviterId int) string {
+	if inviterId <= 0 {
+		return ""
+	}
+	var inviter User
+	if err := DB.Select("aff_code").Where("id = ?", inviterId).First(&inviter).Error; err != nil {
+		return ""
+	}
+	return inviter.AffCode
+}
+
 func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
@@ -455,6 +472,7 @@ func (user *User) Insert(inviterId int) error {
 		RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("新用户注册赠送 %s", logger.LogQuota(common.QuotaForNewUser)))
 	}
 	if inviterId != 0 {
+		_ = referralmodel.RecordSignupTx(DB, int64(user.Id), int64(inviterId), getInviteCodeForUser(inviterId))
 		if common.QuotaForInvitee > 0 {
 			_ = IncreaseUserQuota(user.Id, common.QuotaForInvitee, true)
 			RecordLog(user.Id, LogTypeSystem, fmt.Sprintf("使用邀请码赠送 %s", logger.LogQuota(common.QuotaForInvitee)))
@@ -494,6 +512,9 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	result := tx.Create(user)
 	if result.Error != nil {
 		return result.Error
+	}
+	if inviterId != 0 {
+		_ = referralmodel.RecordSignupTx(tx, int64(user.Id), int64(inviterId), getInviteCodeForUser(inviterId))
 	}
 
 	return nil

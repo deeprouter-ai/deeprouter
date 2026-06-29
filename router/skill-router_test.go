@@ -119,6 +119,29 @@ func TestSkillRouterAdminAuthFailureUsesEnvelope(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), `"success":false`)
 }
 
+func TestSkillRouterAdminUserSkillUsageRequiresRootAuth(t *testing.T) {
+	engine := newSkillTestRouter(t, false)
+	db := platformmodel.DB
+	require.NoError(t, db.Create(&platformmodel.User{
+		Id:                    42,
+		Username:              "dr94-target",
+		Password:              "password123",
+		Status:                common.UserStatusEnabled,
+		Role:                  common.RoleCommonUser,
+		Tier2TelemetryConsent: true,
+	}).Error)
+
+	adminCookie := signedSessionCookie(t, 10, common.RoleAdminUser)
+	admin := performAuthedSkillRequest(engine, "/api/v1/admin/users/42/skill-usage", adminCookie, 10)
+	require.Equal(t, http.StatusForbidden, admin.Code)
+	assert.Contains(t, admin.Body.String(), `"code":"FORBIDDEN"`)
+
+	rootCookie := signedSessionCookie(t, 11, common.RoleRootUser)
+	root := performAuthedSkillRequest(engine, "/api/v1/admin/users/42/skill-usage", rootCookie, 11)
+	require.Equal(t, http.StatusOK, root.Code)
+	assert.Contains(t, root.Body.String(), `"consent_granted":true`)
+}
+
 func TestSkillRouterOpsAuthFailureUsesEnvelope(t *testing.T) {
 	engine := newSkillTestRouter(t, false)
 
@@ -142,6 +165,14 @@ func TestSkillRouterSkillAnalyticsAuthFailureUsesEnvelope(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, skills.Code)
 	assert.Contains(t, skills.Body.String(), `"code":"AUTH_REQUIRED"`)
 	assert.Contains(t, skills.Body.String(), `"request_id":`)
+}
+
+func TestSkillRouterTelemetryUsageRequiresAPIToken(t *testing.T) {
+	engine := newSkillTestRouter(t, false)
+
+	w := performSkillRequestWithBody(engine, http.MethodPost, "/api/v1/telemetry/skill-usage", `{"skill_id":"s","success":true}`)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestSkillRouterMySkillsRequiresAuth(t *testing.T) {
@@ -251,7 +282,12 @@ func newSkillRouterTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	require.NoError(t, skillmodel.MigrateSkills(db))
 	require.NoError(t, skillmodel.MigrateUserEnabledSkills(db))
+	require.NoError(t, skillmodel.MigrateUserSavedSkills(db))
+	require.NoError(t, skillmodel.MigrateSkillPurchases(db))
+	require.NoError(t, skillmodel.MigrateSkillAuditLog(db))
+	require.NoError(t, skillmodel.MigrateSkillPurchases(db))
 	require.NoError(t, skillmodel.MigrateSkillUsageEvents(db))
+	require.NoError(t, skillmodel.MigrateSkillTelemetryQuarantine(db))
 	require.NoError(t, db.AutoMigrate(&platformmodel.User{}))
 	published := routerTestSkill("published-skill", enums.SkillStatusPublished)
 	draft := routerTestSkill("draft-skill", enums.SkillStatusDraft)

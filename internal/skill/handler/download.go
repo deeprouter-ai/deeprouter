@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	skillapi "github.com/QuantumNous/new-api/internal/skill/api"
 	"github.com/QuantumNous/new-api/internal/skill/enums"
 	"github.com/QuantumNous/new-api/internal/skill/errcodes"
 	skillmodel "github.com/QuantumNous/new-api/internal/skill/model"
 	"github.com/QuantumNous/new-api/internal/skill/packageassets"
+	"github.com/QuantumNous/new-api/internal/skill/pricing"
 	appmodel "github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -57,9 +59,8 @@ func DownloadSkillPackage(c *gin.Context) {
 		return
 	}
 
-	if !downloadEntitled(s.RequiredPlan, c.GetString("group")) {
-		skillapi.Error(c, errcodes.ErrSkillPlanRequired,
-			fmt.Sprintf("This skill requires the %s plan.", s.RequiredPlan), nil)
+	if code := downloadEntitlementCode(db, s, int64(c.GetInt("id")), c.GetString("group")); code != "" {
+		skillapi.Error(c, code, downloadEntitlementMessage(s, code), nil)
 		return
 	}
 
@@ -94,9 +95,8 @@ func DownloadSkillVersionPackage(c *gin.Context) {
 		return
 	}
 
-	if !downloadEntitled(s.RequiredPlan, c.GetString("group")) {
-		skillapi.Error(c, errcodes.ErrSkillPlanRequired,
-			fmt.Sprintf("This skill requires the %s plan.", s.RequiredPlan), nil)
+	if code := downloadEntitlementCode(db, s, int64(c.GetInt("id")), c.GetString("group")); code != "" {
+		skillapi.Error(c, code, downloadEntitlementMessage(s, code), nil)
 		return
 	}
 
@@ -123,7 +123,7 @@ func sendSkillPackageDownload(c *gin.Context, db *gorm.DB, s skillmodel.Skill, v
 		return
 	}
 
-	entryPoint := downloadEntryPoint(c.Query("entry_point"))
+	entryPoint := downloadEntryPoint(c)
 	userPlan := groupToPlan(c.GetString("group"))
 	if err := emitSkillEnabledForDownload(db, userID, s, userPlan, entryPoint); err != nil {
 		common.SysLog("EmitSkillEnabled failed for skill " + s.ID + " version " + version.ID + ": " + err.Error())
@@ -135,19 +135,106 @@ func sendSkillPackageDownload(c *gin.Context, db *gorm.DB, s skillmodel.Skill, v
 	c.Data(http.StatusOK, "application/zip", zipBytes)
 }
 
-// downloadEntitled reports whether the user's group level meets or exceeds the
-// skill's required plan. Maps platform group strings to the three-tier hierarchy
-// used by the availability resolver (free < pro < enterprise).
-func downloadEntitled(required enums.RequiredPlan, userGroup string) bool {
-	return downloadPlanLevel(groupToPlan(userGroup)) >= downloadPlanLevel(required)
+func downloadEntitlementCode(db *gorm.DB, s skillmodel.Skill, userID int64, userGroup string) errcodes.ErrorCode {
+	hasOneTimeEntitlement := false
+	if userID > 0 {
+		ok, err := skillmodel.HasOneTimeEntitlement(db, userID, s.ID)
+		if err != nil {
+			return errcodes.ErrSkillInternalError
+		}
+		hasOneTimeEntitlement = ok
+	}
+	plan, subActive := downloadRuntimePlan(db, userID, userGroup)
+	decision := pricing.ResolveEntitlement(pricing.EntitlementInput{
+		RequiredPlan:          s.RequiredPlan,
+		MonetizationType:      s.MonetizationType,
+		UserPlan:              plan,
+		SubscriptionActive:    subActive,
+		HasOneTimeEntitlement: hasOneTimeEntitlement,
+	})
+	if decision.Allowed {
+		return ""
+	}
+	return decision.Code
 }
 
-func downloadEntryPoint(raw string) enums.EntryPoint {
+func downloadEntitlementMessage(s skillmodel.Skill, code errcodes.ErrorCode) string {
+	if code == errcodes.ErrSkillSubscriptionInactive {
+		return "This skill requires an active PLUS subscription."
+	}
+	if s.MonetizationType == enums.MonetizationTypeOneTime {
+		return "This skill requires a USD 2 one-time purchase or active PLUS."
+	}
+	return fmt.Sprintf("This skill requires the %s plan.", s.RequiredPlan)
+}
+
+func downloadRuntimePlan(db *gorm.DB, userID int64, group string) (enums.RequiredPlan, bool) {
+	groupPlan := groupToPlan(group)
+	if userID <= 0 || db == nil || !db.Migrator().HasTable("user_subscriptions") || !db.Migrator().HasTable("subscription_plans") {
+		return groupPlan, true
+	}
+
+	var rows []struct {
+		UpgradeGroup string
+		Active       bool
+	}
+	if err := db.Table("user_subscriptions AS us").
+		Select("sp.upgrade_group, us.status = ? AND us.end_time > ? AS active", "active", common.GetTimestamp()).
+		Joins("JOIN subscription_plans AS sp ON sp.id = us.plan_id").
+		Where("us.user_id = ?", userID).
+		Scan(&rows).Error; err != nil || len(rows) == 0 {
+		return groupPlan, true
+	}
+
+	bestPlan := groupPlan
+	for _, row := range rows {
+		if !row.Active {
+			continue
+		}
+		plan := groupToPlan(row.UpgradeGroup)
+		if planLevel(plan) > planLevel(bestPlan) {
+			bestPlan = plan
+		}
+	}
+	return bestPlan, bestPlan == enums.RequiredPlanFree || hasActivePaidSubscription(rows)
+}
+
+func hasActivePaidSubscription(rows []struct {
+	UpgradeGroup string
+	Active       bool
+}) bool {
+	for _, row := range rows {
+		if row.Active && groupToPlan(row.UpgradeGroup) != enums.RequiredPlanFree {
+			return true
+		}
+	}
+	return false
+}
+
+func downloadEntryPoint(c *gin.Context) enums.EntryPoint {
+	if common.GetContextKeyString(c, constant.ContextKeySkillAuthEntryPoint) == string(enums.EntryPointAPIToken) {
+		return enums.EntryPointAPIToken
+	}
+	raw := c.Query("entry_point")
 	switch enums.EntryPoint(strings.TrimSpace(raw)) {
 	case enums.EntryPointNew:
 		return enums.EntryPointNew
+	case enums.EntryPointNewWeek:
+		return enums.EntryPointNewWeek
+	case enums.EntryPointTrending:
+		return enums.EntryPointTrending
 	case enums.EntryPointRecommended:
 		return enums.EntryPointRecommended
+	case enums.EntryPointRecoPersonal:
+		return enums.EntryPointRecoPersonal
+	case enums.EntryPointRecoCodownload:
+		return enums.EntryPointRecoCodownload
+	case enums.EntryPointLeaderboardWeekly:
+		return enums.EntryPointLeaderboardWeekly
+	case enums.EntryPointLeaderboardMonthly:
+		return enums.EntryPointLeaderboardMonthly
+	case enums.EntryPointUserHome:
+		return enums.EntryPointUserHome
 	default:
 		return enums.EntryPointSkillPackage
 	}
@@ -164,7 +251,7 @@ func groupToPlan(group string) enums.RequiredPlan {
 	}
 }
 
-func downloadPlanLevel(p enums.RequiredPlan) int {
+func planLevel(p enums.RequiredPlan) int {
 	switch p {
 	case enums.RequiredPlanFree:
 		return 0
@@ -184,7 +271,7 @@ func emitSkillEnabledForDownload(db *gorm.DB, userID int64, s skillmodel.Skill, 
 	}
 	if !isKidsSession {
 		return skillmodel.EmitSkillEnabled(db, userID, s.ID, s.ActiveVersionID,
-			string(entryPoint), string(userPlan))
+			string(entryPoint), string(userPlan), s.MonetizationType)
 	}
 
 	plan := userPlan
@@ -199,7 +286,7 @@ func emitSkillEnabledForDownload(db *gorm.DB, userID int64, s skillmodel.Skill, 
 		IsKidsSafeSkill:      &s.IsKidsSafe,
 		IsKidsExclusiveSkill: &s.IsKidsExclusive,
 		Success:              &successVal,
-		Metadata:             skillmodel.SkillJSONB(`{}`),
+		Metadata:             skillmodel.SkillTierEventMetadata(s.MonetizationType, userPlan, nil),
 	}
 	if err := event.ApplyKidsSessionAnalyticsIdentity(userID, userID, kidsAnalyticsSaltVersion(), kidsAnalyticsDailySalt()); err != nil {
 		return err
@@ -281,12 +368,121 @@ func buildSkillPackageForVersion(s skillmodel.Skill, version skillmodel.SkillVer
 
 	files := []skillPackageFile{
 		{Name: "manifest.json", Content: manifestJSON},
+		{Name: "README.md", Content: []byte(buildSkillPackageREADME(s, version))},
 		{Name: "SKILL.md", Content: []byte(buildSkillMD(s))},
 		{Name: "instruction_template.md", Content: []byte(version.InstructionTemplate)},
 		{Name: "runtime/deeprouter_skill_runner.py", Content: packageassets.RuntimeClient()},
 		{Name: "runtime/README.md", Content: packageassets.RuntimeREADME()},
 	}
 	return buildSkillPackageZip(skillPackageKindFor(s), files)
+}
+
+func buildSkillPackageREADME(s skillmodel.Skill, version skillmodel.SkillVersion) string {
+	var sb strings.Builder
+	sb.WriteString("# " + s.Name + "\n\n")
+	if strings.TrimSpace(s.ShortDescription) != "" {
+		sb.WriteString(s.ShortDescription + "\n\n")
+	}
+	sb.WriteString("Skill slug: `" + s.Slug + "`\n\n")
+	sb.WriteString("Skill version: `" + version.ID + "`\n\n")
+
+	writeMarkdownSection(&sb, "Download Instructions", version.DownloadInstructions)
+	writeMarkdownSection(&sb, "Usage Instructions", version.UsageInstructions)
+	writeMarkdownListSection(&sb, "Prerequisites", version.Prerequisites)
+	writeMarkdownListSection(&sb, "Quickstart", version.Quickstart)
+	writeMarkdownExampleIOSection(&sb, version.ExampleIO)
+
+	sb.WriteString("## Runtime Environment\n\n")
+	sb.WriteString("- `DEEPROUTER_API_KEY`\n")
+	sb.WriteString("- `DEEPROUTER_EXECUTION_API_URL`\n\n")
+	sb.WriteString("Run this package through `runtime/deeprouter_skill_runner.py`; do not call provider APIs directly from the package.\n")
+	return sb.String()
+}
+
+func writeMarkdownSection(sb *strings.Builder, title, body string) {
+	sb.WriteString("## " + title + "\n\n")
+	trimmed := strings.TrimSpace(body)
+	if trimmed == "" {
+		sb.WriteString("Not provided.\n\n")
+		return
+	}
+	sb.WriteString(trimmed + "\n\n")
+}
+
+func writeMarkdownListSection(sb *strings.Builder, title string, raw skillmodel.SkillJSONB) {
+	items := markdownStringList(raw)
+	if len(items) == 0 {
+		return
+	}
+	sb.WriteString("## " + title + "\n\n")
+	for _, item := range items {
+		sb.WriteString("- " + item + "\n")
+	}
+	sb.WriteString("\n")
+}
+
+func writeMarkdownExampleIOSection(sb *strings.Builder, raw skillmodel.SkillJSONB) {
+	examples := markdownExampleIO(raw)
+	if len(examples) == 0 {
+		return
+	}
+	sb.WriteString("## Example I/O\n\n")
+	for i, example := range examples {
+		sb.WriteString(fmt.Sprintf("### Example %d\n\n", i+1))
+		if strings.TrimSpace(example.Input) != "" {
+			sb.WriteString("Input:\n\n")
+			sb.WriteString("```text\n" + strings.TrimSpace(example.Input) + "\n```\n\n")
+		}
+		if strings.TrimSpace(example.Output) != "" {
+			sb.WriteString("Output:\n\n")
+			sb.WriteString("```text\n" + strings.TrimSpace(example.Output) + "\n```\n\n")
+		}
+	}
+}
+
+func markdownStringList(raw skillmodel.SkillJSONB) []string {
+	var values []string
+	if err := common.Unmarshal(raw, &values); err == nil {
+		out := make([]string, 0, len(values))
+		for _, value := range values {
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+	var objects []struct {
+		Text string `json:"text"`
+	}
+	if err := common.Unmarshal(raw, &objects); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(objects))
+	for _, object := range objects {
+		if trimmed := strings.TrimSpace(object.Text); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+type markdownIOExample struct {
+	Input  string `json:"input"`
+	Output string `json:"output"`
+}
+
+func markdownExampleIO(raw skillmodel.SkillJSONB) []markdownIOExample {
+	var examples []markdownIOExample
+	if err := common.Unmarshal(raw, &examples); err != nil {
+		return nil
+	}
+	out := make([]markdownIOExample, 0, len(examples))
+	for _, example := range examples {
+		if strings.TrimSpace(example.Input) != "" || strings.TrimSpace(example.Output) != "" {
+			out = append(out, example)
+		}
+	}
+	return out
 }
 
 func packageBytesForCurrentSkillVersion(db *gorm.DB, s skillmodel.Skill) (skillmodel.SkillVersion, []byte, error) {

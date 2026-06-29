@@ -52,9 +52,19 @@ export type SkillCTAAction =
 export type SkillGrowthEntryPoint =
   | 'marketplace_card'
   | 'skill_detail'
+  | 'paywall'
+  | 'saved_list'
   | 'search_results'
   | 'new'
+  | 'new_week'
+  | 'trending'
   | 'recommended'
+  | 'reco_personal'
+  | 'reco_codownload'
+  | 'leaderboard_weekly'
+  | 'leaderboard_monthly'
+  | 'category_demand'
+  | 'user_home'
 
 export type SkillGrowthEventType = 'skill_impression' | 'skill_detail_view'
 
@@ -103,22 +113,61 @@ export interface MarketplaceSkill {
   badges?: string[]
   featured?: boolean
   featured_flag?: boolean
+  hot_category_boost?: boolean
+  category_demand_7d?: number
+  merchandising_entry_point?: SkillGrowthEntryPoint | null
+  saved?: boolean | null
   is_kids_safe?: boolean
   is_kids_exclusive?: boolean
   ai_disclosure_required?: boolean
   published_at?: string | null
+  rating_summary?: RatingSummary
+  download_count?: number
+}
+
+export interface RatingSummary {
+  average: number
+  count: number
+}
+
+export type DownloadLeaderboardWindow = '7d' | '30d'
+
+export interface DownloadLeaderboardSkill extends MarketplaceSkill {
+  download_count: number
+  rank: number
+  window: DownloadLeaderboardWindow
 }
 
 export interface MarketplaceEventPayload {
   event_type: 'skill_impression' | 'skill_detail_view'
   skill_id: string
-  entry_point: 'marketplace_card'
+  entry_point: SkillGrowthEntryPoint
+}
+
+export interface SkillPurchaseResponse {
+  order_id: string
+  skill_id: string
+  skill_version_id?: string
+  status: string
+  entitled: boolean
+  amount_usd: number
+  currency: string
+  quota_charged: number
+  monetization_type: string
 }
 
 export interface DownloadCTA {
   url: string
   // Backend returns "GET"; kept as string to tolerate future methods.
   method: string
+}
+
+export interface SkillVersionInstructions {
+  download_instructions: string
+  usage_instructions: string
+  prerequisites?: unknown[]
+  quickstart?: unknown[]
+  example_io?: unknown[]
 }
 
 // PublicSkillDetail mirrors the backend detail-only response (DR-53):
@@ -128,14 +177,42 @@ export interface DownloadCTA {
 export interface PublicSkillDetail extends MarketplaceSkill {
   requires_deeprouter_key: boolean
   download_cta: DownloadCTA
+  instructions: SkillVersionInstructions
+  saved?: boolean
 }
 
-export interface MySkill extends MarketplaceSkill {
+export interface SavedSkill {
+  skill_id: string
+  slug: string
+  name: string
+  category: string
+  short_description: string
+  skill_status: SkillStatus
+  required_plan: SkillPlan
+  saved_at: string
+  last_used_at?: string | null
+  enabled: boolean
+}
+
+// MySkill mirrors the DR-54 `GET /api/v1/marketplace/my-skills` response item
+// (internal/skill/handler/skills.go): the live payload carries `skill_id` (not
+// `id`) and no `category`. `id`/`category`/`status` are kept optional only for
+// forward-compat and normalization — the live API does not send them — so this
+// is a standalone interface, not an extension of the (id/category-required)
+// MarketplaceSkill listing type.
+export interface MySkill {
   skill_id?: string
+  id?: string
+  slug: string
+  name: string
+  category?: string
   skill_status?: SkillStatus
+  status?: SkillStatus
+  required_plan: SkillPlan
   enabled?: boolean
   enabled_at?: string | null
   last_used_at?: string | null
+  availability?: SkillAvailability
 }
 
 export interface MarketplacePagination {
