@@ -2,6 +2,7 @@ package skillrelay
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -20,28 +21,37 @@ var db *gorm.DB
 // Must be called during router setup before the first request (see router/skill-router.go).
 func SetDB(database *gorm.DB) { db = database }
 
-// Resolve is the relay entry point for DR-64 (tasks/05 §5.1 steps 1-6).
-// It reads user identity exclusively from the auth context (T-21: never from the
-// client payload), loads the Skill from DB, and returns a SkillRelayContext.
+// Resolve is the relay entry point for DR-64/65.
+// It reads user identity exclusively from the auth context, loads the Skill plus
+// immutable active SkillVersion snapshot from DB, and returns a SkillRelayContext.
 //
 // Returns (ctx, "") on success.
-// Returns (nil, errCode) on any failure — caller must abort the request.
+// Returns (nil, errCode) on any failure; caller must abort the request.
 func Resolve(c *gin.Context, skillID string) (*SkillRelayContext, errcodes.ErrorCode) {
 	return resolve(c, db, skillID)
 }
 
+// ResolveVersion is the public routing/package execution entry point when a
+// downloaded package provides a manifest-pinned skill_version_id. Identity still
+// comes exclusively from the authenticated request context; the version pin is
+// only accepted after the server verifies it belongs to the requested published
+// Skill and is active.
+func ResolveVersion(c *gin.Context, skillID string, skillVersionID string) (*SkillRelayContext, errcodes.ErrorCode) {
+	return resolveVersion(c, db, skillID, skillVersionID)
+}
+
 // resolve is the pure, DB-injectable core of Resolve. Used directly in tests.
 func resolve(c *gin.Context, database *gorm.DB, skillID string) (*SkillRelayContext, errcodes.ErrorCode) {
-	// Step 3: reject anonymous callers immediately (user_id=0 → not authenticated).
+	return resolveVersion(c, database, skillID, "")
+}
+
+// resolveVersion is the pure, DB-injectable core of ResolveVersion. Used directly in tests.
+func resolveVersion(c *gin.Context, database *gorm.DB, skillID string, skillVersionID string) (*SkillRelayContext, errcodes.ErrorCode) {
 	userID := common.GetContextKeyInt(c, constant.ContextKeyUserId)
 	if userID == 0 {
 		return nil, errcodes.ErrAuthRequired
 	}
 
-	// Steps 4-6: resolve identity server-side.
-	// Prefer the *model.User already stashed by middleware/policy.go to avoid an
-	// extra DB round-trip. Fall back to a targeted DB lookup when the middleware
-	// did not run (e.g. direct unit tests or non-relay routes).
 	user := airbotixUser(c)
 	if user == nil {
 		if database == nil {
@@ -61,40 +71,141 @@ func resolve(c *gin.Context, database *gorm.DB, skillID string) (*SkillRelayCont
 		return nil, errcodes.ErrAuthRequired
 	}
 
-	// Load skill from DB — only fetch the columns needed for relay entry;
-	// large text fields (description, example_inputs, etc.) are not read here.
 	if database == nil {
 		return nil, errcodes.ErrSkillInternalError
 	}
+
 	var skill skillmodel.Skill
 	if err := database.
-		Select([]string{"id", "status", "required_plan", "active_version_id", "slug", "name", "timeout_seconds", "max_input_tokens", "model_whitelist", "is_kids_safe", "is_kids_exclusive"}).
+		Select([]string{
+			"id",
+			"status",
+			"required_plan",
+			"monetization_type",
+			"active_version_id",
+			"slug",
+			"name",
+			"timeout_seconds",
+			"max_input_tokens",
+			"model_whitelist",
+			"is_kids_safe",
+			"is_kids_exclusive",
+		}).
 		Where("id = ?", skillID).Take(&skill).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errcodes.ErrSkillNotFound
 		}
 		return nil, errcodes.ErrSkillInternalError
 	}
-	// Only published skills with an active version are executable.
-	// draft/deprecated/archived → SKILL_NOT_PUBLISHED (HTTP 403).
-	if skill.Status != enums.SkillStatusPublished {
-		return nil, errcodes.ErrSkillNotPublished
+
+	// DR-66 lifecycle + enabled-state gate (tasks/05 §5.1 step 8, before the
+	// SkillVersion snapshot SELECT / LoadAndApply). Gate failure returns here, so a
+	// disabled / draft / archived skill never loads a
+	// snapshot or prompt ("No prompt load", tasks/05 error table; threat T-05).
+	//
+	// Short-circuit (fixed requirement, not an optimisation): only a published
+	// skill WITH an active version (and, once DR-67 flips the flag, deprecated)
+	// needs the enabled lookup. A missing active version, draft, archived, or
+	// deprecated without DR-67's live flag is rejected on lifecycle alone, so it must
+	// NOT query user_enabled_skills. Gating the lookup on hasActiveVersion also preserves error
+	// priority: a published-but-no-active-version skill returns SKILL_NOT_PUBLISHED
+	// even when the enabled lookup would have hit a DB error (which must not mask the
+	// higher-priority lifecycle failure with SKILL_INTERNAL_ERROR).
+	hasActiveVersion := skill.ActiveVersionID != nil
+	enabled := false
+	if hasActiveVersion &&
+		(skill.Status == enums.SkillStatusPublished ||
+			(deprecatedRuntimeEnabled && skill.Status == enums.SkillStatusDeprecated)) {
+		e, err := userSkillEnabled(database, int64(userID), skill.ID)
+		if err != nil {
+			return nil, errcodes.ErrSkillInternalError
+		}
+		enabled = e
 	}
-	// active_version_id = NULL means the skill has no runnable version yet.
-	// DR-88 (prompt injection) will dereference this pointer — guard it here
-	// so no downstream handler ever receives a nil ActiveVersionID.
-	if skill.ActiveVersionID == nil {
+	if code := lifecycleEnabledDecision(skill.Status, hasActiveVersion, enabled, deprecatedRuntimeEnabled); code != "" {
+		return nil, code
+	}
+
+	// DR-63 version selection (runs AFTER the DR-66 gate authorises execution): use
+	// the manifest-pinned version if provided, else the skill's active version. The
+	// snapshot SELECT below still requires the selected version to be active.
+	selectedVersionID := strings.TrimSpace(skillVersionID)
+	if selectedVersionID == "" {
+		if skill.ActiveVersionID == nil {
+			return nil, errcodes.ErrSkillNotPublished
+		}
+		selectedVersionID = *skill.ActiveVersionID
+	}
+	if strings.TrimSpace(selectedVersionID) == "" {
 		return nil, errcodes.ErrSkillNotPublished
 	}
 
+	var skillVersion skillmodel.SkillVersion
+	var versionEntitlement struct {
+		ID                   string
+		SkillID              string
+		Status               enums.SkillVersionStatus
+		RequiredPlanSnapshot enums.RequiredPlan
+	}
+	if err := database.Model(&skillmodel.SkillVersion{}).
+		Select([]string{
+			"id",
+			"skill_id",
+			"status",
+			"required_plan_snapshot",
+		}).
+		Where("id = ? AND skill_id = ? AND status = ?", selectedVersionID, skill.ID, enums.SkillVersionStatusActive).
+		Take(&versionEntitlement).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcodes.ErrSkillNotPublished
+		}
+		return nil, errcodes.ErrSkillInternalError
+	}
+
+	hasOneTimeEntitlement, err := skillmodel.HasOneTimeEntitlement(database, int64(userID), skill.ID)
+	if err != nil {
+		return nil, errcodes.ErrSkillInternalError
+	}
+	entitlement, err := resolveRuntimeEntitlement(database, userID, user.Group)
+	if err != nil {
+		return nil, errcodes.ErrSkillInternalError
+	}
+	if code := useTimeTierDecision(versionEntitlement.RequiredPlanSnapshot, entitlement.Plan, entitlement.SubActive, skill.MonetizationType, hasOneTimeEntitlement); code != "" {
+		return nil, code
+	}
+
+	if err := database.
+		Select([]string{
+			"id",
+			"skill_id",
+			"status",
+			"instruction_template",
+			"model_whitelist_snapshot",
+			"required_plan_snapshot",
+			"monetization_snapshot",
+			"max_input_tokens_snapshot",
+		}).
+		Where("id = ? AND skill_id = ? AND status = ?", selectedVersionID, skill.ID, enums.SkillVersionStatusActive).
+		Take(&skillVersion).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errcodes.ErrSkillNotPublished
+		}
+		return nil, errcodes.ErrSkillInternalError
+	}
+	if strings.TrimSpace(skillVersion.InstructionTemplate) == "" {
+		return nil, errcodes.ErrSkillInternalError
+	}
+
 	return &SkillRelayContext{
-		RequestID:     uuid.New().String(),
-		SkillID:       skillID,
-		UserID:        userID,
-		IsKidsSession: user.KidsMode,
-		Plan:          groupToPlan(user.Group),
-		SubActive:     true, // TODO(DR-subscription): replace with subscription table lookup
-		Skill:         &skill,
+		RequestID:      uuid.New().String(),
+		SkillID:        skillID,
+		SkillVersionID: skillVersion.ID,
+		UserID:         userID,
+		IsKidsSession:  user.KidsMode,
+		Plan:           entitlement.Plan,
+		SubActive:      entitlement.SubActive,
+		Skill:          &skill,
+		SkillVersion:   &skillVersion,
 	}, ""
 }
 
@@ -107,7 +218,7 @@ func airbotixUser(c *gin.Context) *platformmodel.User {
 
 // groupToPlan maps the platform user.Group string to a skill-marketplace RequiredPlan.
 // "pro" and "enterprise" map directly; all other values (including the default "default")
-// map to free. V1 mapping — a subscription table will supersede this in Phase 2.
+// map to free. V1 mapping - a subscription table will supersede this in Phase 2.
 func groupToPlan(group string) enums.RequiredPlan {
 	switch group {
 	case string(enums.RequiredPlanPro):

@@ -26,6 +26,8 @@ import { Button } from '@/components/ui/button'
 
 const NEVER_CALLED_DISMISS_KEY = 'dr_dash_banner_never_called_dismissed'
 const LOW_QUOTA_DISMISS_KEY = 'dr_dash_banner_low_quota_dismissed'
+const MARKETPLACE_POINTER_DISMISS_KEY =
+  'dr78_dash_marketplace_pointer_dismissed'
 
 // Trigger the low-quota banner when the user's REMAINING quota dips
 // below this many tokens. 50_000 tokens ≈ $0.10 ≈ ~10 chat turns of
@@ -50,9 +52,30 @@ function writeDismissed(key: string): void {
   }
 }
 
-function parseSettingRaw(
-  raw: unknown
-): Record<string, unknown> | null {
+type ClientSlug =
+  | 'cherry-studio'
+  | 'chatbox'
+  | 'lobechat'
+  | 'cursor'
+  | 'claude-code'
+  | 'code'
+
+function asClientSlug(value: unknown): ClientSlug | null {
+  if (typeof value !== 'string') return null
+  switch (value) {
+    case 'cherry-studio':
+    case 'chatbox':
+    case 'lobechat':
+    case 'cursor':
+    case 'claude-code':
+    case 'code':
+      return value
+    default:
+      return null
+  }
+}
+
+function parseSettingRaw(raw: unknown): Record<string, unknown> | null {
   if (!raw) return null
   if (typeof raw === 'string') {
     try {
@@ -93,6 +116,8 @@ export function OnboardingStatusBanner() {
   const [lowQuotaDismissed, setLowQuotaDismissed] = useState(() =>
     readDismissed(LOW_QUOTA_DISMISS_KEY)
   )
+  const [marketplacePointerDismissed, setMarketplacePointerDismissed] =
+    useState(() => readDismissed(MARKETPLACE_POINTER_DISMISS_KEY))
 
   const setting = useMemo(() => parseSettingRaw(user?.setting), [user?.setting])
 
@@ -122,10 +147,32 @@ export function OnboardingStatusBanner() {
     remainingQuota < LOW_QUOTA_THRESHOLD &&
     !lowQuotaDismissed
 
-  if (!showNeverCalled && !showLowQuota) return null
+  const showMarketplacePointer = hasPersona && !marketplacePointerDismissed
+
+  if (!showNeverCalled && !showLowQuota && !showMarketplacePointer) return null
 
   return (
     <div className='flex flex-col gap-3'>
+      {showMarketplacePointer && (
+        <Banner
+          tone='accent'
+          icon={<PackageOpen className='size-4' aria-hidden='true' />}
+          title={t('Marketplace skills are ready.')}
+          description={t(
+            'Start with a ready-made skill when you want a guided workflow instead of a blank prompt.'
+          )}
+          actions={
+            <Button size='sm' render={<Link to='/skills' />}>
+              {t('Browse skills')}
+            </Button>
+          }
+          onDismiss={() => {
+            setMarketplacePointerDismissed(true)
+            writeDismissed(MARKETPLACE_POINTER_DISMISS_KEY)
+          }}
+        />
+      )}
+
       {showNeverCalled && (
         <Banner
           tone='accent'

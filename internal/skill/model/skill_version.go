@@ -25,11 +25,21 @@ type SkillVersion struct {
 	// Callers must handle nil before unmarshaling.
 	OutputSchema *SkillJSONB `gorm:"column:output_schema;type:text"`
 
+	DownloadInstructions string     `gorm:"column:download_instructions;type:text;not null;default:''"`
+	UsageInstructions    string     `gorm:"column:usage_instructions;type:text;not null;default:''"`
+	Prerequisites        SkillJSONB `gorm:"column:prerequisites;type:text;not null"`
+	Quickstart           SkillJSONB `gorm:"column:quickstart;type:text;not null"`
+	ExampleIO            SkillJSONB `gorm:"column:example_io;type:text;not null"`
+
 	ModelWhitelistSnapshot SkillJSONB         `gorm:"column:model_whitelist_snapshot;type:text;not null"`
 	RequiredPlanSnapshot   enums.RequiredPlan `gorm:"column:required_plan_snapshot;type:varchar(32);not null;check:chk_skill_versions_required_plan_snapshot,required_plan_snapshot IN ('free','pro','enterprise')"`
 	// MonetizationSnapshot is an object (not an array): {} means "no monetization config".
 	MonetizationSnapshot   SkillJSONB `gorm:"column:monetization_snapshot;type:text;not null"`
 	MaxInputTokensSnapshot *int       `gorm:"column:max_input_tokens_snapshot;type:integer;check:chk_skill_versions_max_input_tokens_snapshot,max_input_tokens_snapshot IS NULL OR max_input_tokens_snapshot > 0"`
+
+	PackageZip     []byte     `gorm:"column:package_zip"`
+	PackageSHA256  *string    `gorm:"column:package_sha256;type:char(64)"`
+	PackageBuiltAt *time.Time `gorm:"column:package_built_at"`
 
 	RolloutPercentage int     `gorm:"column:rollout_percentage;not null;default:100;check:chk_skill_versions_rollout_percentage,rollout_percentage BETWEEN 0 AND 100"`
 	ExperimentName    *string `gorm:"column:experiment_name;type:varchar(128)"`
@@ -50,6 +60,9 @@ func (v *SkillVersion) BeforeCreate(tx *gorm.DB) error {
 	}
 	// output_schema: intentionally not normalized — nil stays nil (NULL in DB = no schema, PRD §4.2)
 	normalizeSkillJSONB(&v.ModelWhitelistSnapshot)
+	normalizeSkillJSONB(&v.Prerequisites)
+	normalizeSkillJSONB(&v.Quickstart)
+	normalizeSkillJSONB(&v.ExampleIO)
 	normalizeSkillJSONBObject(&v.MonetizationSnapshot) // object shape, not array
 	return nil
 }

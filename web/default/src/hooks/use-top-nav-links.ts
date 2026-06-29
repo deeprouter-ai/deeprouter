@@ -144,8 +144,9 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Rankings'), href: '/rankings', disabled })
   }
 
-  // Resources (DeepRouter integration guides) — in-app docs site at /resources.
-  // Operators can hide it via HeaderNavModules.docs in System Settings → Site.
+  // Resources — DeepRouter's own in-app docs site at /resources (integration
+  // guides). Upstream pointed Docs at docs.newapi.pro; we now have our own, so
+  // this slot is re-enabled. Operators can hide it via HeaderNavModules.docs.
   if (modules?.docs !== false) {
     links.push({ title: t('Resources'), href: '/resources' })
   }

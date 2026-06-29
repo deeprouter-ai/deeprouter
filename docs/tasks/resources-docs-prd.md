@@ -127,7 +127,7 @@ UI 必须遵循 `docs/DESIGN.md` §0–5。v1 复用现有 prose / Tailwind toke
 | dev 实测：`/resources` 200、`*.md` 200 text/markdown | ✅ |
 | 配图（images/ 实图） | 🟡 已上 9 张 DeepRouter 品牌占位图（真图待拍，shot list 仍就绪） |
 | DESIGN.md 视觉正式校对（§0–5） | ✅ 已过：侧栏 active 改 `bg-info/10 text-info`（双模式保 AI-blue）、卡片 `rounded-xl bg-card`、代码块 `prose-pre:bg-card` |
-| 中文版指南 | ⬜ fast-follow |
+| 中文版指南 | ✅ 全 24 篇 `<slug>.zh.md`（只译正文，代码/URL/品牌名原样）；`useDocContent` 按界面语言自动选中/英文，缺失回退英文 |
 
 > ⚠️ 流程订正：本应**先评审本 PRD 再实现**（`AGENTS.md` Rule 11）。实现已先行，
 > 故本 PRD 兼做「已建内容的规格固化 + 待办」。请 Lightman 评审 §1 目标与 §8 决策。
@@ -149,10 +149,12 @@ UI 必须遵循 `docs/DESIGN.md` §0–5。v1 复用现有 prose / Tailwind toke
 
 ## 9. 验收标准
 
-- [ ] 首页导航出现 **Resources**，路由 `/docs`（站内）。
-- [ ] `/docs` 展示分类网格 + 完整指南，覆盖全部 23 个工具。
-- [ ] 任一 `/docs/$slug` 正确渲染：标题、表格、代码块、内部链接可跳。
-- [ ] 图片占位解析到 `/docs/integrations/images/...`；缺图优雅降级。
-- [ ] 无新增运行时依赖；`bun run typecheck` 通过。
-- [ ] 公开（未登录）可访问。
-- [ ] DESIGN.md §0–5 视觉校对通过。
+- [x] 首页导航出现 **Resources**，路由 `/resources`（站内）。
+- [x] `/resources` 展示分类网格 + 完整指南，覆盖全部 23 个工具。
+- [x] 任一 `/resources/$slug` 正确渲染：标题、表格、代码块、内部链接可跳。
+- [x] 图片占位解析到 `/docs/integrations/images/...`；缺图优雅降级（9 张品牌占位图已上）。
+- [x] 无新增运行时依赖；`bun run typecheck` 通过（exit 0）+ `bun run build` 通过（exit 0）。
+- [x] 公开（未登录）可访问。
+- [x] DESIGN.md §0–5 视觉校对通过。
+- [x] 加载失败显示具体原因（HTTP 状态 / 陈旧缓存命中 HTML）+ Retry 重试按钮（非"could not be loaded"一句话）。
+- [x] 导航标签 `Resources` 已注册进 i18n（en/zh），中文站显示「资源」。

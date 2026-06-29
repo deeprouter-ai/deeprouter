@@ -1,0 +1,69 @@
+# DR-95 Category Demand Analytics and Merchandising Signal Test Results
+
+Date: 2026-06-29
+
+## Focused Backend Handler Coverage
+
+- Command: `go test -cover ./internal/skill/handler`
+- Dataset/fixtures: in-memory SQLite Skill Marketplace fixtures seeded by handler tests; DR-95 adds published video/writing Skills, `skill_enabled`, `skill_purchased`, successful/failed `skill_used`, and `admin_preview` exclusion events.
+- Verified: category demand aggregates downloads + successful usage by category over 7d/30d, excludes failed runs/admin preview from demand, returns aggregate-only response, New-this-week boosts hot-category Skills and emits hot-category metadata.
+- Coverage: `internal/skill/handler` 74.4% statements.
+- Result: PASS.
+
+## Related Backend Schema/Enum Coverage
+
+- Command: `go test -cover ./internal/skill/model ./internal/skill/enums`
+- Dataset/fixtures: model migration/enum unit fixtures, including Skill usage event schema checks and enum validity tests.
+- Verified: `category_demand` is accepted by application enum validation and Skill usage event migration/check definitions remain compatible.
+- Coverage: `internal/skill/model` 43.7% statements; `internal/skill/enums` 88.9% statements.
+- Result: PASS.
+
+## Related Skill Regression Suite
+
+- Command: `go test ./internal/skill/...`
+- Dataset/fixtures: existing Skill Marketplace API, model, relay, notify, seed, tier, and availability fixtures.
+- Verified: category-demand changes do not regress Skill download, analytics, entitlement, relay, notification, seed, or tier behavior.
+- Coverage: not collected for this command; related package coverage collected in focused commands above.
+- Result: PASS.
+
+- Command: `go test ./router`
+- Dataset/fixtures: router package Skill Marketplace fixtures, including minimal public marketplace schema without optional `skill_purchase_orders` table.
+- Verified: marketplace list routes keep returning the response envelope when social-proof/category-demand merchandising runs against schemas without optional purchase-order tables.
+- Coverage: not collected for this command; regression covered by handler focused coverage above and router package pass.
+- Result: PASS.
+
+## Frontend Focused Coverage
+
+- Command: `bunx vitest run src/features/marketplace/marketplace.test.tsx src/features/skill-analytics/__tests__/dashboard.integration.test.tsx src/features/skill-analytics/__tests__/types.test.ts src/features/skill-analytics/__tests__/metric-card.test.tsx src/features/skill-analytics/__tests__/date-range-control.test.tsx --coverage`
+- Dataset/fixtures: mocked Marketplace and Skill Analytics API responses, including hot-category boosted New-this-week Skill with `merchandising_entry_point=category_demand`.
+- Verified: Skill Analytics dashboard remains renderable with the new panel, marketplace card renders Hot category badge, boosted detail clicks record `category_demand`, and existing discovery rails/leaderboards still attribute correctly.
+- Coverage: 5 files / 64 tests passed; overall selected coverage 16.74% statements. Touched Skill Analytics feature files reported 84.28% statements, 79.12% branches, 82.14% functions, 83.33% lines.
+- Result: PASS.
+
+## Frontend Typecheck and Build
+
+- Command: `bun run typecheck`
+- Dataset/fixtures: TypeScript project references in `web/default`.
+- Verified: new marketplace and skill-analytics API/types compile.
+- Coverage: not applicable.
+- Result: PASS.
+
+- Command: `bun run build`
+- Dataset/fixtures: production Rsbuild build for `web/default`.
+- Verified: production frontend bundle builds with category-demand UI changes.
+- Coverage: not applicable.
+- Result: PASS.
+
+## Full Go Regression
+
+- Command: `make build-frontend-classic`
+- Dataset/fixtures: legacy `web/classic` production build assets required by root Go embed.
+- Verified: generated missing `web/classic/dist` prerequisite for full Go suite.
+- Coverage: not applicable.
+- Result: PASS.
+
+- Command: `go test ./...`
+- Dataset/fixtures: all repository Go package tests after building `web/default/dist` and `web/classic/dist`.
+- Verified: full Go regression suite passes with category-demand schema, route, handler, and marketplace changes.
+- Coverage: not collected for full suite; focused package coverage listed above.
+- Result: PASS.

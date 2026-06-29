@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import type { MouseEventHandler } from 'react'
 import {
   ArrowRight,
   Download,
@@ -24,6 +25,7 @@ import {
   Play,
   RefreshCcw,
   Sparkles,
+  Trash2,
   UserRound,
   UsersRound,
   Zap,
@@ -35,7 +37,9 @@ import type { SkillCTAAction } from '../types'
 interface SkillCTAProps {
   action: SkillCTAAction
   disabled?: boolean
-  onClick?: () => void
+  label?: string
+  variant?: 'default' | 'outline' | 'secondary' | 'destructive'
+  onClick?: MouseEventHandler<HTMLButtonElement>
 }
 
 const ctaConfig = {
@@ -50,7 +54,12 @@ const ctaConfig = {
     label: 'Contact Sales',
     variant: 'outline',
   },
-  login: { icon: UserRound, label: 'Sign in', variant: 'outline' },
+  login: { icon: UserRound, label: 'Log in', variant: 'outline' },
+  remove: {
+    icon: Trash2,
+    label: 'Remove from My Skills',
+    variant: 'destructive',
+  },
   unavailable: {
     icon: LockKeyhole,
     label: 'Unavailable',
@@ -58,7 +67,13 @@ const ctaConfig = {
   },
 } as const
 
-export function SkillCTA({ action, disabled, onClick }: SkillCTAProps) {
+export function SkillCTA({
+  action,
+  disabled,
+  label,
+  variant,
+  onClick,
+}: SkillCTAProps) {
   const { t } = useTranslation()
   const normalizedAction = action in ctaConfig ? action : 'view'
   const config = ctaConfig[normalizedAction]
@@ -69,14 +84,14 @@ export function SkillCTA({ action, disabled, onClick }: SkillCTAProps) {
     <Button
       type='button'
       size='sm'
-      variant={config.variant}
+      variant={variant ?? config.variant}
       className='min-w-28'
       disabled={disabled || isUnavailable}
       aria-disabled={disabled || isUnavailable}
       onClick={onClick}
     >
       <Icon data-icon='inline-start' />
-      {t(config.label)}
+      {label ?? t(config.label)}
       {normalizedAction === 'view' && <ArrowRight data-icon='inline-end' />}
     </Button>
   )

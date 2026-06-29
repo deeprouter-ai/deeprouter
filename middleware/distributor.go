@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/internal/skill/errcodes"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -35,6 +36,14 @@ func Distribute() func(c *gin.Context) {
 		modelRequest, shouldSelectChannel, err := getModelRequest(c)
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorInvalidRequest, map[string]any{"Error": err.Error()}))
+			return
+		}
+		// DR-68: skill requests must choose their model from the server SkillVersion
+		// snapshot before token model limits, smart-router, and channel selection run.
+		// This prevents a downloaded package from steering routing through its
+		// client-supplied model/history/system hints.
+		if errCode := prepareSkillRelayForDistribution(c, modelRequest); errCode != "" {
+			abortWithOpenAiMessage(c, errcodes.HTTPStatusFor(errCode), string(errCode), types.ErrorCode(errCode))
 			return
 		}
 		// DeepRouter smart routing: deeprouter-auto triggers an HTTP call
@@ -97,7 +106,9 @@ func Distribute() func(c *gin.Context) {
 					tokenModelLimit = map[string]bool{}
 				}
 				matchName := ratio_setting.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
-				if _, ok := tokenModelLimit[matchName]; !ok {
+				// Whitelist match supports trailing-"*" prefix entries (e.g. "claude-*").
+				// This only gates; account/group ability still bounds actual access (DR-1001 §5).
+				if !model.MatchModelLimit(tokenModelLimit, matchName) {
 					abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgDistributorTokenModelForbidden, map[string]any{"Model": modelRequest.Model}))
 					return
 				}

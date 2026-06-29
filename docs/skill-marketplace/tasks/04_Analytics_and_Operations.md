@@ -22,8 +22,8 @@ V1 analytics must answer:
 
 | Item | Decision |
 |---|---|
-| Execution analytics (server-side) | Not in scope；DeepRouter 不执行 Skill，无服务端执行事件 |
-| Per-execution billing analytics | Not in scope；无 per-execution 计费 |
+| Execution analytics (server-side) | In scope for DeepRouter-routed Skill execution surfaces, including `skill_used`, `skill_repeat_use`, and `skill_blocked`; purely local/off-platform execution remains out of scope |
+| Per-execution billing analytics | In scope at the attribution boundary via `skill_billing_events` when DeepRouter-routed execution reaches billable settlement; blocked paths create no billing row |
 | Full referral attribution | V1.1 |
 | A/B experiment dashboard | P1/V1.1 |
 | Tier 2 aggregated dashboard | P1；须 Tier 2 数据量达统计意义后启用 |
@@ -50,6 +50,8 @@ V1 analytics must answer:
 
 Analytics dashboards must not read or expose `instruction_template`, `prompt_guard_template`, raw full user input, provider raw payload, or Kids sensitive content.
 
+Retention implementation note: `skill_usage_events` is an append-only hot event stream, not the permanent warehouse. Keep raw rows hot for 90 days, then archive or aggregate before deletion; dashboards that need longer lookbacks must read aggregate/archive tables rather than extending raw retention by default.
+
 ---
 
 ## 3. Event Taxonomy
@@ -62,7 +64,8 @@ Analytics dashboards must not read or expose `instruction_template`, `prompt_gua
 |---|---|---|---|---|
 | `skill_impression` | Frontend | Skill card or rail item becomes visible | `skill_usage_events` | `event_id`, `timestamp`, `schema_version`, `user_id` nullable, `session_id`, `skill_id`, `entry_point` |
 | `skill_detail_view` | Frontend | Skill Detail opened | `skill_usage_events` | Core + `metadata.source_entry_point` |
-| `skill_saved` | Frontend/Backend | User saves or unsaves Skill | `skill_usage_events` + `skill_saves` | Core + `save_type` ('saved'/'unsaved') |
+| `skill_saved` | Backend | User saves/bookmarks Skill | `skill_usage_events` + `user_saved_skills` | Core + `entry_point` |
+| `skill_unsaved` | Backend | User removes saved/bookmarked Skill | `skill_usage_events` + `user_saved_skills` | Core + `entry_point` |
 | `skill_favorited` | Frontend/Backend | User favorites or unfavorites Skill | `skill_usage_events` + `skill_saves` | Core + `favorite_flag` (true/false) |
 | `skill_enabled` | Backend | Download zip succeeds (download == enable, DR-55) | `skill_usage_events` + `user_enabled_skills` | Core + `skill_version_id`, `plan` |
 | `skill_rated` | Frontend/Backend | User submits or updates rating | `skill_usage_events` + `skill_ratings` | Core + `stars` (1-5), `has_comment` |
@@ -116,7 +119,7 @@ These events must not be required for V1 P0 dashboards:
 |---|---|---:|---|
 | `event_id` | UUID | Yes | `skill_usage_events.event_id`; dedupe key |
 | `timestamp` | timestamp | Yes | Maps to `skill_usage_events.occurred_at`; UTC required |
-| `schema_version` | string | Yes | Stored in `metadata.schema_version` if not first-class |
+| `schema_version` | string | Yes | Stored in `metadata.schema_version` (no first-class column in V1; value `"1.0"`, DR-74) |
 | `user_id` | UUID/null | Conditional | Null allowed for anonymous browse and Kids Session analytics; Kids must not store real child user identifiers here |
 | `tenant_id` | UUID/null | Conditional | Required for logged-in execution |
 | `session_id` | UUID/string | Yes | Server/session derived; Kids analytics uses `kids_session_pseudo_id` |
@@ -189,15 +192,18 @@ Use the same enum as Data/API Spec.
 | `marketplace_card` | Card impression or action from Marketplace |
 | `skill_detail` | Detail page CTA |
 | `my_skills` | My Skills page |
+| `saved_list` | Saved/Favorited Skills list |
 | `skill_package` | Execution from a downloaded Skill package via the public routing API (R2 primary execution entry) |
+| `api_token` | Download or execution authenticated directly by a DeepRouter API token |
 | `playground_picker` | Legacy: in-platform Playground Skill Picker (historical events only) |
 | `featured` | Featured rail |
 | `popular` | Popular rail |
 | `new` | New rail |
 | `recommended` | Recommended Lite rail |
 | `admin_preview` | Admin preview/test execution |
+| `search_results` | Marketplace search results |
 
-V1 execution events primarily use `entry_point=skill_package` (downloaded package via the public routing API). `playground_picker` is retained only for historical events and is not produced by new V1 execution.
+V1 execution events use `entry_point=skill_package` for browser/session package flows and `entry_point=api_token` when the DeepRouter API token itself is the auth+entitlement principal. `playground_picker` is retained only for historical events and is not produced by new V1 execution.
 
 ---
 
@@ -421,7 +427,8 @@ Rules:
 
 - Deprecated and archived Skills are excluded.
 - Free users should see at least one Free Skill when available.
-- Recommendation interactions use existing Skill events with `entry_point=featured/popular/new/recommended`.
+- Recommendation interactions use existing Skill events with `entry_point=featured/popular/new/new_week/trending/recommended/reco_personal/reco_codownload/user_home`.
+- Paywall interactions use existing Skill events with `entry_point=paywall`.
 
 ---
 
@@ -489,10 +496,10 @@ Ops may create a review from the Ops Dashboard using "Mark for Review" on a Skil
 |---|---|
 | Event dedupe | `event_id` must be unique |
 | Required fields | P0 events missing required fields are rejected or quarantined |
-| Late events | Accept up to 24h late; mark late arrival |
-| Clock source | Backend server time preferred |
+| Late events | Accept up to 24h late; mark late arrival. Applies only to trusted server-side producer timestamps (P1); V1 client surfaces use server-receipt time, so nothing is "late" (DR-74) |
+| Clock source | Backend server time preferred. `occurred_at` is **server-authoritative UTC**: current public/client-facing producers use server receipt time, while trusted server-side producers may preserve an explicit event timestamp after UTC normalization. A client's self-reported time, if kept, lives only in optional `metadata.client_event_time` and is never the dashboard/cohort source (DR-74 D2/D4) |
 | Timezone | Persist and query P0 analytics in UTC |
-| Schema version | All events include `schema_version` |
+| Schema version | All events include `schema_version` (V1: `metadata.schema_version="1.0"`, stamped at persistence — DR-74) |
 | Unknown entry point | Reject or map to `unknown` only in quarantine, not production dashboards |
 | Null user | Allowed for anonymous impression/detail and Kids Session analytics only |
 | No prompt leakage | Reject events containing restricted prompt-like keys |
@@ -559,7 +566,7 @@ Export policy:
 }
 ```
 
-Persistence: `timestamp` maps to `skill_usage_events.occurred_at`.
+Persistence: `timestamp` maps to `skill_usage_events.occurred_at` (server-authoritative UTC). The top-level `schema_version` shown here is a wire-envelope field; persisted rows have no such column — only `metadata.schema_version` is stored (DR-74).
 
 ### 16.2 `skill_used`
 
@@ -575,7 +582,7 @@ Persistence: `timestamp` maps to `skill_usage_events.occurred_at`.
   "request_id": "req_789",
   "skill_id": "22222222-2222-4222-8222-222222222222",
   "skill_version_id": "66666666-6666-4666-8666-666666666666",
-  "entry_point": "playground_picker",
+  "entry_point": "skill_package",
   "plan": "pro",
   "subscription_status": "active",
   "persona": "developer",
@@ -611,7 +618,7 @@ Persistence: `timestamp` maps to `skill_usage_events.occurred_at`.
   "request_id": "req_blocked_123",
   "skill_id": "22222222-2222-4222-8222-222222222222",
   "skill_version_id": null,
-  "entry_point": "playground_picker",
+  "entry_point": "skill_package",
   "plan": "free",
   "subscription_status": "active",
   "is_kids_session": false,

@@ -55,6 +55,7 @@ func TestRequiredPlan_StringValues(t *testing.T) {
 func TestMonetizationType_Valid(t *testing.T) {
 	valid := []MonetizationType{
 		MonetizationTypeFree, MonetizationTypePlanIncluded, MonetizationTypeTokenMarkup,
+		MonetizationTypeOneTime, MonetizationTypePlusExclusive,
 	}
 	for _, m := range valid {
 		assert.True(t, m.Valid(), "expected %q to be valid", m)
@@ -70,6 +71,8 @@ func TestMonetizationType_StringValues(t *testing.T) {
 	assert.Equal(t, "free", string(MonetizationTypeFree))
 	assert.Equal(t, "plan_included", string(MonetizationTypePlanIncluded))
 	assert.Equal(t, "token_markup", string(MonetizationTypeTokenMarkup))
+	assert.Equal(t, "one_time", string(MonetizationTypeOneTime))
+	assert.Equal(t, "plus_exclusive", string(MonetizationTypePlusExclusive))
 }
 
 // --- SkillVersionStatus ---
@@ -154,7 +157,7 @@ func TestBlockReason_Valid(t *testing.T) {
 	valid := []BlockReason{
 		BlockReasonAuthRequired, BlockReasonSkillNotFound, BlockReasonSkillNotPublished,
 		BlockReasonSkillNotEnabled, BlockReasonPlanRequired, BlockReasonSubscriptionInactive,
-		BlockReasonQuotaExceeded, BlockReasonKidsModeBlocked, BlockReasonContextTooLong,
+		BlockReasonEvaluationNotPassed, BlockReasonQuotaExceeded, BlockReasonKidsModeBlocked, BlockReasonContextTooLong,
 		BlockReasonRateLimited, BlockReasonTimeout, BlockReasonSafetyViolation,
 		BlockReasonInternalError,
 	}
@@ -181,6 +184,7 @@ func TestBlockReason_StringValues(t *testing.T) {
 	assert.Equal(t, "skill_not_enabled", string(BlockReasonSkillNotEnabled))
 	assert.Equal(t, "plan_required", string(BlockReasonPlanRequired))
 	assert.Equal(t, "subscription_inactive", string(BlockReasonSubscriptionInactive))
+	assert.Equal(t, "evaluation_not_passed", string(BlockReasonEvaluationNotPassed))
 	assert.Equal(t, "quota_exceeded", string(BlockReasonQuotaExceeded))
 	assert.Equal(t, "kids_mode_blocked", string(BlockReasonKidsModeBlocked))
 	assert.Equal(t, "context_too_long", string(BlockReasonContextTooLong))
@@ -195,9 +199,13 @@ func TestBlockReason_StringValues(t *testing.T) {
 func TestEntryPoint_Valid(t *testing.T) {
 	valid := []EntryPoint{
 		EntryPointMarketplaceCard, EntryPointSkillDetail, EntryPointMySkills,
-		EntryPointPlaygroundPicker, EntryPointFeatured, EntryPointPopular,
-		EntryPointNew, EntryPointRecommended, EntryPointAdminPreview,
-		EntryPointSkillPackage,
+		EntryPointSavedList, EntryPointFeatured, EntryPointPopular,
+		EntryPointNew, EntryPointNewWeek, EntryPointTrending,
+		EntryPointRecommended, EntryPointRecoPersonal,
+		EntryPointRecoCodownload, EntryPointAdminPreview,
+		EntryPointSearchResults, EntryPointPaywall,
+		EntryPointSkillPackage, EntryPointAPIToken,
+		EntryPointDownloadedRunner, EntryPointPlaygroundPicker,
 	}
 	for _, e := range valid {
 		assert.True(t, e.Valid(), "expected %q to be valid", e)
@@ -213,11 +221,27 @@ func TestEntryPoint_StringValues(t *testing.T) {
 	assert.Equal(t, "marketplace_card", string(EntryPointMarketplaceCard))
 	assert.Equal(t, "skill_detail", string(EntryPointSkillDetail))
 	assert.Equal(t, "my_skills", string(EntryPointMySkills))
-	assert.Equal(t, "playground_picker", string(EntryPointPlaygroundPicker))
+	assert.Equal(t, "saved_list", string(EntryPointSavedList))
 	assert.Equal(t, "featured", string(EntryPointFeatured))
 	assert.Equal(t, "popular", string(EntryPointPopular))
 	assert.Equal(t, "new", string(EntryPointNew))
+	assert.Equal(t, "new_week", string(EntryPointNewWeek))
+	assert.Equal(t, "trending", string(EntryPointTrending))
 	assert.Equal(t, "recommended", string(EntryPointRecommended))
+	assert.Equal(t, "reco_personal", string(EntryPointRecoPersonal))
+	assert.Equal(t, "reco_codownload", string(EntryPointRecoCodownload))
+	assert.Equal(t, "digest", string(EntryPointDigest))
+	assert.Equal(t, "reengage", string(EntryPointReengage))
 	assert.Equal(t, "admin_preview", string(EntryPointAdminPreview))
+	assert.Equal(t, "search_results", string(EntryPointSearchResults))
+	assert.Equal(t, "paywall", string(EntryPointPaywall))
 	assert.Equal(t, "skill_package", string(EntryPointSkillPackage))
+	assert.Equal(t, "api_token", string(EntryPointAPIToken))
+	assert.Equal(t, "downloaded_runner", string(EntryPointDownloadedRunner))
+	assert.Equal(t, "playground_picker", string(EntryPointPlaygroundPicker))
+}
+
+func TestEntryPoint_LegacyPlaygroundPickerStillParses(t *testing.T) {
+	assert.True(t, EntryPoint("playground_picker").Valid(),
+		"legacy Playground analytics rows must continue to parse")
 }

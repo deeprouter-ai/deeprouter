@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   LockKeyhole,
   PackageOpen,
+  Bookmark,
   Star,
   TriangleAlert,
 } from 'lucide-react'
@@ -37,7 +38,12 @@ import {
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MarketplaceSkill, SkillCTAAction } from '../types'
-import { KidsBadge, PlanBadge } from './badges'
+import {
+  KidsBadge,
+  MarketplaceTrustBadges,
+  PlanBadge,
+  SocialProofRow,
+} from './badges'
 import { LockState } from './lock-state'
 import { normalizeLockState } from './lock-state-utils'
 import { SkillCTA } from './skill-cta'
@@ -55,7 +61,12 @@ interface SkillCardProps {
   variant?: SkillCardVariant
   cta?: SkillCTAAction
   onCTA?: (skill: MarketplaceSkill) => void
+  onPlusCTA?: (skill: MarketplaceSkill) => void
+  onOpen?: (skill: MarketplaceSkill) => void
+  onSaveToggle?: (skill: MarketplaceSkill) => void
+  cardRef?: (node: HTMLDivElement | null) => void
   className?: string
+  ctaDisabled?: boolean
 }
 
 function getSkillVariant(
@@ -78,6 +89,7 @@ function getSkillCTA(skill: MarketplaceSkill): SkillCTAAction {
     action === 'renew' ||
     action === 'contact_sales' ||
     action === 'login' ||
+    action === 'remove' ||
     action === 'unavailable'
   ) {
     return action
@@ -91,7 +103,12 @@ export function SkillCard({
   variant,
   cta,
   onCTA,
+  onPlusCTA,
+  onOpen,
+  onSaveToggle,
+  cardRef,
   className,
+  ctaDisabled,
 }: SkillCardProps) {
   const { t } = useTranslation()
   const resolvedVariant =
@@ -103,6 +120,8 @@ export function SkillCard({
 
   const lockState = normalizeLockState(skill.availability?.lock_code)
   const action = cta ?? getSkillCTA(skill)
+  const showPaywallCTA =
+    resolvedVariant === 'locked' && (action === 'upgrade' || action === 'renew')
   const statusLabel =
     resolvedVariant === 'enabled'
       ? t('Enabled')
@@ -116,13 +135,23 @@ export function SkillCard({
 
   return (
     <Card
+      ref={cardRef}
       size='sm'
       className={cn(
-        'min-h-[232px]',
+        'hover:bg-card/80 focus-within:ring-ring/30 min-h-[272px] cursor-pointer transition-colors focus-within:ring-3',
         resolvedVariant === 'locked' && 'opacity-85',
         resolvedVariant === 'deprecated' && 'border-dashed',
         className
       )}
+      role='button'
+      tabIndex={0}
+      onClick={() => onOpen?.(skill)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen?.(skill)
+        }
+      }}
       aria-label={t('Skill {{name}}, {{plan}} plan, {{status}}', {
         name: skill.name,
         plan: t(
@@ -141,13 +170,35 @@ export function SkillCard({
             <PackageOpen className='size-5' aria-hidden='true' />
           </div>
           <div className='min-w-0'>
-            <CardTitle className='truncate'>{skill.name}</CardTitle>
+            <CardTitle className='line-clamp-2 min-h-10'>
+              {skill.name}
+            </CardTitle>
             <CardDescription className='truncate'>
               {skill.category || t('Uncategorized')}
             </CardDescription>
           </div>
         </div>
         <CardAction>
+          {skill.saved != null && (
+            <button
+              type='button'
+              className='text-muted-foreground hover:text-foreground focus-visible:ring-ring bg-background inline-flex size-8 items-center justify-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:outline-none'
+              aria-label={skill.saved ? t('Unsave Skill') : t('Save Skill')}
+              aria-pressed={skill.saved === true}
+              onClick={(event) => {
+                event.stopPropagation()
+                onSaveToggle?.(skill)
+              }}
+            >
+              <Bookmark
+                className={cn(
+                  'size-4',
+                  skill.saved === true && 'text-primary fill-current'
+                )}
+                aria-hidden='true'
+              />
+            </button>
+          )}
           {resolvedVariant === 'enabled' && (
             <Badge variant='secondary'>
               <CheckCircle2 data-icon='inline-start' />
@@ -174,12 +225,24 @@ export function SkillCard({
             skill.description ||
             t('No description provided.')}
         </p>
-        <div className='flex min-h-6 flex-wrap items-center gap-1.5'>
+        <SocialProofRow
+          rating={skill.rating_summary}
+          downloadCount={skill.download_count}
+        />
+        <div className='flex min-h-14 flex-wrap content-start items-start gap-1.5'>
           <PlanBadge plan={skill.required_plan} />
+          <MarketplaceTrustBadges badges={skill.badges} />
           {skill.featured_flag === true || skill.featured === true ? (
             <Badge variant='outline'>
               <Star data-icon='inline-start' />
               {t('Featured')}
+            </Badge>
+          ) : null}
+          {skill.hot_category_boost === true ||
+          skill.badges?.includes('hot_category') === true ? (
+            <Badge variant='secondary'>
+              <Star data-icon='inline-start' />
+              {t('Hot category')}
             </Badge>
           ) : null}
           {skill.is_kids_safe === true && <KidsBadge state='kids_safe' />}
@@ -187,13 +250,46 @@ export function SkillCard({
             <KidsBadge state='kids_exclusive' />
           )}
         </div>
-        {lockState != null && <LockState state={lockState} />}
+        <div className='min-h-5'>
+          {lockState != null && <LockState state={lockState} />}
+        </div>
       </CardContent>
       <CardFooter className='justify-between gap-3'>
         <span className='text-muted-foreground min-w-0 truncate text-xs'>
-          {statusLabel}
+          {showPaywallCTA ? t('$2 unlock') : statusLabel}
         </span>
-        <SkillCTA action={action} onClick={() => onCTA?.(skill)} />
+        {showPaywallCTA ? (
+          <div className='flex shrink-0 items-center gap-2'>
+            <SkillCTA
+              action='upgrade'
+              label={t('Unlock $2')}
+              disabled={ctaDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onCTA?.(skill)
+              }}
+            />
+            <SkillCTA
+              action='upgrade'
+              label={t('Get PLUS')}
+              variant='outline'
+              disabled={ctaDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                onPlusCTA?.(skill)
+              }}
+            />
+          </div>
+        ) : (
+          <SkillCTA
+            action={action}
+            disabled={ctaDisabled}
+            onClick={(event) => {
+              event.stopPropagation()
+              onCTA?.(skill)
+            }}
+          />
+        )}
       </CardFooter>
     </Card>
   )
@@ -201,7 +297,7 @@ export function SkillCard({
 
 export function SkillCardSkeleton({ className }: { className?: string }) {
   return (
-    <Card size='sm' className={cn('min-h-[232px]', className)} aria-busy='true'>
+    <Card size='sm' className={cn('min-h-[272px]', className)} aria-busy='true'>
       <CardHeader>
         <div className='flex items-start gap-3'>
           <Skeleton className='size-10 shrink-0 rounded-lg' />
@@ -216,10 +312,11 @@ export function SkillCardSkeleton({ className }: { className?: string }) {
           <Skeleton className='h-4 w-full' />
           <Skeleton className='h-4 w-5/6' />
         </div>
-        <div className='flex min-h-6 gap-2'>
+        <div className='flex min-h-14 gap-2'>
           <Skeleton className='h-5 w-16 rounded-4xl' />
           <Skeleton className='h-5 w-24 rounded-4xl' />
         </div>
+        <Skeleton className='h-4 w-28' />
       </CardContent>
       <CardFooter className='justify-between gap-3'>
         <Skeleton className='h-4 w-20' />

@@ -44,15 +44,19 @@ func (p RequiredPlan) Valid() bool { _, ok := validRequiredPlans[p]; return ok }
 type MonetizationType string
 
 const (
-	MonetizationTypeFree         MonetizationType = "free"
-	MonetizationTypePlanIncluded MonetizationType = "plan_included"
-	MonetizationTypeTokenMarkup  MonetizationType = "token_markup"
+	MonetizationTypeFree          MonetizationType = "free"
+	MonetizationTypePlanIncluded  MonetizationType = "plan_included"
+	MonetizationTypeTokenMarkup   MonetizationType = "token_markup"
+	MonetizationTypeOneTime       MonetizationType = "one_time"
+	MonetizationTypePlusExclusive MonetizationType = "plus_exclusive"
 )
 
 var validMonetizationTypes = map[MonetizationType]struct{}{
-	MonetizationTypeFree:         {},
-	MonetizationTypePlanIncluded: {},
-	MonetizationTypeTokenMarkup:  {},
+	MonetizationTypeFree:          {},
+	MonetizationTypePlanIncluded:  {},
+	MonetizationTypeTokenMarkup:   {},
+	MonetizationTypeOneTime:       {},
+	MonetizationTypePlusExclusive: {},
 }
 
 func (m MonetizationType) Valid() bool { _, ok := validMonetizationTypes[m]; return ok }
@@ -138,6 +142,7 @@ const (
 	BlockReasonSkillNotEnabled      BlockReason = "skill_not_enabled"
 	BlockReasonPlanRequired         BlockReason = "plan_required"
 	BlockReasonSubscriptionInactive BlockReason = "subscription_inactive"
+	BlockReasonEvaluationNotPassed  BlockReason = "evaluation_not_passed"
 	BlockReasonQuotaExceeded        BlockReason = "quota_exceeded"
 	BlockReasonKidsModeBlocked      BlockReason = "kids_mode_blocked"
 	BlockReasonContextTooLong       BlockReason = "context_too_long"
@@ -154,6 +159,7 @@ var validBlockReasons = map[BlockReason]struct{}{
 	BlockReasonSkillNotEnabled:      {},
 	BlockReasonPlanRequired:         {},
 	BlockReasonSubscriptionInactive: {},
+	BlockReasonEvaluationNotPassed:  {},
 	BlockReasonQuotaExceeded:        {},
 	BlockReasonKidsModeBlocked:      {},
 	BlockReasonContextTooLong:       {},
@@ -165,36 +171,127 @@ var validBlockReasons = map[BlockReason]struct{}{
 
 func (b BlockReason) Valid() bool { _, ok := validBlockReasons[b]; return ok }
 
+// SkillUsageEventType is the analytics event name stored in skill_usage_events.event_type.
+type SkillUsageEventType string
+
+const (
+	SkillUsageEventTypeImpression          SkillUsageEventType = "skill_impression"
+	SkillUsageEventTypeDetailView          SkillUsageEventType = "skill_detail_view"
+	SkillUsageEventTypeSaved               SkillUsageEventType = "skill_saved"
+	SkillUsageEventTypeUnsaved             SkillUsageEventType = "skill_unsaved"
+	SkillUsageEventTypeFavorited           SkillUsageEventType = "skill_favorited"
+	SkillUsageEventTypeEnabled             SkillUsageEventType = "skill_enabled"
+	SkillUsageEventTypeRated               SkillUsageEventType = "skill_rated"
+	SkillUsageEventTypeReported            SkillUsageEventType = "skill_reported"
+	SkillUsageEventTypeEvaluationCompleted SkillUsageEventType = "skill_evaluation_completed"
+	SkillUsageEventTypeAdminAction         SkillUsageEventType = "skill_admin_action"
+	SkillUsageEventTypeKidsApproved        SkillUsageEventType = "skill_kids_approved"
+	SkillUsageEventTypeInstalled           SkillUsageEventType = "skill_installed"
+	SkillUsageEventTypeUsedLocal           SkillUsageEventType = "skill_used_local"
+	SkillUsageEventTypeUsed                SkillUsageEventType = "skill_used"
+	SkillUsageEventTypeBlocked             SkillUsageEventType = "skill_blocked"
+	SkillUsageEventTypeFirstUse            SkillUsageEventType = "skill_first_use"
+	SkillUsageEventTypeRepeatUse           SkillUsageEventType = "skill_repeat_use"
+	SkillUsageEventTypePurchased           SkillUsageEventType = "skill_purchased"
+	SkillUsageEventTypeNotificationSent    SkillUsageEventType = "skill_notification_sent"
+	SkillUsageEventTypeNotificationOpened  SkillUsageEventType = "skill_notification_opened"
+	SkillUsageEventTypeNotificationClicked SkillUsageEventType = "skill_notification_clicked"
+)
+
+var validSkillUsageEventTypes = map[SkillUsageEventType]struct{}{
+	SkillUsageEventTypeImpression:          {},
+	SkillUsageEventTypeDetailView:          {},
+	SkillUsageEventTypeSaved:               {},
+	SkillUsageEventTypeUnsaved:             {},
+	SkillUsageEventTypeFavorited:           {},
+	SkillUsageEventTypeEnabled:             {},
+	SkillUsageEventTypeRated:               {},
+	SkillUsageEventTypeReported:            {},
+	SkillUsageEventTypeEvaluationCompleted: {},
+	SkillUsageEventTypeAdminAction:         {},
+	SkillUsageEventTypeKidsApproved:        {},
+	SkillUsageEventTypeInstalled:           {},
+	SkillUsageEventTypeUsedLocal:           {},
+	SkillUsageEventTypeUsed:                {},
+	SkillUsageEventTypeBlocked:             {},
+	SkillUsageEventTypeFirstUse:            {},
+	SkillUsageEventTypeRepeatUse:           {},
+	SkillUsageEventTypePurchased:           {},
+	SkillUsageEventTypeNotificationSent:    {},
+	SkillUsageEventTypeNotificationOpened:  {},
+	SkillUsageEventTypeNotificationClicked: {},
+}
+
+func (e SkillUsageEventType) Valid() bool { _, ok := validSkillUsageEventTypes[e]; return ok }
+
 // EntryPoint identifies the surface from which a Skill interaction originated.
 // Must be recorded in every skill_usage_events.entry_point (tasks/03 §3).
 type EntryPoint string
 
 const (
-	EntryPointMarketplaceCard  EntryPoint = "marketplace_card"
-	EntryPointSkillDetail      EntryPoint = "skill_detail"
-	EntryPointMySkills         EntryPoint = "my_skills"
-	EntryPointPlaygroundPicker EntryPoint = "playground_picker"
-	EntryPointFeatured         EntryPoint = "featured"
-	EntryPointPopular          EntryPoint = "popular"
-	EntryPointNew              EntryPoint = "new"
-	EntryPointRecommended      EntryPoint = "recommended"
-	EntryPointAdminPreview     EntryPoint = "admin_preview"
-	// EntryPointSkillPackage is recorded when a user downloads the zip package
-	// from the Marketplace (DR-81). Used by the analytics skill_enabled event.
+	EntryPointMarketplaceCard    EntryPoint = "marketplace_card"
+	EntryPointSkillDetail        EntryPoint = "skill_detail"
+	EntryPointMySkills           EntryPoint = "my_skills"
+	EntryPointSavedList          EntryPoint = "saved_list"
+	EntryPointFeatured           EntryPoint = "featured"
+	EntryPointPopular            EntryPoint = "popular"
+	EntryPointNew                EntryPoint = "new"
+	EntryPointNewWeek            EntryPoint = "new_week"
+	EntryPointTrending           EntryPoint = "trending"
+	EntryPointRecommended        EntryPoint = "recommended"
+	EntryPointRecoPersonal       EntryPoint = "reco_personal"
+	EntryPointRecoCodownload     EntryPoint = "reco_codownload"
+	EntryPointLeaderboardWeekly  EntryPoint = "leaderboard_weekly"
+	EntryPointLeaderboardMonthly EntryPoint = "leaderboard_monthly"
+	EntryPointCategoryDemand     EntryPoint = "category_demand"
+	EntryPointUserHome           EntryPoint = "user_home"
+	EntryPointDigest             EntryPoint = "digest"
+	EntryPointReengage           EntryPoint = "reengage"
+	EntryPointAdminPreview       EntryPoint = "admin_preview"
+	EntryPointSearchResults      EntryPoint = "search_results"
+	EntryPointPaywall            EntryPoint = "paywall"
+	// EntryPointSkillPackage is the primary R2 execution entry for downloaded
+	// Skill packages calling the public routing API. It is also used by the
+	// package-download skill_enabled event.
 	EntryPointSkillPackage EntryPoint = "skill_package"
+	// EntryPointAPIToken identifies Skill package download/execution initiated
+	// directly with a DeepRouter API token rather than a browser/JWT session.
+	EntryPointAPIToken EntryPoint = "api_token"
+	// EntryPointDownloadedRunner records consented local runner telemetry for
+	// downloaded Skills that execute outside the DeepRouter relay path.
+	EntryPointDownloadedRunner EntryPoint = "downloaded_runner"
+	// EntryPointPlaygroundPicker is retained only so historical Playground
+	// execution events continue to parse. New V1/R2 execution flows must emit
+	// EntryPointSkillPackage instead.
+	EntryPointPlaygroundPicker EntryPoint = "playground_picker"
 )
 
 var validEntryPoints = map[EntryPoint]struct{}{
-	EntryPointMarketplaceCard:  {},
-	EntryPointSkillDetail:      {},
-	EntryPointMySkills:         {},
-	EntryPointPlaygroundPicker: {},
-	EntryPointFeatured:         {},
-	EntryPointPopular:          {},
-	EntryPointNew:              {},
-	EntryPointRecommended:      {},
-	EntryPointAdminPreview:     {},
-	EntryPointSkillPackage:     {},
+	EntryPointMarketplaceCard:    {},
+	EntryPointSkillDetail:        {},
+	EntryPointMySkills:           {},
+	EntryPointSavedList:          {},
+	EntryPointPlaygroundPicker:   {},
+	EntryPointFeatured:           {},
+	EntryPointPopular:            {},
+	EntryPointNew:                {},
+	EntryPointNewWeek:            {},
+	EntryPointTrending:           {},
+	EntryPointRecommended:        {},
+	EntryPointRecoPersonal:       {},
+	EntryPointRecoCodownload:     {},
+	EntryPointLeaderboardWeekly:  {},
+	EntryPointLeaderboardMonthly: {},
+	EntryPointCategoryDemand:     {},
+	EntryPointUserHome:           {},
+	EntryPointDigest:             {},
+	EntryPointReengage:           {},
+	EntryPointAdminPreview:       {},
+	EntryPointSearchResults:      {},
+	EntryPointPaywall:            {},
+	EntryPointSkillPackage:       {},
+	EntryPointAPIToken:           {},
+	EntryPointDownloadedRunner:   {},
 }
 
 func (e EntryPoint) Valid() bool { _, ok := validEntryPoints[e]; return ok }

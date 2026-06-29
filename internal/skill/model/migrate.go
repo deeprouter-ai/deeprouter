@@ -47,13 +47,33 @@ func MigrateSkillVersions(db *gorm.DB) error {
 	if err := migrateSkillVersionsConstraints(db); err != nil {
 		return err
 	}
+	if err := migrateSkillVersionInstructionColumns(db); err != nil {
+		return err
+	}
 	if err := createSkillVersionsJSONBColumns(db); err != nil {
+		return err
+	}
+	if err := migrateSkillVersionPackageColumns(db); err != nil {
 		return err
 	}
 	if err := createSkillVersionsIndexes(db); err != nil {
 		return err
 	}
 	if err := migrateSkillVersionsTimestampDefaults(db); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MigrateSkillAuditLog runs the audit-log migration used by Skill admin APIs.
+func MigrateSkillAuditLog(db *gorm.DB) error {
+	if err := db.AutoMigrate(&SkillAuditLog{}); err != nil {
+		return err
+	}
+	if err := createSkillAuditLogJSONBColumns(db); err != nil {
+		return err
+	}
+	if err := createSkillAuditLogIndexes(db); err != nil {
 		return err
 	}
 	return nil
@@ -70,10 +90,18 @@ func createSkillVersionsSQLiteTable(db *gorm.DB) error {
 			instruction_template_sha256 char(64) NOT NULL,
 			prompt_guard_template text,
 			output_schema text,
+			download_instructions text NOT NULL DEFAULT '',
+			usage_instructions text NOT NULL DEFAULT '',
+			prerequisites text NOT NULL DEFAULT '[]',
+			quickstart text NOT NULL DEFAULT '[]',
+			example_io text NOT NULL DEFAULT '[]',
 			model_whitelist_snapshot text NOT NULL,
 			required_plan_snapshot varchar(32) NOT NULL,
 			monetization_snapshot text NOT NULL,
 			max_input_tokens_snapshot integer,
+			package_zip blob,
+			package_sha256 char(64),
+			package_built_at datetime,
 			rollout_percentage integer NOT NULL DEFAULT 100,
 			experiment_name varchar(128),
 			created_by bigint NOT NULL,
@@ -101,10 +129,18 @@ func createSkillVersionsMySQLTable(db *gorm.DB) error {
 			instruction_template_sha256 char(64) NOT NULL,
 			prompt_guard_template text,
 			output_schema text,
+			download_instructions text NOT NULL,
+			usage_instructions text NOT NULL,
+			prerequisites text NOT NULL,
+			quickstart text NOT NULL,
+			example_io text NOT NULL,
 			model_whitelist_snapshot text NOT NULL,
 			required_plan_snapshot varchar(32) NOT NULL,
 			monetization_snapshot text NOT NULL,
 			max_input_tokens_snapshot bigint,
+			package_zip longblob,
+			package_sha256 char(64),
+			package_built_at datetime(3),
 			rollout_percentage bigint NOT NULL DEFAULT 100,
 			experiment_name varchar(128),
 			created_by bigint NOT NULL,
@@ -117,6 +153,61 @@ func createSkillVersionsMySQLTable(db *gorm.DB) error {
 			CONSTRAINT fk_skill_versions_skill FOREIGN KEY (skill_id) REFERENCES skills(id) ON UPDATE RESTRICT ON DELETE RESTRICT
 		)
 	`).Error
+}
+
+func migrateSkillVersionPackageColumns(db *gorm.DB) error {
+	cols := []string{"package_zip", "package_sha256", "package_built_at"}
+	for _, col := range cols {
+		if db.Migrator().HasColumn(&SkillVersion{}, col) {
+			continue
+		}
+		if err := db.Migrator().AddColumn(&SkillVersion{}, col); err != nil {
+			return fmt.Errorf("add skill_versions %s: %w", col, err)
+		}
+	}
+	return nil
+}
+
+func migrateSkillVersionInstructionColumns(db *gorm.DB) error {
+	cols := []struct {
+		name        string
+		sqliteMySQL string
+		postgres    string
+	}{
+		{"download_instructions", "text", "text"},
+		{"usage_instructions", "text", "text"},
+		{"prerequisites", "text", "jsonb"},
+		{"quickstart", "text", "jsonb"},
+		{"example_io", "text", "jsonb"},
+	}
+	for _, col := range cols {
+		if db.Migrator().HasColumn(&SkillVersion{}, col.name) {
+			continue
+		}
+		var sql string
+		switch db.Dialector.Name() {
+		case "postgres":
+			sql = fmt.Sprintf("ALTER TABLE skill_versions ADD COLUMN %s %s", col.name, col.postgres)
+		default:
+			sql = fmt.Sprintf("ALTER TABLE skill_versions ADD COLUMN %s %s", col.name, col.sqliteMySQL)
+		}
+		if err := db.Exec(sql).Error; err != nil {
+			return fmt.Errorf("add skill_versions %s: %w", col.name, err)
+		}
+	}
+	updates := map[string]string{
+		"download_instructions": "''",
+		"usage_instructions":    "''",
+		"prerequisites":         "'[]'",
+		"quickstart":            "'[]'",
+		"example_io":            "'[]'",
+	}
+	for col, value := range updates {
+		if err := db.Exec(fmt.Sprintf("UPDATE skill_versions SET %s = %s WHERE %s IS NULL", col, value, col)).Error; err != nil {
+			return fmt.Errorf("backfill skill_versions %s: %w", col, err)
+		}
+	}
+	return nil
 }
 
 // migrateSkillsConstraints adds the 9 hand-written CHECK constraints to PG and MySQL >= 8.0.16.
@@ -146,7 +237,7 @@ func migrateSkillsConstraints(db *gorm.DB) error {
 	}{
 		{"chk_skills_status", "status IN ('draft','published','deprecated','archived')"},
 		{"chk_skills_required_plan", "required_plan IN ('free','pro','enterprise')"},
-		{"chk_skills_monetization_type", "monetization_type IN ('free','plan_included','token_markup')"},
+		{"chk_skills_monetization_type", "monetization_type IN ('free','plan_included','token_markup','one_time','plus_exclusive')"},
 		{"chk_skills_kids_approval_status", "kids_approval_status IN ('not_required','pending','approved','emergency_approved','rejected','revoked')"},
 		{"chk_skills_timeout_seconds", "timeout_seconds BETWEEN 1 AND 120"},
 		{"chk_skills_free_quota", "free_quota_per_month IS NULL OR free_quota_per_month >= 0"},
@@ -156,6 +247,11 @@ func migrateSkillsConstraints(db *gorm.DB) error {
 	}
 
 	for _, c := range constraints {
+		if c.name == "chk_skills_monetization_type" && db.Migrator().HasConstraint(&Skill{}, c.name) {
+			if err := db.Migrator().DropConstraint(&Skill{}, c.name); err != nil {
+				return fmt.Errorf("drop constraint %s: %w", c.name, err)
+			}
+		}
 		if db.Migrator().HasConstraint(&Skill{}, c.name) {
 			continue
 		}
@@ -222,6 +318,9 @@ func createSkillVersionsJSONBColumns(db *gorm.DB) error {
 		defaultVal string
 	}{
 		{"output_schema", ""}, // NULL = no output schema (PRD §4.2)
+		{"prerequisites", "'[]'::jsonb"},
+		{"quickstart", "'[]'::jsonb"},
+		{"example_io", "'[]'::jsonb"},
 		{"model_whitelist_snapshot", "'[]'::jsonb"},
 		{"monetization_snapshot", "'{}'::jsonb"}, // object shape, not array
 	}
@@ -243,6 +342,43 @@ func createSkillVersionsJSONBColumns(db *gorm.DB) error {
 		for _, sql := range steps {
 			if err := db.Exec(sql).Error; err != nil {
 				return fmt.Errorf("skill_versions jsonb upgrade %s: %w", cd.col, err)
+			}
+		}
+	}
+	return nil
+}
+
+func createSkillAuditLogJSONBColumns(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+
+	cols := []struct {
+		col        string
+		defaultVal string
+	}{
+		{"changed_fields", "'[]'::jsonb"},
+		{"before_value", ""},
+		{"after_value", ""},
+	}
+	for _, cd := range cols {
+		already, err := isPGColumnJSONB(db, "skill_audit_log", cd.col)
+		if err != nil {
+			return fmt.Errorf("check skill_audit_log jsonb column %s: %w", cd.col, err)
+		}
+		if already {
+			continue
+		}
+		steps := []string{
+			fmt.Sprintf("ALTER TABLE skill_audit_log ALTER COLUMN %s DROP DEFAULT", cd.col),
+			fmt.Sprintf("ALTER TABLE skill_audit_log ALTER COLUMN %s TYPE jsonb USING %s::jsonb", cd.col, cd.col),
+		}
+		if cd.defaultVal != "" {
+			steps = append(steps, fmt.Sprintf("ALTER TABLE skill_audit_log ALTER COLUMN %s SET DEFAULT %s", cd.col, cd.defaultVal))
+		}
+		for _, sql := range steps {
+			if err := db.Exec(sql).Error; err != nil {
+				return fmt.Errorf("skill_audit_log jsonb upgrade %s: %w", cd.col, err)
 			}
 		}
 	}
@@ -552,5 +688,30 @@ func createSkillVersionsIndexes(db *gorm.DB) error {
 		}
 	}
 
+	return nil
+}
+
+func createSkillAuditLogIndexes(db *gorm.DB) error {
+	indexes := []struct {
+		name string
+		ddl  string
+	}{
+		{
+			name: "idx_skill_audit_log_skill_created",
+			ddl:  "CREATE INDEX idx_skill_audit_log_skill_created ON skill_audit_log(skill_id, created_at)",
+		},
+		{
+			name: "idx_skill_audit_log_action_created",
+			ddl:  "CREATE INDEX idx_skill_audit_log_action_created ON skill_audit_log(action, created_at)",
+		},
+	}
+	for _, idx := range indexes {
+		if db.Migrator().HasIndex(&SkillAuditLog{}, idx.name) {
+			continue
+		}
+		if err := db.Exec(idx.ddl).Error; err != nil {
+			return fmt.Errorf("create skill_audit_log index %s: %w", idx.name, err)
+		}
+	}
 	return nil
 }
