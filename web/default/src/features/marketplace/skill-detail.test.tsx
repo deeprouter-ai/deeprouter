@@ -52,6 +52,8 @@ vi.mock('./api', () => {
     DownloadSkillError,
     getMarketplaceSkill: vi.fn(),
     downloadSkillPackage: vi.fn(),
+    purchaseSkill: vi.fn(),
+    recordMarketplaceSkillEvent: vi.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -69,6 +71,10 @@ const detail: PublicSkillDetail = {
   ai_disclosure_required: false,
   requires_deeprouter_key: true,
   download_cta: { url: '/api/v1/marketplace/skills/my-skill/download', method: 'GET' },
+  instructions: {
+    download_instructions: 'Extract the zip to .claude/skills/.',
+    usage_instructions: 'Run the Skill from your local assistant.',
+  },
 }
 
 function renderDetail() {
@@ -184,17 +190,13 @@ describe('SkillDetail page', () => {
     ).toBeNull()
   })
 
-  it('SKILL_PLAN_REQUIRED shows upgrade copy and does not navigate', async () => {
+  it('SKILL_PLAN_REQUIRED opens the paywall and does not navigate', async () => {
     vi.mocked(downloadSkillPackage).mockRejectedValue(
       new DownloadSkillError('SKILL_PLAN_REQUIRED')
     )
     renderDetail()
     fireEvent.click(await findDownloadButton())
-    expect(
-      await screen.findByText(
-        'This Skill requires a higher plan. Upgrade to download it.'
-      )
-    ).not.toBeNull()
+    expect(await screen.findByText('Paywall')).not.toBeNull()
     expect(navigateMock).not.toHaveBeenCalled()
     expect(resetMock).not.toHaveBeenCalled()
   })

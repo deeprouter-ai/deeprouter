@@ -4,6 +4,7 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-29
 
+- 修复 PR #101 前端检查：补齐 `SkillDetail` 测试 fixture 的 `instructions` 字段，并同步 `SKILL_PLAN_REQUIRED` 断言到当前 Paywall 行为与 API mock（`web/default/src/features/marketplace/skill-detail.test.tsx`）
 - 修复 PR #72 Dashboard onboarding status banner 前端 typecheck：补齐 Marketplace pointer 图标导入并移除未使用 client slug helper（`web/default/src/features/dashboard/components/overview/onboarding-status-banner.tsx`）
 - 修复 DR-88 `user_home` 归因入口未同步到前端增长入口类型与 `skill_usage_events` DB CHECK 约束，恢复 User Home 事件记录和 PR checks（`web/default/src/features/marketplace/types.ts`, `internal/skill/model/`）
 - 新增 DR-99 tiered Skill pricing model 任务 PRD，定义 Basic/PLUS、USD 2 one-time、PLUS-exclusive、PLUS 抵扣与 Skill entitlement matrix 范围（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
