@@ -64,6 +64,7 @@ export type SkillGrowthEntryPoint =
   | 'leaderboard_weekly'
   | 'leaderboard_monthly'
   | 'category_demand'
+  | 'user_home'
 
 export type SkillGrowthEventType = 'skill_impression' | 'skill_detail_view'
 
