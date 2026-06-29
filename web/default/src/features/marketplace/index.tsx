@@ -132,6 +132,22 @@ function labelForStatus(status: MarketplaceStatusFilter) {
   }
 }
 
+function merchandisingEntryPoint(
+  skill: MarketplaceSkill,
+  fallback: SkillGrowthEntryPoint
+): SkillGrowthEntryPoint {
+  if (skill.merchandising_entry_point === 'category_demand') {
+    return 'category_demand'
+  }
+  if (
+    skill.hot_category_boost === true ||
+    skill.badges?.includes('hot_category') === true
+  ) {
+    return 'category_demand'
+  }
+  return fallback
+}
+
 export { SkillDetail } from './skill-detail'
 
 export function Marketplace() {
@@ -344,7 +360,7 @@ export function Marketplace() {
     newWeekSkills.forEach((skill) => {
       void recordMarketplaceSkillEvent(skill.slug || skill.id, {
         event_type: 'skill_impression',
-        entry_point: 'new_week',
+        entry_point: merchandisingEntryPoint(skill, 'new_week'),
       }).catch(() => undefined)
     })
   }, [filterSignature, newWeekSkills])
@@ -364,11 +380,19 @@ export function Marketplace() {
         const key = `${filterSignature}:${skill.id}`
         if (emittedImpressions.current.has(key)) return
         emittedImpressions.current.add(key)
-        emitEvent({
+        const entryPoint = merchandisingEntryPoint(skill, 'marketplace_card')
+        if (entryPoint === 'marketplace_card') {
+          emitEvent({
+            event_type: 'skill_impression',
+            skill_id: skill.id,
+            entry_point: 'marketplace_card',
+          })
+          return
+        }
+        void recordMarketplaceSkillEvent(skill.slug || skill.id, {
           event_type: 'skill_impression',
-          skill_id: skill.id,
-          entry_point: 'marketplace_card',
-        })
+          entry_point: entryPoint,
+        }).catch(() => undefined)
       })
       return
     }
@@ -383,11 +407,23 @@ export function Marketplace() {
           const key = `${filterSignature}:${skillId}`
           if (emittedImpressions.current.has(key)) return
           emittedImpressions.current.add(key)
-          emitEvent({
+          const skill = filteredSkills.find((item) => item.id === skillId)
+          const entryPoint =
+            skill == null
+              ? 'marketplace_card'
+              : merchandisingEntryPoint(skill, 'marketplace_card')
+          if (entryPoint === 'marketplace_card') {
+            emitEvent({
+              event_type: 'skill_impression',
+              skill_id: skillId,
+              entry_point: 'marketplace_card',
+            })
+            return
+          }
+          void recordMarketplaceSkillEvent(skill?.slug || skillId, {
             event_type: 'skill_impression',
-            skill_id: skillId,
-            entry_point: 'marketplace_card',
-          })
+            entry_point: entryPoint,
+          }).catch(() => undefined)
         })
       },
       { threshold: 0.5 }
@@ -426,7 +462,8 @@ export function Marketplace() {
     skill: MarketplaceSkill,
     entryPoint: SkillGrowthEntryPoint
   ) => {
-    if (entryPoint === 'marketplace_card') {
+    const resolvedEntryPoint = merchandisingEntryPoint(skill, entryPoint)
+    if (resolvedEntryPoint === 'marketplace_card') {
       emitEvent({
         event_type: 'skill_detail_view',
         skill_id: skill.id,
@@ -435,7 +472,7 @@ export function Marketplace() {
     } else {
       void recordMarketplaceSkillEvent(skill.slug || skill.id, {
         event_type: 'skill_detail_view',
-        entry_point: entryPoint,
+        entry_point: resolvedEntryPoint,
       }).catch(() => undefined)
     }
     void navigate({

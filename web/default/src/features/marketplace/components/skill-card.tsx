@@ -238,6 +238,13 @@ export function SkillCard({
               {t('Featured')}
             </Badge>
           ) : null}
+          {skill.hot_category_boost === true ||
+          skill.badges?.includes('hot_category') === true ? (
+            <Badge variant='secondary'>
+              <Star data-icon='inline-start' />
+              {t('Hot category')}
+            </Badge>
+          ) : null}
           {skill.is_kids_safe === true && <KidsBadge state='kids_safe' />}
           {skill.is_kids_exclusive === true && (
             <KidsBadge state='kids_exclusive' />

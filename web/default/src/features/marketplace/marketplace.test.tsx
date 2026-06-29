@@ -311,6 +311,47 @@ describe('Marketplace DR-90 discovery rails', () => {
       params: { slug: 'trending' },
     })
   })
+
+  it('renders hot-category badges and attributes boosted detail clicks to category demand', async () => {
+    setMarketplaceSkills([baseSkill])
+    mockGetMarketplaceRailSkills.mockImplementation((rail: string) => {
+      if (rail === 'new_week') {
+        return Promise.resolve({
+          data: [
+            {
+              ...baseSkill,
+              id: 'hot-video',
+              slug: 'hot-video',
+              name: 'Hot Video Skill',
+              category: 'video',
+              hot_category_boost: true,
+              merchandising_entry_point: 'category_demand',
+              badges: ['hot_category'],
+            },
+          ],
+          pagination: { page: 1, limit: 6, total: 1, has_next: false },
+        })
+      }
+      return Promise.resolve({
+        data: [],
+        pagination: { page: 1, limit: 6, total: 0, has_next: false },
+      })
+    })
+
+    renderMarketplace()
+
+    expect(await screen.findByText('Hot category')).toBeInTheDocument()
+    fireEvent.click(await screen.findByText('Hot Video Skill'))
+
+    expect(mockRecordMarketplaceSkillEvent).toHaveBeenCalledWith('hot-video', {
+      event_type: 'skill_detail_view',
+      entry_point: 'category_demand',
+    })
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/skills/$slug',
+      params: { slug: 'hot-video' },
+    })
+  })
 })
 
 describe('Marketplace download leaderboards', () => {

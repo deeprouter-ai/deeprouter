@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 import { api } from '@/lib/api'
 import type {
   DateRange,
+  SkillAnalyticsCategoryDemandResponse,
   SkillAnalyticsOverview,
   SkillAnalyticsSkillsResponse,
 } from './types'
@@ -41,6 +42,14 @@ export async function getMostSavedSkillAnalytics(
       sort: 'most_saved',
       limit: 5,
     },
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function getCategoryDemandAnalytics(): Promise<SkillAnalyticsCategoryDemandResponse> {
+  const res = await api.get('/api/v1/ops/skill-analytics/category-demand', {
+    params: { limit: 8 },
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data

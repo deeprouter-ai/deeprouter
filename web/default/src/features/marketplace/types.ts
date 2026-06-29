@@ -63,6 +63,7 @@ export type SkillGrowthEntryPoint =
   | 'reco_codownload'
   | 'leaderboard_weekly'
   | 'leaderboard_monthly'
+  | 'category_demand'
   | 'user_home'
 
 export type SkillGrowthEventType = 'skill_impression' | 'skill_detail_view'
@@ -112,6 +113,9 @@ export interface MarketplaceSkill {
   badges?: string[]
   featured?: boolean
   featured_flag?: boolean
+  hot_category_boost?: boolean
+  category_demand_7d?: number
+  merchandising_entry_point?: SkillGrowthEntryPoint | null
   saved?: boolean | null
   is_kids_safe?: boolean
   is_kids_exclusive?: boolean

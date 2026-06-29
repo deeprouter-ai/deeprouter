@@ -19,12 +19,14 @@ import {
   CreditCard,
   Clock,
   Bookmark,
+  Flame,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatNumber } from '@/lib/format'
 import { SectionPageLayout } from '@/components/layout'
 import { StaggerContainer, StaggerItem } from '@/components/page-transition'
 import {
+  getCategoryDemandAnalytics,
   getMostSavedSkillAnalytics,
   getSkillAnalyticsOverview,
   getSkillAnalyticsSkills,
@@ -33,6 +35,7 @@ import { DateRangeControl } from './components/date-range-control'
 import { MetricCard } from './components/metric-card'
 import {
   type DateRangePreset,
+  type SkillAnalyticsCategoryDemandResponse,
   type SkillAnalyticsSkillsResponse,
   type SkillAnalyticsSkillRow,
   getDateRange,
@@ -96,6 +99,12 @@ export function SkillAnalyticsDashboard() {
   const mostSavedQuery = useQuery({
     queryKey: ['skill-analytics', 'most-saved', preset, refreshTick],
     queryFn: () => getMostSavedSkillAnalytics(range),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  })
+  const categoryDemandQuery = useQuery({
+    queryKey: ['skill-analytics', 'category-demand', refreshTick],
+    queryFn: () => getCategoryDemandAnalytics(),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   })
@@ -264,6 +273,8 @@ export function SkillAnalyticsDashboard() {
             ))}
           </StaggerContainer>
 
+          <CategoryDemandPanel query={categoryDemandQuery} />
+
           {data?.charging_enabled !== false && (
             <MonetizationSkillTable
               rows={skillsData?.skills ?? []}
@@ -274,6 +285,85 @@ export function SkillAnalyticsDashboard() {
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
+  )
+}
+
+interface CategoryDemandPanelProps {
+  query: UseQueryResult<SkillAnalyticsCategoryDemandResponse, Error>
+}
+
+function CategoryDemandPanel(props: CategoryDemandPanelProps) {
+  const { t } = useTranslation()
+
+  return (
+    <section className='bg-background/60 rounded-xl border p-4'>
+      <div className='mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between'>
+        <div className='flex items-center gap-2'>
+          <Flame className='text-muted-foreground size-4' aria-hidden='true' />
+          <h2 className='text-base font-semibold'>{t('Category Demand')}</h2>
+        </div>
+        <p className='text-muted-foreground text-xs'>
+          {t('Aggregate downloads and successful usage by category')}
+        </p>
+      </div>
+      {props.query.isLoading ? (
+        <div className='text-muted-foreground text-sm'>{t('Loading…')}</div>
+      ) : props.query.isError ? (
+        <div className='text-muted-foreground text-sm'>
+          {t('Category demand data is unavailable.')}
+        </div>
+      ) : (props.query.data?.categories.length ?? 0) === 0 ? (
+        <div className='text-muted-foreground text-sm'>
+          {t('No category demand data yet.')}
+        </div>
+      ) : (
+        <div className='overflow-x-auto'>
+          <table className='w-full min-w-[720px] text-left text-sm'>
+            <thead className='text-muted-foreground border-b text-xs'>
+              <tr>
+                <th className='py-2 pr-3 font-medium'>{t('Category')}</th>
+                <th className='py-2 pr-3 font-medium'>{t('Demand 7d')}</th>
+                <th className='py-2 pr-3 font-medium'>{t('Downloads 7d')}</th>
+                <th className='py-2 pr-3 font-medium'>{t('Runs 7d')}</th>
+                <th className='py-2 pr-3 font-medium'>{t('Demand 30d')}</th>
+                <th className='py-2 font-medium'>{t('Trend')}</th>
+              </tr>
+            </thead>
+            <tbody className='divide-y'>
+              {props.query.data?.categories.map((row) => (
+                <tr key={row.category}>
+                  <td className='py-2 pr-3 font-medium'>
+                    <span className='inline-flex items-center gap-2'>
+                      {row.category}
+                      {row.hot ? (
+                        <span className='bg-accent/10 text-accent rounded-full px-2 py-0.5 text-xs font-semibold'>
+                          {t('Hot')}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  <td className='py-2 pr-3 tabular-nums'>
+                    {fmtCount(row.demand_score_7d)}
+                  </td>
+                  <td className='py-2 pr-3 tabular-nums'>
+                    {fmtCount(row.downloads_7d)}
+                  </td>
+                  <td className='py-2 pr-3 tabular-nums'>
+                    {fmtCount(row.successful_runs_7d)}
+                  </td>
+                  <td className='py-2 pr-3 tabular-nums'>
+                    {fmtCount(row.demand_score_30d)}
+                  </td>
+                  <td className='py-2 tabular-nums'>
+                    {formatPercent(row.trend_pct)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 

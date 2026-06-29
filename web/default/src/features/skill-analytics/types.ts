@@ -77,6 +77,24 @@ export interface SkillAnalyticsSkillsResponse {
   period_end: string
 }
 
+export interface SkillAnalyticsCategoryDemandRow {
+  category: string
+  downloads_7d: number
+  downloads_30d: number
+  successful_runs_7d: number
+  successful_runs_30d: number
+  demand_score_7d: number
+  demand_score_30d: number
+  trend_pct: number | null
+  hot: boolean
+}
+
+export interface SkillAnalyticsCategoryDemandResponse {
+  categories: SkillAnalyticsCategoryDemandRow[]
+  period_end: string
+  windows: string[]
+}
+
 export interface DateRange {
   start: string
   end: string

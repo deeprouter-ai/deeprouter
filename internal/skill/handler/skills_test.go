@@ -63,6 +63,29 @@ func TestListMarketplaceSkillsEnvelopeAndPagination(t *testing.T) {
 	assert.NotEmpty(t, got.Meta.RequestID)
 }
 
+func TestListMarketplaceSkillsAllowsMissingPurchaseOrderTable(t *testing.T) {
+	db := testSkillDB(t)
+	require.NoError(t, db.Migrator().DropTable(&skillmodel.SkillPurchaseOrder{}))
+	SetDB(db)
+	published := testSkill("published-skill", "published")
+	require.NoError(t, db.Create(&published).Error)
+
+	c, w := testContext("/api/v1/marketplace/skills?page=1&limit=20")
+	ListMarketplaceSkills(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data []struct {
+			Slug          string `json:"slug"`
+			DownloadCount int64  `json:"download_count"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data, 1)
+	assert.Equal(t, "published-skill", got.Data[0].Slug)
+	assert.Zero(t, got.Data[0].DownloadCount)
+}
+
 func TestListMarketplaceSkills_DR52PublicShapeAndAnonymousAvailability(t *testing.T) {
 	db := testSkillDB(t)
 	SetDB(db)
@@ -931,6 +954,50 @@ func TestListDownloadLeaderboardsRanksWindowedDownloadsAndExcludesInactive(t *te
 	assert.Equal(t, "alpha-download", got.Data[1].Slug)
 	assert.Equal(t, int64(2), got.Data[1].DownloadCount)
 	assert.Equal(t, int64(2), got.Pagination.Total)
+}
+
+func TestListMarketplaceNewWeekBoostsHotCategorySkills(t *testing.T) {
+	db := testSkillDB(t)
+	SetDB(db)
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	withAnalyticsNow(t, now)
+	video := testSkillWithCategory("video-new-week", "video")
+	video.Name = "Video New Week"
+	writing := testSkillWithCategory("writing-new-week", "writing")
+	writing.Name = "Writing New Week"
+	videoPublished := time.Now().UTC().Add(-48 * time.Hour)
+	writingPublished := time.Now().UTC().Add(-time.Hour)
+	video.PublishedAt = &videoPublished
+	writing.PublishedAt = &writingPublished
+	require.NoError(t, db.Create(&video).Error)
+	require.NoError(t, db.Create(&writing).Error)
+	success := true
+	emitAnalyticsEvent(t, db, now.Add(-time.Hour), enums.SkillUsageEventTypeEnabled, 1, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-2*time.Hour), enums.SkillUsageEventTypeUsed, 2, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-3*time.Hour), enums.SkillUsageEventTypeUsed, 3, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-time.Hour), enums.SkillUsageEventTypeUsed, 4, writing.ID, enums.EntryPointSkillPackage, &success, nil)
+
+	c, w := testContext("/api/v1/marketplace/skills?rail=new_week&limit=6")
+	ListMarketplaceSkills(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got struct {
+		Data []struct {
+			Slug                    string   `json:"slug"`
+			HotCategoryBoost        bool     `json:"hot_category_boost"`
+			CategoryDemand7D        int64    `json:"category_demand_7d"`
+			MerchandisingEntryPoint string   `json:"merchandising_entry_point"`
+			Badges                  []string `json:"badges"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Data, 2)
+	assert.Equal(t, "video-new-week", got.Data[0].Slug)
+	assert.True(t, got.Data[0].HotCategoryBoost)
+	assert.Equal(t, int64(3), got.Data[0].CategoryDemand7D)
+	assert.Equal(t, "category_demand", got.Data[0].MerchandisingEntryPoint)
+	assert.Contains(t, got.Data[0].Badges, "hot_category")
+	assert.Equal(t, "writing-new-week", got.Data[1].Slug)
 }
 
 func TestListPersonalRecommendations_UsesDownloadCategoryAndShowsLockedBuyable(t *testing.T) {

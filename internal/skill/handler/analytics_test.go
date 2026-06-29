@@ -260,6 +260,48 @@ func TestGetOpsSkillAnalyticsSkillsReturnsPerSkillRows(t *testing.T) {
 	assert.NotContains(t, w.Body.String(), "metadata")
 }
 
+func TestGetOpsSkillAnalyticsCategoryDemandAggregatesDownloadsAndUsageByCategory(t *testing.T) {
+	db := newAnalyticsTestDB(t)
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	withAnalyticsNow(t, now)
+	video := createAnalyticsSkill(t, db, "video-alpha", enums.RequiredPlanFree)
+	video.Category = "video"
+	require.NoError(t, db.Save(&video).Error)
+	writing := createAnalyticsSkill(t, db, "writing-alpha", enums.RequiredPlanFree)
+	writing.Category = "writing"
+	require.NoError(t, db.Save(&writing).Error)
+	success := true
+
+	emitAnalyticsEvent(t, db, now.Add(-time.Hour), enums.SkillUsageEventTypeEnabled, 1, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-2*time.Hour), enums.SkillUsageEventTypePurchased, 2, video.ID, enums.EntryPointSkillDetail, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-3*time.Hour), enums.SkillUsageEventTypeUsed, 3, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-4*time.Hour), enums.SkillUsageEventTypeUsed, 4, video.ID, enums.EntryPointSkillPackage, boolPtr(false), nil)
+	emitAnalyticsEvent(t, db, now.Add(-8*24*time.Hour), enums.SkillUsageEventTypeUsed, 5, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-9*24*time.Hour), enums.SkillUsageEventTypeEnabled, 6, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-25*24*time.Hour), enums.SkillUsageEventTypeEnabled, 7, video.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-time.Hour), enums.SkillUsageEventTypeUsed, 8, writing.ID, enums.EntryPointSkillPackage, &success, nil)
+	emitAnalyticsEvent(t, db, now.Add(-2*time.Hour), enums.SkillUsageEventTypeUsed, 9, writing.ID, enums.EntryPointAdminPreview, &success, nil)
+
+	w := performAnalyticsHandlerRequest(t, "/?limit=10", GetOpsSkillAnalyticsCategoryDemand)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var got SkillAnalyticsCategoryDemandResponse
+	require.NoError(t, common.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.Categories, 2)
+	assert.Equal(t, "video", got.Categories[0].Category)
+	assert.True(t, got.Categories[0].Hot)
+	assert.Equal(t, int64(2), got.Categories[0].Downloads7D)
+	assert.Equal(t, int64(4), got.Categories[0].Downloads30D)
+	assert.Equal(t, int64(1), got.Categories[0].SuccessfulRuns7D)
+	assert.Equal(t, int64(2), got.Categories[0].SuccessfulRuns30D)
+	assert.Equal(t, int64(3), got.Categories[0].DemandScore7D)
+	assert.Equal(t, int64(6), got.Categories[0].DemandScore30D)
+	require.NotNil(t, got.Categories[0].TrendPct)
+	assert.InDelta(t, 0.5, *got.Categories[0].TrendPct, 0.0001)
+	assert.NotContains(t, w.Body.String(), "user_id")
+	assert.NotContains(t, w.Body.String(), "metadata")
+}
+
 func TestGetOpsSkillAnalyticsSkillsReturnsPerSkillMonetizationSlices(t *testing.T) {
 	db := newAnalyticsTestDB(t)
 	start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)

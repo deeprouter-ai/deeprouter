@@ -4,6 +4,7 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-29
 
+- 修复 DR-88 `user_home` 归因入口未同步到前端增长入口类型与 `skill_usage_events` DB CHECK 约束，恢复 User Home 事件记录和 PR checks（`web/default/src/features/marketplace/types.ts`, `internal/skill/model/`）
 - 新增 DR-99 tiered Skill pricing model 任务 PRD，定义 Basic/PLUS、USD 2 one-time、PLUS-exclusive、PLUS 抵扣与 Skill entitlement matrix 范围（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
 - 更新 DR-99 tiered Skill pricing model 任务 PRD 状态为 build，进入实现阶段（`docs/tasks/dr99-tiered-pricing-model-prd.md`）
 - 实现 DR-99 tiered Skill pricing model：新增共享 Basic/PLUS/one-time/PLUS-exclusive entitlement matrix、`plus_exclusive` Skill monetization tier、USD 2 PLUS upgrade credit helper、download/runtime/Marketplace/My Skills 共用 tier 判定，并在 Skill enable/purchase/use/block 事件写入 plan/tier attribution；管理端 Skill monetization 下拉支持 `one_time` 与 `plus_exclusive`（`internal/skill/{pricing,enums,model,availability,handler,relay}`, `web/default/src/features/admin-skills/`）
@@ -20,6 +21,9 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 - 记录 DR-98 聚焦、相关回归、前端 typecheck/build 与 full Go suite 测试结果和覆盖率；full Go suite 前构建 default/classic frontend dist 以满足 root package embed 前置条件（`docs/test-results/dr98-referral-program-invite-two-sided-reward-attribution.txt`）
 - 更新 DR-98 referral program 任务 PRD 状态为 eval，进入 PR review/checks 阶段（`docs/tasks/dr98-referral-program-invite-two-sided-reward-attribution-prd.md`）
 - 修复 Skill router marketplace 测试 fixture 未迁移 `skill_purchase_orders`，恢复 DR-89 social-proof purchase-count 查询后的 full Go suite 稳定性（`router/skill-router_test.go`）
+- 新增 DR-95 Category-demand analytics -> merchandising signal 任务 PRD，定义类别级 7d/30d 下载+成功使用聚合、Admin Category Demand 面板、hot-category 新品 boost/badge 与 `category_demand` 归因范围（`docs/tasks/dr95-category-demand-analytics-merchandising-signal-prd.md`）
+- 实现 DR-95 category-demand analytics -> merchandising signal：新增 aggregate-only Category Demand ops API，按类别聚合 7d/30d Skill 下载与成功使用、趋势和 hot 标记；Marketplace New-this-week/featured 响应返回 hot-category boost/badge 与 `category_demand` 归因元数据，Skill Analytics 新增 Category Demand 面板，卡片展示 Hot category badge 并用 `category_demand` 记录曝光/点击（`internal/skill/{handler,model,enums}`, `router/skill-router.go`, `web/default/src/features/{skill-analytics,marketplace}`）
+- 记录 DR-95 聚焦、相关回归、前端 typecheck/build 与 full Go suite 测试结果和覆盖率；full Go suite 前构建 classic/default frontend dist 以满足 root package embed 前置条件（`docs/test-results/dr95-category-demand-analytics-merchandising-signal.txt`）
 - 新增 DR-88 User Home status + personalized Skills 任务 PRD，明确 caller-scoped 钱包/订阅/购买状态、Saved、个人推荐、新品个性化与 `entry_point=user_home` 范围（`docs/tasks/dr88-user-home-own-token-purchase-status-personalized-prd.md`）
 - 更新 DR-88 User Home status + personalized Skills 任务 PRD 状态为 build，进入实现阶段（`docs/tasks/dr88-user-home-own-token-purchase-status-personalized-prd.md`）
 - 实现 DR-88 User Home：新增 caller-scoped `/api/v1/marketplace/user-home` 聚合余额、充值摘要、订阅、$2 一次性购买/entitlement、Saved、个人推荐与偏好过滤的新本周 Skills；新增 `/home` 前端 dashboard 与 Personal 侧边栏入口，并扩展 `entry_point=user_home` 归因到事件、保存和下载路径（`internal/skill/{handler,model,enums}`, `router/skill-router.go`, `web/default/src/features/user-home/`, `web/default/src/routes/_authenticated/home/`）

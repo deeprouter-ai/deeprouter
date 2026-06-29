@@ -111,20 +111,23 @@ type PublicSkill struct {
 }
 
 type MarketplaceSkill struct {
-	ID               string             `json:"id"`
-	Slug             string             `json:"slug"`
-	Name             string             `json:"name"`
-	Category         string             `json:"category"`
-	ShortDescription string             `json:"short_description"`
-	RequiredPlan     enums.RequiredPlan `json:"required_plan"`
-	Availability     SkillAvailability  `json:"availability"`
-	Badges           []string           `json:"badges"`
-	Featured         bool               `json:"featured"`
-	Saved            *bool              `json:"saved,omitempty"`
-	IsKidsSafe       bool               `json:"is_kids_safe"`
-	IsKidsExclusive  bool               `json:"is_kids_exclusive"`
-	RatingSummary    RatingSummary      `json:"rating_summary"`
-	DownloadCount    int64              `json:"download_count"`
+	ID                      string             `json:"id"`
+	Slug                    string             `json:"slug"`
+	Name                    string             `json:"name"`
+	Category                string             `json:"category"`
+	ShortDescription        string             `json:"short_description"`
+	RequiredPlan            enums.RequiredPlan `json:"required_plan"`
+	Availability            SkillAvailability  `json:"availability"`
+	Badges                  []string           `json:"badges"`
+	Featured                bool               `json:"featured"`
+	HotCategoryBoost        bool               `json:"hot_category_boost"`
+	CategoryDemand7D        int64              `json:"category_demand_7d,omitempty"`
+	MerchandisingEntryPoint *enums.EntryPoint  `json:"merchandising_entry_point,omitempty"`
+	Saved                   *bool              `json:"saved,omitempty"`
+	IsKidsSafe              bool               `json:"is_kids_safe"`
+	IsKidsExclusive         bool               `json:"is_kids_exclusive"`
+	RatingSummary           RatingSummary      `json:"rating_summary"`
+	DownloadCount           int64              `json:"download_count"`
 }
 
 type RatingSummary struct {
@@ -261,6 +264,7 @@ var marketplaceEventEntryPointValues = map[enums.EntryPoint]struct{}{
 	enums.EntryPointLeaderboardWeekly:  {},
 	enums.EntryPointLeaderboardMonthly: {},
 	enums.EntryPointPaywall:            {},
+	enums.EntryPointCategoryDemand:     {},
 	enums.EntryPointUserHome:           {},
 }
 
@@ -329,38 +333,12 @@ func ListMarketplaceSkills(c *gin.Context) {
 		return
 	}
 
-	userInfo, err := marketplaceUserInfo(c, db)
+	hotCategories, err := loadHotCategoryDemandSet(db, analyticsNow(), 3)
 	if err != nil {
 		writeDBError(c, err)
 		return
 	}
-	enabledBySkillID, err := marketplaceEnablementBySkillID(db, userInfo, skills)
-	if err != nil {
-		writeDBError(c, err)
-		return
-	}
-	savedBySkillID, err := marketplaceSavedBySkillID(db, userInfo, skills)
-	if err != nil {
-		writeDBError(c, err)
-		return
-	}
-	entitlementBySkillID, err := marketplaceOneTimeEntitlementBySkillID(db, userInfo, skills)
-	if err != nil {
-		writeDBError(c, err)
-		return
-	}
-
-	socialProof, err := loadMarketplaceSocialProof(db, skills)
-	if err != nil {
-		writeDBError(c, err)
-		return
-	}
-
-	out := make([]MarketplaceSkill, 0, len(skills))
-	for _, s := range skills {
-		out = append(out, marketplaceSkillFromModel(s, userInfo, enabledBySkillID[s.ID], savedBySkillID[s.ID], entitlementBySkillID[s.ID], socialProof[s.ID]))
-	}
-	skillapi.List(c, out, skillapi.NewPagination(page.Page, page.Limit, total))
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills, total, hotCategories)
 }
 
 func listMarketplaceNewWeek(c *gin.Context, db *gorm.DB, page skillapi.PageParams, featured, kidsSafe *bool) {
@@ -383,14 +361,50 @@ func listMarketplaceNewWeek(c *gin.Context, db *gorm.DB, page skillapi.PageParam
 	}
 
 	var skills []skillmodel.Skill
-	if err := query.Order("published_at DESC, created_at DESC").
-		Offset(page.Offset).
-		Limit(page.Limit).
-		Find(&skills).Error; err != nil {
+	if err := query.Find(&skills).Error; err != nil {
 		writeDBError(c, err)
 		return
 	}
-	writeMarketplaceSkillList(c, db, page, skills, total)
+	hotCategories, err := loadHotCategoryDemandSet(db, analyticsNow(), 3)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	sort.SliceStable(skills, func(i, j int) bool {
+		left := hotCategories[skills[i].Category]
+		right := hotCategories[skills[j].Category]
+		if (left != nil) != (right != nil) {
+			return left != nil
+		}
+		if left != nil && right != nil && left.DemandScore7D != right.DemandScore7D {
+			return left.DemandScore7D > right.DemandScore7D
+		}
+		leftPublished := time.Time{}
+		rightPublished := time.Time{}
+		if skills[i].PublishedAt != nil {
+			leftPublished = *skills[i].PublishedAt
+		}
+		if skills[j].PublishedAt != nil {
+			rightPublished = *skills[j].PublishedAt
+		}
+		if !leftPublished.Equal(rightPublished) {
+			return leftPublished.After(rightPublished)
+		}
+		if !skills[i].CreatedAt.Equal(skills[j].CreatedAt) {
+			return skills[i].CreatedAt.After(skills[j].CreatedAt)
+		}
+		return skills[i].Name < skills[j].Name
+	})
+	start := page.Offset
+	if start >= len(skills) {
+		writeMarketplaceSkillListWithCategoryDemand(c, db, page, nil, total, hotCategories)
+		return
+	}
+	end := start + page.Limit
+	if end > len(skills) {
+		end = len(skills)
+	}
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills[start:end], total, hotCategories)
 }
 
 func listMarketplaceTrending(c *gin.Context, db *gorm.DB, page skillapi.PageParams, featured, kidsSafe *bool) {
@@ -508,6 +522,10 @@ func listMarketplaceTrending(c *gin.Context, db *gorm.DB, page skillapi.PagePara
 }
 
 func writeMarketplaceSkillList(c *gin.Context, db *gorm.DB, page skillapi.PageParams, skills []skillmodel.Skill, total int64) {
+	writeMarketplaceSkillListWithCategoryDemand(c, db, page, skills, total, nil)
+}
+
+func writeMarketplaceSkillListWithCategoryDemand(c *gin.Context, db *gorm.DB, page skillapi.PageParams, skills []skillmodel.Skill, total int64, hotCategories map[string]*CategoryDemandRow) {
 	userInfo, err := marketplaceUserInfo(c, db)
 	if err != nil {
 		writeDBError(c, err)
@@ -536,7 +554,7 @@ func writeMarketplaceSkillList(c *gin.Context, db *gorm.DB, page skillapi.PagePa
 
 	out := make([]MarketplaceSkill, 0, len(skills))
 	for _, s := range skills {
-		out = append(out, marketplaceSkillFromModel(s, userInfo, enabledBySkillID[s.ID], savedBySkillID[s.ID], entitlementBySkillID[s.ID], socialProof[s.ID]))
+		out = append(out, marketplaceSkillFromModelWithCategoryDemand(s, userInfo, enabledBySkillID[s.ID], savedBySkillID[s.ID], entitlementBySkillID[s.ID], socialProof[s.ID], hotCategories[s.Category]))
 	}
 	skillapi.List(c, out, skillapi.NewPagination(page.Page, page.Limit, total))
 }
@@ -1262,6 +1280,8 @@ func listMarketplaceSkillsPublicQuery(db *gorm.DB) *gorm.DB {
 		"created_at",
 		"is_kids_safe",
 		"is_kids_exclusive",
+		"published_at",
+		"created_at",
 	})
 }
 
@@ -1376,6 +1396,10 @@ type marketplaceSocialProof struct {
 const marketplacePopularDownloadThreshold int64 = 100
 
 func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, enabled bool, saved bool, hasOneTimeEntitlement bool, proof marketplaceSocialProof) MarketplaceSkill {
+	return marketplaceSkillFromModelWithCategoryDemand(s, user, enabled, saved, hasOneTimeEntitlement, proof, nil)
+}
+
+func marketplaceSkillFromModelWithCategoryDemand(s skillmodel.Skill, user marketplaceUserContext, enabled bool, saved bool, hasOneTimeEntitlement bool, proof marketplaceSocialProof, demand *CategoryDemandRow) MarketplaceSkill {
 	result := availability.Resolve(availability.SkillInfo{
 		Status:            s.Status,
 		RequiredPlan:      s.RequiredPlan,
@@ -1407,6 +1431,13 @@ func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, 
 		RatingSummary:    proof.RatingSummary,
 		DownloadCount:    proof.DownloadCount,
 	}
+	if demand != nil && demand.DemandScore7D > 0 {
+		entryPoint := enums.EntryPointCategoryDemand
+		out.HotCategoryBoost = true
+		out.CategoryDemand7D = demand.DemandScore7D
+		out.MerchandisingEntryPoint = &entryPoint
+		out.Badges = append(out.Badges, "hot_category")
+	}
 	if !user.IsAnonymous && user.UserID != 0 {
 		out.Saved = &saved
 	}
@@ -1416,6 +1447,18 @@ func marketplaceSkillFromModel(s skillmodel.Skill, user marketplaceUserContext, 
 type categoryAffinityRow struct {
 	Category  string
 	Downloads int64
+}
+
+type CategoryDemandRow struct {
+	Category          string   `json:"category"`
+	Downloads7D       int64    `json:"downloads_7d"`
+	Downloads30D      int64    `json:"downloads_30d"`
+	SuccessfulRuns7D  int64    `json:"successful_runs_7d"`
+	SuccessfulRuns30D int64    `json:"successful_runs_30d"`
+	DemandScore7D     int64    `json:"demand_score_7d"`
+	DemandScore30D    int64    `json:"demand_score_30d"`
+	TrendPct          *float64 `json:"trend_pct"`
+	Hot               bool     `json:"hot"`
 }
 
 type coDownloadRow struct {
@@ -1431,11 +1474,13 @@ type downloadLeaderboardRow struct {
 var downloadAcquisitionEntryPoints = []enums.EntryPoint{
 	enums.EntryPointSkillPackage,
 	enums.EntryPointNew,
+	enums.EntryPointNewWeek,
 	enums.EntryPointRecommended,
 	enums.EntryPointRecoPersonal,
 	enums.EntryPointRecoCodownload,
 	enums.EntryPointLeaderboardWeekly,
 	enums.EntryPointLeaderboardMonthly,
+	enums.EntryPointCategoryDemand,
 }
 
 func parseDownloadLeaderboardWindow(c *gin.Context) (string, time.Duration, bool) {
@@ -1465,6 +1510,180 @@ func downloadCountsQuery(db *gorm.DB, start, end time.Time, skillIDs []string) *
 		query = query.Where("skill_id IN ?", skillIDs)
 	}
 	return query
+}
+
+func categoryDownloadCounts(db *gorm.DB, start, end time.Time, includeKids bool) (map[string]int64, error) {
+	var rows []struct {
+		Category      string
+		DownloadCount int64
+	}
+	query := db.Model(&skillmodel.SkillUsageEvent{}).
+		Select("skills.category AS category, count(*) AS download_count").
+		Joins("JOIN skills ON skills.id = skill_usage_events.skill_id").
+		Where("skill_usage_events.occurred_at >= ? AND skill_usage_events.occurred_at < ?", start.UTC(), end.UTC()).
+		Where("skill_usage_events.skill_id IS NOT NULL").
+		Where("skill_usage_events.success = ?", true).
+		Where("skills.status = ?", enums.SkillStatusPublished).
+		Where(
+			db.Where("skill_usage_events.event_type = ? AND skill_usage_events.entry_point IN ?", enums.SkillUsageEventTypeEnabled, downloadAcquisitionEntryPoints).
+				Or("skill_usage_events.event_type = ?", enums.SkillUsageEventTypePurchased),
+		).
+		Group("skills.category")
+	if !includeKids {
+		query = query.Where("skill_usage_events.is_kids_session = ?", false)
+	}
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Category) == "" {
+			continue
+		}
+		out[row.Category] = row.DownloadCount
+	}
+	return out, nil
+}
+
+func categorySuccessfulRunCounts(db *gorm.DB, start, end time.Time, includeKids bool) (map[string]int64, error) {
+	var rows []struct {
+		Category string
+		RunCount int64
+	}
+	query := analyticsEventsQuery(db, start, end, includeKids).
+		Select("skills.category AS category, count(*) AS run_count").
+		Joins("JOIN skills ON skills.id = skill_usage_events.skill_id").
+		Where("skill_usage_events.event_type = ? AND skill_usage_events.success = ?", enums.SkillUsageEventTypeUsed, true).
+		Where("skill_usage_events.skill_id IS NOT NULL").
+		Where("skills.status = ?", enums.SkillStatusPublished).
+		Group("skills.category")
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Category) == "" {
+			continue
+		}
+		out[row.Category] = row.RunCount
+	}
+	return out, nil
+}
+
+func loadCategoryDemandRows(db *gorm.DB, now time.Time, includeKids bool, limit int) ([]CategoryDemandRow, error) {
+	end := now.UTC()
+	sevenStart := end.Add(-7 * 24 * time.Hour)
+	previousStart := end.Add(-14 * 24 * time.Hour)
+	thirtyStart := end.Add(-30 * 24 * time.Hour)
+
+	downloads7D, err := categoryDownloadCounts(db, sevenStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	downloadsPrevious, err := categoryDownloadCounts(db, previousStart, sevenStart, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	downloads30D, err := categoryDownloadCounts(db, thirtyStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runs7D, err := categorySuccessfulRunCounts(db, sevenStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runsPrevious, err := categorySuccessfulRunCounts(db, previousStart, sevenStart, includeKids)
+	if err != nil {
+		return nil, err
+	}
+	runs30D, err := categorySuccessfulRunCounts(db, thirtyStart, end, includeKids)
+	if err != nil {
+		return nil, err
+	}
+
+	categories := map[string]struct{}{}
+	for category := range downloads7D {
+		categories[category] = struct{}{}
+	}
+	for category := range downloads30D {
+		categories[category] = struct{}{}
+	}
+	for category := range runs7D {
+		categories[category] = struct{}{}
+	}
+	for category := range runs30D {
+		categories[category] = struct{}{}
+	}
+
+	rows := make([]CategoryDemandRow, 0, len(categories))
+	for category := range categories {
+		score7D := downloads7D[category] + runs7D[category]
+		score30D := downloads30D[category] + runs30D[category]
+		previousScore := downloadsPrevious[category] + runsPrevious[category]
+		var trend *float64
+		if score7D > 0 || previousScore > 0 {
+			baseline := previousScore
+			if baseline < 1 {
+				baseline = 1
+			}
+			value := float64(score7D-previousScore) / float64(baseline)
+			trend = &value
+		}
+		rows = append(rows, CategoryDemandRow{
+			Category:          category,
+			Downloads7D:       downloads7D[category],
+			Downloads30D:      downloads30D[category],
+			SuccessfulRuns7D:  runs7D[category],
+			SuccessfulRuns30D: runs30D[category],
+			DemandScore7D:     score7D,
+			DemandScore30D:    score30D,
+			TrendPct:          trend,
+		})
+	}
+
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].DemandScore7D != rows[j].DemandScore7D {
+			return rows[i].DemandScore7D > rows[j].DemandScore7D
+		}
+		leftTrend := float64(-1 << 30)
+		rightTrend := float64(-1 << 30)
+		if rows[i].TrendPct != nil {
+			leftTrend = *rows[i].TrendPct
+		}
+		if rows[j].TrendPct != nil {
+			rightTrend = *rows[j].TrendPct
+		}
+		if leftTrend != rightTrend {
+			return leftTrend > rightTrend
+		}
+		if rows[i].DemandScore30D != rows[j].DemandScore30D {
+			return rows[i].DemandScore30D > rows[j].DemandScore30D
+		}
+		return rows[i].Category < rows[j].Category
+	})
+
+	for i := range rows {
+		rows[i].Hot = i < 3 && rows[i].DemandScore7D > 0
+	}
+	if limit > 0 && len(rows) > limit {
+		rows = rows[:limit]
+	}
+	return rows, nil
+}
+
+func loadHotCategoryDemandSet(db *gorm.DB, now time.Time, limit int) (map[string]*CategoryDemandRow, error) {
+	rows, err := loadCategoryDemandRows(db, now, false, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*CategoryDemandRow, len(rows))
+	for i := range rows {
+		if !rows[i].Hot {
+			continue
+		}
+		out[rows[i].Category] = &rows[i]
+	}
+	return out, nil
 }
 
 func loadDownloadCountsBySkill(db *gorm.DB, skillIDs []string, start, end time.Time) (map[string]int64, error) {
@@ -1505,6 +1724,9 @@ func loadTotalDownloadCountsBySkill(db *gorm.DB, skillIDs []string) (map[string]
 		out[row.SkillID] += row.DownloadCount
 	}
 
+	if !db.Migrator().HasTable("skill_purchase_orders") {
+		return out, nil
+	}
 	var purchaseRows []struct {
 		SkillID       string
 		DownloadCount int64

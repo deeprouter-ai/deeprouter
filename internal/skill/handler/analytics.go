@@ -100,6 +100,12 @@ type SkillAnalyticsSkillsResponse struct {
 	PeriodEnd       string                   `json:"period_end"`
 }
 
+type SkillAnalyticsCategoryDemandResponse struct {
+	Categories []CategoryDemandRow `json:"categories"`
+	PeriodEnd  string              `json:"period_end"`
+	Windows    []string            `json:"windows"`
+}
+
 type skillAnalyticsPageRow struct {
 	ID             string
 	Name           string
@@ -335,6 +341,37 @@ func GetOpsSkillAnalyticsSkills(c *gin.Context) {
 		ChargingEnabled: chargingEnabled,
 		PeriodStart:     period.Start.Format(time.RFC3339),
 		PeriodEnd:       period.End.Format(time.RFC3339),
+	})
+}
+
+func GetOpsSkillAnalyticsCategoryDemand(c *gin.Context) {
+	db, ok := skillDB(c)
+	if !ok {
+		return
+	}
+	includeKids, valid := parseAnalyticsIncludeKids(c)
+	if !valid {
+		return
+	}
+	limit := 10
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 50 {
+			writeAnalyticsQueryError(c, "INVALID_LIMIT", "limit must be between 1 and 50")
+			return
+		}
+		limit = parsed
+	}
+	now := analyticsNow()
+	rows, err := loadCategoryDemandRows(db, now, includeKids, limit)
+	if err != nil {
+		writeDBError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, SkillAnalyticsCategoryDemandResponse{
+		Categories: rows,
+		PeriodEnd:  now.UTC().Format(time.RFC3339),
+		Windows:    []string{"7d", "30d"},
 	})
 }
 
