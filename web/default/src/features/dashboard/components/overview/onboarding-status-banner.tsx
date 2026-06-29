@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { CreditCard, MessageCircle, Sparkles, X } from 'lucide-react'
+import { CreditCard, MessageCircle, PackageOpen, Sparkles, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -49,29 +49,6 @@ function writeDismissed(key: string): void {
     window.localStorage.setItem(key, '1')
   } catch {
     /* private mode — silent */
-  }
-}
-
-type ClientSlug =
-  | 'cherry-studio'
-  | 'chatbox'
-  | 'lobechat'
-  | 'cursor'
-  | 'claude-code'
-  | 'code'
-
-function asClientSlug(value: unknown): ClientSlug | null {
-  if (typeof value !== 'string') return null
-  switch (value) {
-    case 'cherry-studio':
-    case 'chatbox':
-    case 'lobechat':
-    case 'cursor':
-    case 'claude-code':
-    case 'code':
-      return value
-    default:
-      return null
   }
 }
 
