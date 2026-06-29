@@ -170,7 +170,7 @@ func ListModels(c *gin.Context, modelType int) {
 		// them against the account/group's enabled models — best-effort: if the
 		// group can't be resolved we just skip expansion rather than failing the
 		// listing. Matching mirrors the relay gate (model.MatchModelLimit) so
-		// /v1/models stays consistent with what actually routes (DR-1001 §6).
+		// /v1/models stays consistent with what actually routes (DR-85 §6).
 		allowed := make(map[string]bool, len(tokenModelLimit))
 		hasWildcard := false
 		for entry := range tokenModelLimit {
