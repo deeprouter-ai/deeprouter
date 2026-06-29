@@ -265,6 +265,7 @@ var marketplaceEventEntryPointValues = map[enums.EntryPoint]struct{}{
 	enums.EntryPointLeaderboardMonthly: {},
 	enums.EntryPointPaywall:            {},
 	enums.EntryPointCategoryDemand:     {},
+	enums.EntryPointUserHome:           {},
 }
 
 func ListMarketplaceSkills(c *gin.Context) {
@@ -695,6 +696,7 @@ func parseSaveEntryPoint(raw string) (enums.EntryPoint, bool) {
 		enums.EntryPointPopular,
 		enums.EntryPointNew,
 		enums.EntryPointRecommended,
+		enums.EntryPointUserHome,
 		enums.EntryPointSearchResults:
 		return entry, true
 	default:

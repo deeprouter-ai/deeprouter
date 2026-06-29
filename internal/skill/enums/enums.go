@@ -244,6 +244,7 @@ const (
 	EntryPointLeaderboardWeekly  EntryPoint = "leaderboard_weekly"
 	EntryPointLeaderboardMonthly EntryPoint = "leaderboard_monthly"
 	EntryPointCategoryDemand     EntryPoint = "category_demand"
+	EntryPointUserHome           EntryPoint = "user_home"
 	EntryPointDigest             EntryPoint = "digest"
 	EntryPointReengage           EntryPoint = "reengage"
 	EntryPointAdminPreview       EntryPoint = "admin_preview"
@@ -282,6 +283,7 @@ var validEntryPoints = map[EntryPoint]struct{}{
 	EntryPointLeaderboardWeekly:  {},
 	EntryPointLeaderboardMonthly: {},
 	EntryPointCategoryDemand:     {},
+	EntryPointUserHome:           {},
 	EntryPointDigest:             {},
 	EntryPointReengage:           {},
 	EntryPointAdminPreview:       {},
