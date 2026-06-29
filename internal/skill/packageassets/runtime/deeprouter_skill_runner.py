@@ -141,7 +141,7 @@ def execute(api_url, api_key, manifest, user_input):
     # The routing endpoint (/v1/routing/chat/completions) returns the standard
     # OpenAI chat-completion shape. Read the assistant text from
     # choices[0].message.content, falling back to a legacy top-level {"text": ...}
-    # body for backward compatibility. (DR-1002)
+    # body for backward compatibility. (DR-86)
     text = parsed.get("text")
     if not isinstance(text, str):
         choices = parsed.get("choices")

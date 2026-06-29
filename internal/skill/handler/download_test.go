@@ -1157,7 +1157,7 @@ func TestDownloadedPackageRunner_MockSuccessFromExtractedZip(t *testing.T) {
 	assert.NotContains(t, requestBody, "instruction_template")
 }
 
-// TestDownloadedPackageRunner_MockSuccessOpenAIShape verifies the DR-1002 fix:
+// TestDownloadedPackageRunner_MockSuccessOpenAIShape verifies the DR-86 fix:
 // the routing endpoint returns the standard OpenAI chat-completion shape, and
 // the runner extracts choices[0].message.content as the output text (no longer
 // requiring a top-level "text" field).

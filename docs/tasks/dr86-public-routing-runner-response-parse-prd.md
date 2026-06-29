@@ -4,7 +4,7 @@
 > **Author**: Kaitao Lai + Claude
 > **Date**: 2026-06-27
 > **Owner**: DeepRouter Platform (Skill Marketplace)
-> **Ticket**: DR-1002
+> **Ticket**: DR-86
 > **Parent**: [`docs/tasks/dr63-public-routing-api-contract-prd.md`](./dr63-public-routing-api-contract-prd.md) · [`docs/tasks/dr79-publish-time-skill-packaging-prd.md`](./dr79-publish-time-skill-packaging-prd.md)
 > **范围**: 打包进 skill zip 的运行时客户端 `internal/skill/packageassets/runtime/deeprouter_skill_runner.py`
 
@@ -18,7 +18,7 @@ skill 包运行时客户端执行报错:
 {"code": "EXECUTION_FAILED", "message": "Execution API response missing text"}
 ```
 
-(此错误出现在 DR-1001 修好 token 白名单 403 *之后* —— 请求已能到达执行端点。)
+(此错误出现在 DR-85 修好 token 白名单 403 *之后* —— 请求已能到达执行端点。)
 
 根因:**runner 与 routing 端点的响应格式不一致**。
 - Runner(`deeprouter_skill_runner.py:141`)读取顶层 `parsed.get("text")`,缺失即报

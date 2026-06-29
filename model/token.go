@@ -369,7 +369,7 @@ func (token *Token) GetModelLimitsMap() map[string]bool {
 // This mirrors the trailing-"*" prefix convention used elsewhere
 // (setting/operation_setting/tools.go).
 //
-// NOTE (DR-1001 §5): this is a SUBSET FILTER only — a match here never grants
+// NOTE (DR-85 §5): this is a SUBSET FILTER only — a match here never grants
 // access beyond the account/group ability. Channel selection
 // (GetRandomSatisfiedChannel) independently gates on group+model, so a wildcard
 // can only widen access within what the account already can reach.
