@@ -1,4 +1,4 @@
-// Command seed-skills seeds the R2 demo Skills (DR-51) into the configured
+// Command seed-skills seeds the R2 demo Skills (DR-51 free + DR-105 paid) into the configured
 // database as published, packaged, downloadable Skills.
 //
 // It boots the same way the gateway does (loads .env, InitEnv, InitDB — which

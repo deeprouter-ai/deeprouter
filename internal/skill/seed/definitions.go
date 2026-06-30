@@ -1,7 +1,10 @@
 package seed
 
+import "github.com/QuantumNous/new-api/internal/skill/enums"
+
 // DemoSkillDef is the source-of-truth definition for one seeded demo Skill.
-// Mirrors DR-51 (Jira_V2/demo_skills_seed.md). Each field maps onto the skills /
+// Mirrors DR-51 (Jira_V2/demo_skills_seed.md) and DR-105
+// (Jira_V2/paid_skills_seed.md). Each field maps onto the skills /
 // skill_versions schema by SeedDemoSkills.
 //
 // D-09 compliance is structural to every entry:
@@ -25,6 +28,10 @@ type DemoSkillDef struct {
 	ExampleInputs       []map[string]any
 	ExampleOutputs      []map[string]any
 	FeaturedRank        int
+	RequiredPlan        enums.RequiredPlan
+	MonetizationType    enums.MonetizationType
+	PriceMarkup         float64
+	FreeQuotaPerMonth   *int
 }
 
 // field is a tiny constructor for an input-schema descriptor entry.
@@ -36,9 +43,10 @@ func field(name, typ string, required bool, extra map[string]any) map[string]any
 	return m
 }
 
-// DemoSkills returns the four R2 demo Skills, verbatim per DR-51.
+// DemoSkills returns the R2 demo Skills: four free DR-51 Skills plus four
+// Pro/Plus-gated DR-105 Skills.
 func DemoSkills() []DemoSkillDef {
-	return []DemoSkillDef{
+	freeSkills := []DemoSkillDef{
 		{
 			Slug:             "polished-writer",
 			Category:         "writing",
@@ -219,4 +227,5 @@ Return JSON matching output_schema: a concise ` + "`answer`" + `, the ` + "`key_
 			FeaturedRank: 4,
 		},
 	}
+	return append(freeSkills, PaidDemoSkills()...)
 }

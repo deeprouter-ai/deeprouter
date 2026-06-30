@@ -1,0 +1,38 @@
+# DR-105 Pro Paid Skill Seeds Test Results
+
+Date: 2026-06-30
+Branch: feat/dr-105-pro-paid-skill-seeds
+
+## Focused seed tests
+
+- Command: `go test ./internal/skill/seed`
+- Dataset/fixtures: file-backed SQLite Skill tables migrated by `seedTestDB`; seeded DR-51 free Skills plus DR-105 paid Skills via `SeedDemoSkills`.
+- Verified: eight published Skills are created; four paid Skills have `required_plan=pro`, `monetization_type=plan_included`, `price_markup=0`, nil `free_quota_per_month`, `model_whitelist=["smart-tier"]`, large max input token limits, active version snapshots, SHA-256 templates, output schemas, and idempotent re-seed behavior.
+- Coverage: package statement coverage from Go test cache not emitted; behavior coverage targets seed creation, idempotency, monetization snapshots, and version churn.
+- Result: PASS.
+
+## Focused download entitlement tests
+
+- Command: `go test ./internal/skill/handler -run 'TestDownloadSkillPackage_Seeded|TestDownloadSkillPackage_PlanRequired|TestDownloadSkillPackage_ProUserCanDownloadProSkill|TestDownloadSkillPackage_EnterpriseUserCanDownloadProSkill|TestDownloadSkillPackage_DR99ExpiredPlusCannotDownloadPlusExclusive'`
+- Dataset/fixtures: file-backed SQLite Skill, SkillVersion, UserEnabledSkill, SkillPurchase, and SkillUsageEvent tables; seeded DR-51/DR-105 Skills; synthetic free, pro, enterprise, and expired-plus users.
+- Verified: seeded free Skills remain downloadable by free users; seeded Pro Skills reject free users with `SKILL_PLAN_REQUIRED` without creating enablement rows; active Plus and Enterprise users download zip packages; existing expired Plus coverage returns `SKILL_SUBSCRIPTION_INACTIVE`.
+- Coverage: package statement coverage not emitted for this focused run; assertions cover download handler entitlement decisions, zip content generation path, and enablement side effects.
+- Result: PASS.
+
+## Skill package regression
+
+- Command: `go test ./internal/skill/...`
+- Dataset/fixtures: package-local SQLite fixtures and mocks across Skill API, availability, handler, model, pricing, relay, seed, tiers, and notification packages.
+- Verified: DR-105 seed shape does not regress Skill availability, entitlement pricing, relay use-time checks, model migrations, package download, telemetry, or notification behavior.
+- Coverage: package statement coverage not emitted; broad regression across all `internal/skill` packages.
+- Result: PASS.
+
+## Full Go suite
+
+- Commands:
+  - `make build-all-frontends`
+  - `go test ./...`
+- Dataset/fixtures: repository package-local unit/integration fixtures; generated default/classic frontend dist for Go embed prerequisites. Frontend build used project Bun lockfiles and produced only existing warnings: Browserslist age, `lottie-web` eval warning, and chunk-size warnings.
+- Verified: full backend repository regression after seeding change, including controller, middleware, model, relay, router, service, settings, and all Skill packages.
+- Coverage: package statement coverage not emitted for full suite.
+- Result: PASS.

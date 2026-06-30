@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/internal/skill/enums"
 	skillmodel "github.com/QuantumNous/new-api/internal/skill/model"
 	"github.com/QuantumNous/new-api/internal/skill/seed"
 	"github.com/glebarez/sqlite"
@@ -88,4 +89,39 @@ func TestDownloadSkillPackage_SeededDemoSkills(t *testing.T) {
 	var enabled int64
 	db.Model(&skillmodel.UserEnabledSkill{}).Where("user_id = ?", 1).Count(&enabled)
 	require.Equal(t, int64(4), enabled, "each download should upsert a user_enabled_skills row")
+}
+
+func TestDownloadSkillPackage_SeededPaidDemoSkillsPlanGate(t *testing.T) {
+	db := seededDownloadDB(t)
+	SetDB(db)
+	if _, err := seed.SeedDemoSkills(db, 1); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	paidSlugs := []string{"research-synthesizer-pro", "legal-clause-reviewer-pro", "pr-architecture-reviewer-pro", "financial-modeler-pro"}
+	for _, slug := range paidSlugs {
+		var s skillmodel.Skill
+		require.NoErrorf(t, db.Where("slug = ?", slug).First(&s).Error, "%s: load skill", slug)
+		require.Equalf(t, enums.RequiredPlanPro, s.RequiredPlan, "%s: required_plan", slug)
+		require.Equalf(t, enums.MonetizationTypePlanIncluded, s.MonetizationType, "%s: monetization_type", slug)
+		require.Nilf(t, s.FreeQuotaPerMonth, "%s: free_quota_per_month", slug)
+
+		freeCtx, freeResp := testDownloadCtx(slug, 2, "default")
+		DownloadSkillPackage(freeCtx)
+		require.Equalf(t, http.StatusForbidden, freeResp.Code, "%s: free user should be blocked", slug)
+		require.Containsf(t, freeResp.Body.String(), `"code":"SKILL_PLAN_REQUIRED"`, "%s: free user error code", slug)
+
+		proCtx, proResp := testDownloadCtx(slug, 3, "pro")
+		DownloadSkillPackage(proCtx)
+		require.Equalf(t, http.StatusOK, proResp.Code, "%s: Plus user download", slug)
+		require.Equalf(t, "application/zip", proResp.Header().Get("Content-Type"), "%s: Plus content-type", slug)
+
+		enterpriseCtx, enterpriseResp := testDownloadCtx(slug, 4, "enterprise")
+		DownloadSkillPackage(enterpriseCtx)
+		require.Equalf(t, http.StatusOK, enterpriseResp.Code, "%s: Enterprise satisfies Pro", slug)
+	}
+
+	var freeEnabled int64
+	require.NoError(t, db.Model(&skillmodel.UserEnabledSkill{}).Where("user_id = ?", 2).Count(&freeEnabled).Error)
+	require.Equal(t, int64(0), freeEnabled, "blocked free downloads must not enable paid skills")
 }
