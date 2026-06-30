@@ -96,6 +96,10 @@ export const getUserRoleOptions = (t: (key: string) => string) => [
   { label: t('Root'), value: String(USER_ROLE.ROOT), icon: Shield },
 ]
 
+export function canViewUserSkillUsageAction(role?: number | null): boolean {
+  return role === USER_ROLE.ROOT
+}
+
 // ============================================================================
 // Default Values
 // ============================================================================

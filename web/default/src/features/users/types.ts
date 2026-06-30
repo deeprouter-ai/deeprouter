@@ -143,8 +143,47 @@ export interface ManageUserQuotaPayload {
   value: number
 }
 
+export interface UserSkillUsageDownloadRow {
+  skill_id: string
+  skill_slug: string
+  skill_name: string
+  enabled: boolean
+  enabled_at: string
+  disabled_at?: string
+  removed_at?: string
+  source: string
+  last_update_time?: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cost_usd: number
+}
+
+export interface UserSkillUsageTimelineRow {
+  event_id: string
+  event_type: string
+  occurred_at: string
+  skill_id?: string
+  skill_slug?: string
+  skill_name?: string
+  model?: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cost_usd: number
+  success?: boolean
+}
+
+export interface UserSkillUsageResponse {
+  user_id: number
+  consent_granted: boolean
+  kids_protected: boolean
+  downloads: UserSkillUsageDownloadRow[]
+  usage_timeline: UserSkillUsageTimelineRow[]
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================
 
-export type UsersDialogType = 'create' | 'update' | 'delete'
+export type UsersDialogType = 'create' | 'update' | 'delete' | 'skill-usage'

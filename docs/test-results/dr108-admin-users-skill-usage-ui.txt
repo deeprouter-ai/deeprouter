@@ -1,0 +1,177 @@
+# DR-108 Admin Users Skill Usage UI Test Results
+
+Date: 2026-07-01
+
+## Focused unit/regression with coverage
+
+Command:
+
+`cd web/default && bunx vitest run src/features/users/__tests__/skill-usage-dialog.test.tsx --coverage --coverage.include='src/features/users/**' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- Mocked `GET /api/v1/admin/users/:user_id/skill-usage` through `getUserSkillUsage`.
+- Consented fixture includes one downloaded Skill, one `skill_used` timeline event, input/output/total token counts, model, success, and USD cost.
+- Non-consent fixture returns empty downloads and timeline.
+- Error fixture rejects the API request.
+
+Assertions:
+
+- Consented users render per-Skill totals and timeline rows.
+- Non-consented users render the privacy/consent empty state and no usage rows.
+- API errors render a retry/admin-access error state.
+- Root role can see the Skill usage action gate; non-root admin cannot.
+
+Coverage:
+
+- `src/features/users/components/dialogs/user-skill-usage-dialog.tsx`: 89.18% lines, 58.82% branches, 93.75% functions.
+- `src/features/users/components/data-table-row-actions.tsx`: 30.64% lines, 30.43% branches, 12.5% functions.
+- `src/features/users/constants.ts`: 100% lines, 100% branches.
+- Included `src/features/users/**` aggregate: 13.99% lines, 10.85% branches, 12.02% functions because the focused coverage scope also includes many unrelated Users files not exercised by DR-108.
+
+Result:
+
+- PASS: 7 tests passed.
+
+## Typecheck
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Dataset / fixtures / mocks:
+
+- TypeScript project references from `tsc -b`.
+
+Assertions:
+
+- New API types, dialog props, i18n usage, query wiring, and Users dialog state compile.
+
+Coverage:
+
+- Compile-time validation only; no runtime coverage.
+
+Result:
+
+- PASS.
+
+## Focused lint
+
+Command:
+
+`cd web/default && bunx eslint src/features/users/api.ts src/features/users/types.ts src/features/users/constants.ts src/features/users/components/data-table-row-actions.tsx src/features/users/components/dialogs/user-skill-usage-dialog.tsx src/features/users/index.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- DR-108 touched frontend files only.
+
+Assertions:
+
+- ESLint and TanStack query rules pass for touched files.
+
+Coverage:
+
+- Static lint validation only; no runtime coverage.
+
+Result:
+
+- PASS.
+
+## i18n sync
+
+Command:
+
+`cd web/default && bun run i18n:sync`
+
+Dataset / fixtures / mocks:
+
+- Existing `en.json` and `zh.json` locale files. The current default frontend registers only `en` and `zh` in `src/i18n/config.ts`.
+
+Assertions:
+
+- No missing or extra translation keys after adding DR-108 strings.
+
+Coverage:
+
+- i18n report: en missing 0 / extras 0 / untranslated 0; zh missing 0 / extras 0 / untranslated 104 existing entries.
+
+Result:
+
+- PASS.
+
+## Production build
+
+Command:
+
+`cd web/default && bun run build`
+
+Dataset / fixtures / mocks:
+
+- Rsbuild production build of `web/default`.
+
+Assertions:
+
+- Frontend bundles successfully with the new Users dialog and i18n keys.
+
+Coverage:
+
+- Build validation only; no runtime coverage.
+
+Result:
+
+- PASS.
+
+## Full frontend test suite
+
+Command:
+
+`cd web/default && bun run test`
+
+Dataset / fixtures / mocks:
+
+- Existing Vitest suite with project setup and jsdom environment.
+
+Assertions:
+
+- Existing frontend regressions plus DR-108 tests.
+
+Coverage:
+
+- No coverage flag for full suite.
+
+Result:
+
+- PASS: 18 test files, 176 tests.
+
+## Non-blocking full lint note
+
+Command:
+
+`cd web/default && bun run lint`
+
+Dataset / fixtures / mocks:
+
+- Entire `web/default/src` lint surface.
+
+Assertions:
+
+- Full-project ESLint.
+
+Coverage:
+
+- Static lint validation only; no runtime coverage.
+
+Result:
+
+- FAIL due to pre-existing unrelated lint errors outside DR-108 touched files, mostly `react-hooks/set-state-in-effect`, `react-hooks/purity`, and hook declaration-order findings in components such as `src/components/ai-elements/web-preview.tsx`, channel dialogs, wallet hooks/components, and shared hooks.
+- Touched-file ESLint passes, so this is recorded as an existing repository-wide lint debt rather than a DR-108 regression.
+
+## Incorrect runner note
+
+Command:
+
+`cd web/default && bun test`
+
+Result:
+
+- FAIL because this bypasses the configured Vitest runner and lacks Vitest APIs/jsdom setup (`vi.hoisted` / `vi.mocked` unavailable, `document` undefined). The valid full suite command is `bun run test`, which passed.

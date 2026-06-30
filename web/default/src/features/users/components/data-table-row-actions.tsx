@@ -30,9 +30,11 @@ import {
   ShieldAlert,
   Link2,
   CreditCard,
+  Activity,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -50,6 +52,7 @@ import {
   USER_ROLE,
   ERROR_MESSAGES,
   isUserDeleted,
+  canViewUserSkillUsageAction,
 } from '../constants'
 import { getUserActionMessage } from '../lib'
 import { type User, type ManageUserAction } from '../types'
@@ -64,6 +67,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const { t } = useTranslation()
   const user = row.original
   const { setOpen, setCurrentRow, triggerRefresh } = useUsers()
+  const currentUserRole = useAuthStore((state) => state.auth.user?.role)
   const [resetPasskeyOpen, setResetPasskeyOpen] = useState(false)
   const [resetTwoFAOpen, setResetTwoFAOpen] = useState(false)
   const [bindingDialogOpen, setBindingDialogOpen] = useState(false)
@@ -130,6 +134,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const isDisabled = user.status === USER_STATUS.DISABLED
   const isAdmin = user.role >= USER_ROLE.ADMIN
   const isRoot = user.role === USER_ROLE.ROOT
+  const canViewSkillUsage = canViewUserSkillUsageAction(currentUserRole)
 
   if (isUserDeleted(user)) {
     return null
@@ -221,6 +226,21 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
+
+          {canViewSkillUsage && (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault()
+                setCurrentRow(user)
+                setOpen('skill-usage')
+              }}
+            >
+              {t('Skill usage')}
+              <DropdownMenuShortcut>
+                <Activity size={16} />
+              </DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuItem
             onSelect={(event) => {
