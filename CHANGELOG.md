@@ -4,6 +4,8 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-30
 
+- 更新 DR-105 seeder：在 DR-51 四个免费 demo Skills 外新增四个 Pro/Plus-gated demo Skills，写入 plan-included monetization/version snapshots，并补种子、下载门控与 full Go suite 测试结果记录（`internal/skill/seed/`, `internal/skill/handler/seed_download_test.go`, `docs/test-results/dr105-pro-paid-skill-seeds.txt`）
+- 新增 DR-105 Pro paid Skill seeds 任务 PRD，明确四个 Plus/Pro 专享 demo Skills、付费门控、打包下载与验收范围（`docs/tasks/dr105-pro-paid-skill-seeds-prd.md`）
 - 修复 Jira ticket 编号误写：将 skill runner routing 响应解析修复相关记录统一更正为 DR-86（`internal/skill/`, `docs/tasks/`, `docs/tickets/dr-tickets.csv`）
 - 修复 Jira ticket 编号误写：将调用密钥 Allowed models 通配符鉴权修复相关记录统一更正为 DR-85（`controller/`, `middleware/`, `model/`, `docs/tasks/`, `docs/tickets/dr-tickets.csv`）
 

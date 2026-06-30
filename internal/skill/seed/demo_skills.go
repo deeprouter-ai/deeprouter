@@ -1,4 +1,4 @@
-// Package seed creates the R2 demo Skills (DR-51) directly via GORM, exercising
+// Package seed creates the R2 demo Skills (DR-51 and DR-105) directly via GORM, exercising
 // the draft → version → publish lifecycle (DR-46 / DR-47 / DR-48) so each Skill
 // ends up published with an active, packaged, downloadable version.
 //
@@ -52,7 +52,7 @@ type Result struct {
 	Outcomes []Outcome
 }
 
-// SeedDemoSkills creates/updates the four R2 demo Skills as published, packaged,
+// SeedDemoSkills creates/updates the R2 demo Skills as published, packaged,
 // downloadable Skills. createdBy is the platform user id recorded as the author
 // (typically the root user, id 1). It validates every tier whitelist against the
 // platform alias registry (DR-110) before writing.
@@ -117,7 +117,10 @@ func seedOne(db *gorm.DB, d DemoSkillDef, createdBy int64) (Outcome, error) {
 		if existing.Status == enums.SkillStatusPublished && existing.ActiveVersionID != nil {
 			var active skillmodel.SkillVersion
 			if err := tx.Where("id = ?", *existing.ActiveVersionID).First(&active).Error; err == nil {
-				if active.InstructionTemplateSHA256 == sha && sameStringList(active.ModelWhitelistSnapshot, d.ModelWhitelist) {
+				if active.InstructionTemplateSHA256 == sha &&
+					sameStringList(active.ModelWhitelistSnapshot, d.ModelWhitelist) &&
+					active.RequiredPlanSnapshot == effectiveRequiredPlan(d) &&
+					sameMonetizationSnapshot(active.MonetizationSnapshot, d) {
 					if err := tx.Save(&existing).Error; err != nil {
 						return err
 					}
@@ -203,9 +206,6 @@ func buildSkill(d DemoSkillDef, createdBy int64) (skillmodel.Skill, error) {
 		Name:                 d.Name,
 		ShortDescription:     d.ShortDescription,
 		Description:          d.Description,
-		RequiredPlan:         enums.RequiredPlanFree,
-		MonetizationType:     enums.MonetizationTypeFree,
-		PriceMarkup:          0,
 		TimeoutSeconds:       45,
 		IsKidsSafe:           false,
 		KidsApprovalStatus:   enums.KidsApprovalStatusNotRequired,
@@ -259,6 +259,15 @@ func applyMetadata(skill *skillmodel.Skill, d DemoSkillDef, actor int64) error {
 	skill.ExampleInputs = exInJSON
 	skill.ExampleOutputs = exOutJSON
 	skill.ModelWhitelist = wlJSON
+	skill.RequiredPlan = effectiveRequiredPlan(d)
+	skill.MonetizationType = effectiveMonetizationType(d)
+	skill.PriceMarkup = d.PriceMarkup
+	if d.FreeQuotaPerMonth == nil {
+		skill.FreeQuotaPerMonth = nil
+	} else {
+		quota := *d.FreeQuotaPerMonth
+		skill.FreeQuotaPerMonth = &quota
+	}
 	skill.MaxInputTokens = &maxTok
 	skill.FeaturedFlag = true
 	skill.FeaturedRank = &rank
@@ -312,6 +321,20 @@ func monetizationSnapshot(skill skillmodel.Skill) (skillmodel.SkillJSONB, error)
 	return toJSONB(payload)
 }
 
+func effectiveRequiredPlan(d DemoSkillDef) enums.RequiredPlan {
+	if d.RequiredPlan == "" {
+		return enums.RequiredPlanFree
+	}
+	return d.RequiredPlan
+}
+
+func effectiveMonetizationType(d DemoSkillDef) enums.MonetizationType {
+	if d.MonetizationType == "" {
+		return enums.MonetizationTypeFree
+	}
+	return d.MonetizationType
+}
+
 // computeTemplateSHA256 returns the lowercase hex SHA-256 of the instruction
 // template. main's SkillVersion.BeforeCreate does NOT compute this, so the seeder
 // sets it explicitly (integrity check, R2/D-09).
@@ -342,4 +365,16 @@ func sameStringList(j skillmodel.SkillJSONB, want []string) bool {
 		}
 	}
 	return true
+}
+
+func sameMonetizationSnapshot(j skillmodel.SkillJSONB, d DemoSkillDef) bool {
+	want, err := monetizationSnapshot(skillmodel.Skill{
+		MonetizationType:  effectiveMonetizationType(d),
+		PriceMarkup:       d.PriceMarkup,
+		FreeQuotaPerMonth: d.FreeQuotaPerMonth,
+	})
+	if err != nil {
+		return false
+	}
+	return string(j) == string(want)
 }

@@ -1,11 +1,11 @@
 package seed
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/internal/skill/enums"
 	skillmodel "github.com/QuantumNous/new-api/internal/skill/model"
 	"github.com/QuantumNous/new-api/internal/skill/tiers"
@@ -35,15 +35,15 @@ func seedTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestSeedDemoSkills_CreatesFourPublishedPackagedSkills(t *testing.T) {
+func TestSeedDemoSkills_CreatesPublishedPackagedSkills(t *testing.T) {
 	db := seedTestDB(t)
 
 	result, err := SeedDemoSkills(db, 1)
 	if err != nil {
 		t.Fatalf("SeedDemoSkills: %v", err)
 	}
-	if len(result.Outcomes) != 4 {
-		t.Fatalf("expected 4 outcomes, got %d", len(result.Outcomes))
+	if len(result.Outcomes) != 8 {
+		t.Fatalf("expected 8 outcomes, got %d", len(result.Outcomes))
 	}
 	for _, o := range result.Outcomes {
 		if o.Action != "created" {
@@ -53,11 +53,20 @@ func TestSeedDemoSkills_CreatesFourPublishedPackagedSkills(t *testing.T) {
 
 	var published int64
 	db.Model(&skillmodel.Skill{}).Where("status = ?", enums.SkillStatusPublished).Count(&published)
-	if published != 4 {
-		t.Fatalf("expected 4 published skills, got %d", published)
+	if published != 8 {
+		t.Fatalf("expected 8 published skills, got %d", published)
 	}
 
-	wantSlugs := map[string]bool{"polished-writer": false, "faithful-translator": false, "code-helper": false, "data-analyst": false}
+	wantSlugs := map[string]bool{
+		"polished-writer": false, "faithful-translator": false, "code-helper": false, "data-analyst": false,
+		"research-synthesizer-pro": false, "legal-clause-reviewer-pro": false, "pr-architecture-reviewer-pro": false, "financial-modeler-pro": false,
+	}
+	paidSlugs := map[string]bool{
+		"research-synthesizer-pro":     true,
+		"legal-clause-reviewer-pro":    true,
+		"pr-architecture-reviewer-pro": true,
+		"financial-modeler-pro":        true,
+	}
 	var skills []skillmodel.Skill
 	if err := db.Find(&skills).Error; err != nil {
 		t.Fatalf("load skills: %v", err)
@@ -81,7 +90,7 @@ func TestSeedDemoSkills_CreatesFourPublishedPackagedSkills(t *testing.T) {
 
 		// model_whitelist must be valid platform tiers (D-09 rule 2 / DR-110).
 		var wl []string
-		if err := json.Unmarshal(s.ModelWhitelist, &wl); err != nil {
+		if err := common.Unmarshal(s.ModelWhitelist, &wl); err != nil {
 			t.Fatalf("%s: whitelist json: %v", s.Slug, err)
 		}
 		if _, ok := tiers.ValidateWhitelist(wl); !ok {
@@ -93,6 +102,28 @@ func TestSeedDemoSkills_CreatesFourPublishedPackagedSkills(t *testing.T) {
 		// end-to-end in internal/skill/handler seed→download test).
 		if !strings.Contains(s.Description, "## Work step") || !strings.Contains(strings.ToLower(s.Description), "deeprouter") {
 			t.Fatalf("%s: description missing DeepRouter work step", s.Slug)
+		}
+		if paidSlugs[s.Slug] {
+			if s.RequiredPlan != enums.RequiredPlanPro {
+				t.Fatalf("%s: required_plan = %q, want pro", s.Slug, s.RequiredPlan)
+			}
+			if s.MonetizationType != enums.MonetizationTypePlanIncluded {
+				t.Fatalf("%s: monetization_type = %q, want plan_included", s.Slug, s.MonetizationType)
+			}
+			if s.PriceMarkup != 0 {
+				t.Fatalf("%s: price_markup = %v, want 0", s.Slug, s.PriceMarkup)
+			}
+			if s.FreeQuotaPerMonth != nil {
+				t.Fatalf("%s: free_quota_per_month must be nil", s.Slug)
+			}
+			if !sameStringList(s.ModelWhitelist, []string{"smart-tier"}) {
+				t.Fatalf("%s: paid demo skill must be fixed to smart-tier", s.Slug)
+			}
+			if s.MaxInputTokens == nil || *s.MaxInputTokens < 24000 {
+				t.Fatalf("%s: paid demo skill missing large-context max_input_tokens", s.Slug)
+			}
+		} else if s.RequiredPlan != enums.RequiredPlanFree || s.MonetizationType != enums.MonetizationTypeFree {
+			t.Fatalf("%s: DR-51 free seed should stay free/free, got %s/%s", s.Slug, s.RequiredPlan, s.MonetizationType)
 		}
 
 		// Active version exists, is active, sha matches the stored template, and
@@ -150,11 +181,11 @@ func TestSeedDemoSkills_Idempotent(t *testing.T) {
 	var skillCount, versionCount int64
 	db.Model(&skillmodel.Skill{}).Count(&skillCount)
 	db.Model(&skillmodel.SkillVersion{}).Count(&versionCount)
-	if skillCount != 4 {
-		t.Fatalf("expected 4 skills after re-seed, got %d", skillCount)
+	if skillCount != 8 {
+		t.Fatalf("expected 8 skills after re-seed, got %d", skillCount)
 	}
-	if versionCount != 4 {
-		t.Fatalf("expected 4 versions after re-seed (no churn), got %d", versionCount)
+	if versionCount != 8 {
+		t.Fatalf("expected 8 versions after re-seed (no churn), got %d", versionCount)
 	}
 }
 
