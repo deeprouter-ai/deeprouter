@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/internal/skill/errcodes"
 	skillmodel "github.com/QuantumNous/new-api/internal/skill/model"
 	"github.com/QuantumNous/new-api/internal/skill/pricing"
+	"github.com/QuantumNous/new-api/logger"
 	platformmodel "github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -79,6 +81,7 @@ func PurchaseMarketplaceSkill(c *gin.Context) {
 	}
 
 	var resp purchaseSkillResponse
+	var grantReferralOrderID string
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var s skillmodel.Skill
 		if err := tx.Where("status = ?", enums.SkillStatusPublished).
@@ -100,6 +103,9 @@ func PurchaseMarketplaceSkill(c *gin.Context) {
 				return errSkillPurchaseIdempotencyConflict
 			}
 			resp = purchaseResponseFromOrder(order, order.Status == skillmodel.SkillPurchaseStatusSucceeded)
+			if order.Status == skillmodel.SkillPurchaseStatusSucceeded {
+				grantReferralOrderID = order.ID
+			}
 			return nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -149,15 +155,13 @@ func PurchaseMarketplaceSkill(c *gin.Context) {
 		if err := skillmodel.EmitSkillPurchased(tx, userID, s.ID, s.ActiveVersionID, plan, oneTimeSkillPurchaseAmountUSD, entryPoint); err != nil {
 			return err
 		}
-		if _, _, err := referralservice.GrantForConversion(tx, userID, referralmodel.ReferralConversionSkill, order.ID); err != nil {
-			return err
-		}
 		now := time.Now().UTC()
 		order.Status = skillmodel.SkillPurchaseStatusSucceeded
 		order.CompletedAt = &now
 		if err := tx.Save(&order).Error; err != nil {
 			return err
 		}
+		grantReferralOrderID = order.ID
 		resp = purchaseResponseFromOrder(order, true)
 		return nil
 	})
@@ -178,7 +182,21 @@ func PurchaseMarketplaceSkill(c *gin.Context) {
 		}
 		return
 	}
+	if grantReferralOrderID != "" {
+		grantReferralForSkillPurchase(c, db, userID, grantReferralOrderID)
+	}
 	skillapi.Success(c, resp)
+}
+
+func grantReferralForSkillPurchase(c *gin.Context, db *gorm.DB, userID int64, orderID string) {
+	_, awarded, err := referralservice.GrantForConversion(db, userID, referralmodel.ReferralConversionSkill, orderID)
+	if err != nil {
+		logger.LogError(c.Request.Context(), fmt.Sprintf("referral reward grant failed user_id=%d source=%s reference=%s error=%q", userID, referralmodel.ReferralConversionSkill, orderID, err.Error()))
+		return
+	}
+	if awarded {
+		logger.LogInfo(c.Request.Context(), fmt.Sprintf("referral reward granted user_id=%d source=%s reference=%s", userID, referralmodel.ReferralConversionSkill, orderID))
+	}
 }
 
 var (

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	referralmodel "github.com/QuantumNous/new-api/internal/referral/model"
 	"github.com/QuantumNous/new-api/internal/skill/enums"
 	"github.com/QuantumNous/new-api/internal/skill/errcodes"
@@ -68,6 +69,60 @@ func TestPurchaseMarketplaceSkill_OneTimePaid_GrantsOnceAndEmitsPurchased(t *tes
 	var event skillmodel.SkillUsageEvent
 	require.NoError(t, db.Where("event_type = ? AND skill_id = ?", enums.SkillUsageEventTypePurchased, s.ID).First(&event).Error)
 	assert.Equal(t, enums.EntryPointPaywall, event.EntryPoint)
+}
+
+func TestPurchaseMarketplaceSkill_ReferralGrantFailureDoesNotRollbackPurchase(t *testing.T) {
+	db := purchaseTestDB(t)
+	SetDB(db)
+	oldRewardKind := common.ReferralRewardKind
+	common.ReferralRewardKind = "unsupported_for_test"
+	t.Cleanup(func() {
+		common.ReferralRewardKind = oldRewardKind
+	})
+
+	s := testSkill("referral-fail-buy", "published")
+	s.RequiredPlan = enums.RequiredPlanPro
+	s.MonetizationType = enums.MonetizationTypeOneTime
+	s = createPublishedSkillWithActiveVersionFromSkill(t, db, s, "paid template")
+	require.NoError(t, db.Create(&platformmodel.User{Id: 41, Username: "inviter", Quota: 0, Group: "default", AffCode: "INV41"}).Error)
+	require.NoError(t, db.Create(&platformmodel.User{Id: 45, Username: "buyer4", Quota: oneTimePurchaseQuotaCharge() * 2, Group: "default"}).Error)
+	require.NoError(t, db.Create(&referralmodel.ReferralRecord{
+		InviterID:  41,
+		InviteeID:  45,
+		InviteCode: "INV41",
+		Status:     referralmodel.ReferralStatusSignedUp,
+	}).Error)
+
+	c, w := testContext("/api/v1/marketplace/skills/referral-fail-buy/purchase")
+	c.Params = gin.Params{{Key: "id", Value: "referral-fail-buy"}}
+	c.Set("id", 45)
+	c.Set("group", "default")
+	c.Request.Body = io.NopCloser(strings.NewReader(`{"idempotency_key":"referral-failure-key"}`))
+	PurchaseMarketplaceSkill(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"status":"succeeded"`)
+	assert.Contains(t, w.Body.String(), `"entitled":true`)
+
+	var user platformmodel.User
+	require.NoError(t, db.First(&user, 45).Error)
+	assert.Equal(t, oneTimePurchaseQuotaCharge(), user.Quota, "referral grant failure must not roll back wallet debit")
+
+	var order skillmodel.SkillPurchaseOrder
+	require.NoError(t, db.Where("user_id = ? AND idempotency_key = ?", 45, "referral-failure-key").First(&order).Error)
+	assert.Equal(t, skillmodel.SkillPurchaseStatusSucceeded, order.Status)
+
+	var entitlementCount, eventCount int64
+	require.NoError(t, db.Model(&skillmodel.SkillEntitlement{}).Where("user_id = ? AND skill_id = ?", 45, s.ID).Count(&entitlementCount).Error)
+	require.NoError(t, db.Model(&skillmodel.SkillUsageEvent{}).Where("event_type = ? AND skill_id = ?", enums.SkillUsageEventTypePurchased, s.ID).Count(&eventCount).Error)
+	assert.Equal(t, int64(1), entitlementCount)
+	assert.Equal(t, int64(1), eventCount)
+
+	var referral referralmodel.ReferralRecord
+	require.NoError(t, db.Where("invitee_id = ?", 45).First(&referral).Error)
+	assert.Equal(t, referralmodel.ReferralStatusSignedUp, referral.Status)
+	assert.Nil(t, referral.RewardGrantedAt)
+	assert.Empty(t, referral.ConversionReference)
 }
 
 func TestPlusUpgradeCreditUSD_ConfigurableFromOneTimeEntitlement(t *testing.T) {
