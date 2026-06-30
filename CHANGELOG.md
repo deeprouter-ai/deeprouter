@@ -2,6 +2,12 @@
 
 DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
+## 2026-07-01
+
+- 新增 DR-108 Admin Users Skill Usage UI 任务 PRD，定义 Super Admin-only 用户行级 Skill usage drill-down、consent gate、Kids pseudonymization 与无 raw payload 展示范围（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
+- 实现 DR-108 Admin Users Skill Usage UI：Users 行操作新增 Super Admin-only `Skill usage` 入口，接入 DR-94 `GET /api/v1/admin/users/:user_id/skill-usage`，新增 consent-gated 下载 Skill 汇总与 usage timeline dialog、en/zh 文案、聚焦回归测试，并记录 typecheck/build/full frontend test 与 lint 结果（`web/default/src/features/users/`, `web/default/src/i18n/locales/`, `docs/test-results/dr108-admin-users-skill-usage-ui.txt`）
+- 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 eval，进入 review/check 阶段（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
+
 ## 2026-06-30
 
 - 更新 SkillVersion instruction migration PRD 状态为 ship，记录 PR #142 checks 通过并合并到 main（`docs/tasks/skill-version-instruction-migration-prd.md`）
