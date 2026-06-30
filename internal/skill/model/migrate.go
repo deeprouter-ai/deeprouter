@@ -40,6 +40,9 @@ func MigrateSkillVersions(db *gorm.DB) error {
 			return err
 		}
 	} else {
+		if err := migrateSkillVersionInstructionColumns(db); err != nil {
+			return err
+		}
 		if err := db.AutoMigrate(&SkillVersion{}); err != nil {
 			return err
 		}
@@ -169,6 +172,9 @@ func migrateSkillVersionPackageColumns(db *gorm.DB) error {
 }
 
 func migrateSkillVersionInstructionColumns(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&SkillVersion{}) {
+		return nil
+	}
 	cols := []struct {
 		name        string
 		sqliteMySQL string

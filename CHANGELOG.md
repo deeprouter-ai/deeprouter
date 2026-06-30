@@ -4,6 +4,7 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-30
 
+- 修复 PostgreSQL 旧 `skill_versions` 表含数据时新增 Skill 说明字段迁移失败的问题：在 GORM `AutoMigrate` 前先补齐并回填 instruction columns，避免 `prerequisites NOT NULL` 加列导致 smart-router compose 栈后端重启（`internal/skill/model/migrate.go`, `internal/skill/model/skill_pg_mysql_test.go`, `docs/tasks/skill-version-instruction-migration-prd.md`）
 - 更新 DR-98 Skill purchase referral 发奖隔离修复 PRD 状态为 ship，记录 PR #141 checks 通过并合并到 main（`docs/tasks/dr98-referral-skill-purchase-grant-isolation-prd.md`）
 - 修复 DR-98 one-time Skill purchase referral 发奖失败回滚购买的问题：购买事务提交后 best-effort 发奖并记录日志，补发奖失败不影响订单成功、entitlement 和扣款的回归测试（`internal/skill/handler/purchase.go`, `internal/skill/handler/purchase_test.go`）
 - 更新 DR-98 Skill purchase referral 发奖隔离修复 PRD 状态为 eval，进入 review/check 阶段（`docs/tasks/dr98-referral-skill-purchase-grant-isolation-prd.md`）
