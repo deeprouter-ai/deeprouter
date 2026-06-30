@@ -71,6 +71,83 @@ func TestMigrateSkills_PG_SucceedsFromEmptyDB(t *testing.T) {
 	}
 }
 
+func TestMigrateSkillVersions_PG_BackfillsInstructionColumnsOnLegacyRows(t *testing.T) {
+	db := openPGDB(t)
+	if err := MigrateSkills(db); err != nil {
+		t.Fatalf("MigrateSkills on PG: %v", err)
+	}
+	if err := db.Exec(`
+		CREATE TABLE skill_versions (
+			id char(36) NOT NULL PRIMARY KEY,
+			skill_id char(36) NOT NULL,
+			version_number bigint NOT NULL,
+			status varchar(32) NOT NULL DEFAULT 'draft',
+			instruction_template text NOT NULL,
+			instruction_template_sha256 char(64) NOT NULL,
+			prompt_guard_template text,
+			output_schema text,
+			model_whitelist_snapshot text NOT NULL,
+			required_plan_snapshot varchar(32) NOT NULL,
+			monetization_snapshot text NOT NULL,
+			max_input_tokens_snapshot bigint,
+			rollout_percentage bigint NOT NULL DEFAULT 100,
+			experiment_name varchar(128),
+			created_by bigint NOT NULL,
+			created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			activated_at timestamptz,
+			archived_at timestamptz
+		)
+	`).Error; err != nil {
+		t.Fatalf("create legacy skill_versions table: %v", err)
+	}
+	skill := validSkill("pg-legacy-instruction-columns")
+	if err := db.Create(&skill).Error; err != nil {
+		t.Fatalf("create parent skill: %v", err)
+	}
+	if err := db.Exec(`
+		INSERT INTO skill_versions (
+			id, skill_id, version_number, status, instruction_template,
+			instruction_template_sha256, output_schema, model_whitelist_snapshot,
+			required_plan_snapshot, monetization_snapshot, rollout_percentage, created_by
+		) VALUES (?, ?, 1, 'draft', 'legacy template',
+			'0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+			'{"type":"object"}', '["gpt-4o-mini"]', 'free', '{"type":"free"}', 100, 1
+		)
+	`, uuid.New().String(), skill.ID).Error; err != nil {
+		t.Fatalf("insert legacy skill version: %v", err)
+	}
+
+	if err := MigrateSkillVersions(db); err != nil {
+		t.Fatalf("MigrateSkillVersions on legacy PG table: %v", err)
+	}
+
+	var got struct {
+		DownloadInstructions string
+		UsageInstructions    string
+		Prerequisites        string
+		Quickstart           string
+		ExampleIO            string
+	}
+	if err := db.Raw(`
+		SELECT
+			download_instructions,
+			usage_instructions,
+			prerequisites::text AS prerequisites,
+			quickstart::text AS quickstart,
+			example_io::text AS example_io
+		FROM skill_versions
+		LIMIT 1
+	`).Scan(&got).Error; err != nil {
+		t.Fatalf("read migrated row: %v", err)
+	}
+	if got.DownloadInstructions != "" || got.UsageInstructions != "" {
+		t.Fatalf("text instruction defaults = %q/%q, want empty strings", got.DownloadInstructions, got.UsageInstructions)
+	}
+	if got.Prerequisites != "[]" || got.Quickstart != "[]" || got.ExampleIO != "[]" {
+		t.Fatalf("json instruction defaults = %q/%q/%q, want []/[]/[]", got.Prerequisites, got.Quickstart, got.ExampleIO)
+	}
+}
+
 func TestMigrateSkillUsageEvents_PG_SucceedsFromEmptyDB(t *testing.T) {
 	db := openPGDB(t)
 	if err := MigrateSkillUsageEvents(db); err != nil {
