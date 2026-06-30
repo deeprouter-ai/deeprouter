@@ -4,6 +4,10 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-06-30
 
+- 更新 DR-98 Skill purchase referral 发奖隔离修复 PRD 状态为 ship，记录 PR #141 checks 通过并合并到 main（`docs/tasks/dr98-referral-skill-purchase-grant-isolation-prd.md`）
+- 修复 DR-98 one-time Skill purchase referral 发奖失败回滚购买的问题：购买事务提交后 best-effort 发奖并记录日志，补发奖失败不影响订单成功、entitlement 和扣款的回归测试（`internal/skill/handler/purchase.go`, `internal/skill/handler/purchase_test.go`）
+- 更新 DR-98 Skill purchase referral 发奖隔离修复 PRD 状态为 eval，进入 review/check 阶段（`docs/tasks/dr98-referral-skill-purchase-grant-isolation-prd.md`）
+- 新增 DR-98 Skill purchase referral 发奖隔离修复 PRD，明确发奖失败不得回滚购买、entitlement、扣款与订单成功态（`docs/tasks/dr98-referral-skill-purchase-grant-isolation-prd.md`）
 - 更新 DR-105 seeder：在 DR-51 四个免费 demo Skills 外新增四个 Pro/Plus-gated demo Skills，写入 plan-included monetization/version snapshots，并补种子、下载门控与 full Go suite 测试结果记录（`internal/skill/seed/`, `internal/skill/handler/seed_download_test.go`, `docs/test-results/dr105-pro-paid-skill-seeds.txt`）
 - 新增 DR-105 Pro paid Skill seeds 任务 PRD，明确四个 Plus/Pro 专享 demo Skills、付费门控、打包下载与验收范围（`docs/tasks/dr105-pro-paid-skill-seeds-prd.md`）
 - 修复 Jira ticket 编号误写：将 skill runner routing 响应解析修复相关记录统一更正为 DR-86（`internal/skill/`, `docs/tasks/`, `docs/tickets/dr-tickets.csv`）
