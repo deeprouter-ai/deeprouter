@@ -55,3 +55,5 @@ Add a root-only Skill Usage drill-down from Admin -> Users so operators can answ
 ## Evaluation Notes
 
 - 2026-07-01: Implemented Admin -> Users row action and Skill Usage dialog, moved to eval. Test evidence recorded in `docs/test-results/dr108-admin-users-skill-usage-ui.txt`.
+- 2026-07-01: Reopened to build for a row-action usability bug where selecting `Skill usage` from the dropdown prevented the menu from closing, making the action appear unresponsive.
+- 2026-07-01: Fixed the row action and returned to eval after focused regression verified the click sets `skill-usage` dialog state and closes the menu.

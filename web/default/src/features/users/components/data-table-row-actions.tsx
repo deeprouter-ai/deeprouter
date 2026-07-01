@@ -229,8 +229,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
           {canViewSkillUsage && (
             <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault()
+              onClick={() => {
                 setCurrentRow(user)
                 setOpen('skill-usage')
               }}
