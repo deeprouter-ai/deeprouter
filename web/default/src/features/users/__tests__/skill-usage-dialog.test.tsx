@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DataTableRowActions } from '../components/data-table-row-actions'
@@ -194,6 +194,27 @@ describe('DR-108 user row Skill usage action', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
 
     expect(await screen.findByText('Skill usage')).toBeInTheDocument()
+  })
+
+  it('opens the Skill usage dialog state and closes the menu when root users select it', async () => {
+    const setOpen = vi.fn()
+    const setCurrentRow = vi.fn()
+    mockUseUsers.mockReturnValue({
+      setOpen,
+      setCurrentRow,
+      triggerRefresh: vi.fn(),
+    })
+    authState.role = 100
+
+    render(<DataTableRowActions row={{ original: baseUser } as never} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+    await userEvent.click(await screen.findByText('Skill usage'))
+
+    expect(setCurrentRow).toHaveBeenCalledWith(baseUser)
+    expect(setOpen).toHaveBeenCalledWith('skill-usage')
+    await waitFor(() => {
+      expect(screen.queryByText('Skill usage')).not.toBeInTheDocument()
+    })
   })
 
   it('does not render the Skill usage menu item for non-root admins', async () => {
