@@ -495,31 +495,33 @@ func GetSelf(c *gin.Context) {
 
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
-		"id":                user.Id,
-		"username":          user.Username,
-		"display_name":      user.DisplayName,
-		"role":              user.Role,
-		"status":            user.Status,
-		"email":             user.Email,
-		"github_id":         user.GitHubId,
-		"discord_id":        user.DiscordId,
-		"oidc_id":           user.OidcId,
-		"wechat_id":         user.WeChatId,
-		"telegram_id":       user.TelegramId,
-		"group":             user.Group,
-		"quota":             user.Quota,
-		"used_quota":        user.UsedQuota,
-		"request_count":     user.RequestCount,
-		"aff_code":          user.AffCode,
-		"aff_count":         user.AffCount,
-		"aff_quota":         user.AffQuota,
-		"aff_history_quota": user.AffHistoryQuota,
-		"inviter_id":        user.InviterId,
-		"linux_do_id":       user.LinuxDOId,
-		"setting":           user.Setting,
-		"stripe_customer":   user.StripeCustomer,
-		"sidebar_modules":   userSetting.SidebarModules, // 正确提取sidebar_modules字段
-		"permissions":       permissions,                // 新增权限字段
+		"id":                           user.Id,
+		"username":                     user.Username,
+		"display_name":                 user.DisplayName,
+		"role":                         user.Role,
+		"status":                       user.Status,
+		"email":                        user.Email,
+		"github_id":                    user.GitHubId,
+		"discord_id":                   user.DiscordId,
+		"oidc_id":                      user.OidcId,
+		"wechat_id":                    user.WeChatId,
+		"telegram_id":                  user.TelegramId,
+		"group":                        user.Group,
+		"quota":                        user.Quota,
+		"used_quota":                   user.UsedQuota,
+		"request_count":                user.RequestCount,
+		"aff_code":                     user.AffCode,
+		"aff_count":                    user.AffCount,
+		"aff_quota":                    user.AffQuota,
+		"aff_history_quota":            user.AffHistoryQuota,
+		"inviter_id":                   user.InviterId,
+		"linux_do_id":                  user.LinuxDOId,
+		"setting":                      user.Setting,
+		"tier2_telemetry_consent":      user.Tier2TelemetryConsent,
+		"tier2_telemetry_consented_at": user.Tier2TelemetryConsentedAt,
+		"stripe_customer":              user.StripeCustomer,
+		"sidebar_modules":              userSetting.SidebarModules, // 正确提取sidebar_modules字段
+		"permissions":                  permissions,                // 新增权限字段
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1280,6 +1282,58 @@ type UpdateUserSettingRequest struct {
 	Industry        *string `json:"industry,omitempty"`
 	ExpectedVolume  *string `json:"expected_volume,omitempty"`
 	MarketingEmails *bool   `json:"marketing_emails,omitempty"`
+}
+
+type TelemetryConsentResponse struct {
+	Tier2TelemetryConsent     bool       `json:"tier2_telemetry_consent"`
+	Tier2TelemetryConsentedAt *time.Time `json:"tier2_telemetry_consented_at,omitempty"`
+}
+
+type UpdateTelemetryConsentRequest struct {
+	Tier2TelemetryConsent *bool `json:"tier2_telemetry_consent"`
+}
+
+func GetTelemetryConsent(c *gin.Context) {
+	userId := c.GetInt("id")
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, TelemetryConsentResponse{
+		Tier2TelemetryConsent:     user.Tier2TelemetryConsent,
+		Tier2TelemetryConsentedAt: user.Tier2TelemetryConsentedAt,
+	})
+}
+
+func UpdateTelemetryConsent(c *gin.Context) {
+	var req UpdateTelemetryConsentRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Tier2TelemetryConsent == nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	userId := c.GetInt("id")
+	updates := map[string]interface{}{
+		"tier2_telemetry_consent": *req.Tier2TelemetryConsent,
+	}
+	if *req.Tier2TelemetryConsent {
+		now := time.Now()
+		updates["tier2_telemetry_consented_at"] = &now
+	}
+	if err := model.DB.Model(&model.User{}).Where("id = ?", userId).Updates(updates).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, TelemetryConsentResponse{
+		Tier2TelemetryConsent:     user.Tier2TelemetryConsent,
+		Tier2TelemetryConsentedAt: user.Tier2TelemetryConsentedAt,
+	})
 }
 
 func UpdateUserSetting(c *gin.Context) {

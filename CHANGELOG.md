@@ -4,6 +4,9 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-07-01
 
+- 新增 User Tier 2 Telemetry Consent 任务 PRD，定义用户在 Profile / Privacy 自助开启/关闭 Skill usage telemetry consent、Admin 只读不可代开、以及 raw content 不展示范围（`docs/tasks/user-tier2-telemetry-consent-prd.md`）
+- 实现 User Tier 2 Telemetry Consent：新增当前用户 GET/PUT `/api/user/telemetry-consent`、`/api/user/self` 返回 consent 状态，Profile 新增 Privacy 卡片允许用户自助开启/关闭 Tier 2 telemetry consent，Admin 用户编辑路径不可代开，并补后端/前端回归测试与测试结果记录（`controller/user.go`, `router/api-router.go`, `web/default/src/features/profile/`, `docs/test-results/user-tier2-telemetry-consent.txt`）
+- 更新 User Tier 2 Telemetry Consent 任务 PRD 状态为 eval，进入 review/check 阶段（`docs/tasks/user-tier2-telemetry-consent-prd.md`）
 - 修复 DR-108 Skill usage dialog 将 Skill v1 `{data, meta}` 成功响应误判为 legacy `{success, data}` 失败响应的问题，并从 v1 error envelope 显示后端错误信息（`web/default/src/features/users/api.ts`, `web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`, `web/default/src/features/users/types.ts`）
 - 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 build，记录 Skill v1 response envelope mismatch 修复范围（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
 - 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 eval，记录 Skill v1 envelope 修复已通过 focused regression、lint、typecheck 与 build（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）

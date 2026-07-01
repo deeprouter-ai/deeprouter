@@ -81,6 +81,10 @@ export interface UserProfile {
   telegram_id?: string
   /** LinuxDO ID (OAuth) */
   linux_do_id?: string
+  /** User-controlled consent for Tier 2 Skill usage telemetry */
+  tier2_telemetry_consent?: boolean
+  /** Last time the user enabled Tier 2 telemetry consent */
+  tier2_telemetry_consented_at?: string
 }
 
 /**
@@ -132,9 +136,15 @@ export interface UserSettings {
   /** Signup-wizard captures (see docs/tasks/onboarding-prd.md §5) */
   brand_preference?: 'claude' | 'openai' | 'gemini' | 'deepseek' | ''
   preferred_client?:
-    | 'cherry-studio' | 'chatbox' | 'lobechat'
-    | 'cursor' | 'claude-code' | 'code'
-    | 'playground' | 'dashboard' | ''
+    | 'cherry-studio'
+    | 'chatbox'
+    | 'lobechat'
+    | 'cursor'
+    | 'claude-code'
+    | 'code'
+    | 'playground'
+    | 'dashboard'
+    | ''
   acquisition_channel?: string
   timezone?: string
   onboarding_completed_at?: string
@@ -192,6 +202,15 @@ export interface UpdateUserSettingsRequest {
   industry?: string
   expected_volume?: 'trying' | 'daily-low' | 'daily-medium' | 'daily-high' | ''
   marketing_emails?: boolean
+}
+
+export interface TelemetryConsentStatus {
+  tier2_telemetry_consent: boolean
+  tier2_telemetry_consented_at?: string
+}
+
+export interface UpdateTelemetryConsentRequest {
+  tier2_telemetry_consent: boolean
 }
 
 /**

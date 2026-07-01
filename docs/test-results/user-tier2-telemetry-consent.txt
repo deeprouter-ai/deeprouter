@@ -1,0 +1,237 @@
+# User Tier 2 Telemetry Consent Test Results
+
+Date: 2026-07-01
+
+## Focused backend controller tests
+
+Command:
+
+`go test ./controller -run 'TestTelemetryConsent|TestAdminUpdateUserCannotEnableTelemetryConsent'`
+
+Dataset / fixtures / mocks:
+
+- In-memory SQLite `users` table migrated from `model.User`.
+- Test users with unique usernames and affiliate codes.
+- Redis cache disabled for the test scope so model update paths do not require a Redis client.
+
+Assertions:
+
+- Current user can read Tier 2 telemetry consent state.
+- Current user can enable consent and receives a consent timestamp.
+- Current user can disable consent while retaining the last consent timestamp for audit context.
+- Request bodies containing another `user_id` do not update another user's consent.
+- Admin user edit path does not enable another user's telemetry consent even if the request body includes `tier2_telemetry_consent`.
+
+Coverage:
+
+- Focused controller package coverage: 0.7% statements. The exercised handler branch coverage is targeted; aggregate package coverage is low because the controller package contains many unrelated handlers.
+
+Result:
+
+- PASS.
+
+## Focused frontend component tests
+
+Command:
+
+`cd web/default && bunx vitest run src/features/profile/__tests__/telemetry-consent-card.test.tsx --coverage --coverage.include='src/features/profile/**' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- Mocked `updateTelemetryConsent`.
+- Mocked i18n passthrough `t`.
+- Mocked `sonner` toast calls.
+- Profile fixture for user `tao`.
+
+Assertions:
+
+- Privacy card renders disabled consent state.
+- Enabling consent calls the caller-scoped API, refreshes profile, and shows success toast.
+- Failed disable request rolls back the switch and shows an error toast.
+
+Coverage:
+
+- `telemetry-consent-card.tsx`: 87.5% lines, 65% branches, 100% functions.
+- Included `src/features/profile/**` aggregate: 2.21% lines, 1.81% branches, 1.31% functions because the focused coverage scope also includes many unrelated Profile files not exercised by this task.
+
+Result:
+
+- PASS: 1 file / 3 tests.
+
+## Backend controller/router tests
+
+Command:
+
+`go test ./controller ./router`
+
+Dataset / fixtures / mocks:
+
+- Existing controller and router unit fixtures plus the new telemetry consent controller fixtures.
+
+Assertions:
+
+- Existing controller/router regressions still pass.
+- New authenticated user consent handlers compile and run with router/controller packages.
+
+Coverage:
+
+- Package test run without coverage flag.
+
+Result:
+
+- PASS.
+
+## Full Go suite
+
+Command:
+
+`go test ./...`
+
+Dataset / fixtures / mocks:
+
+- Full repository Go test suite.
+
+Assertions:
+
+- Backend, router, middleware, relay, Skill marketplace, and shared packages all pass after adding consent APIs.
+
+Coverage:
+
+- Full suite run without coverage flag.
+
+Result:
+
+- PASS.
+
+## i18n sync
+
+Command:
+
+`cd web/default && bun run i18n:sync`
+
+Dataset / fixtures / mocks:
+
+- Current frontend registered locales: `en` and `zh`.
+
+Assertions:
+
+- New Profile / Privacy strings are present and normalized in registered locale files.
+
+Coverage:
+
+- i18n consistency only.
+
+Result:
+
+- PASS.
+
+## Focused frontend lint
+
+Command:
+
+`cd web/default && bunx eslint src/features/profile/api.ts src/features/profile/types.ts src/features/profile/index.tsx src/features/profile/components/telemetry-consent-card.tsx src/features/profile/__tests__/telemetry-consent-card.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- Touched Profile frontend files only.
+
+Assertions:
+
+- ESLint and React hooks/compiler rules pass for touched files.
+
+Coverage:
+
+- Static lint validation only.
+
+Result:
+
+- PASS.
+
+## Typecheck
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Dataset / fixtures / mocks:
+
+- TypeScript project references from `tsc -b`.
+
+Assertions:
+
+- New API types, Profile props, component state, i18n usage, and tests compile.
+
+Coverage:
+
+- Compile-time validation only.
+
+Result:
+
+- PASS.
+
+## Production build
+
+Command:
+
+`cd web/default && bun run build`
+
+Dataset / fixtures / mocks:
+
+- Rsbuild production frontend build.
+
+Assertions:
+
+- Profile / Privacy card bundles successfully.
+
+Coverage:
+
+- Build validation only.
+
+Result:
+
+- PASS.
+
+## Full frontend test suite
+
+Command:
+
+`cd web/default && bun run test`
+
+Dataset / fixtures / mocks:
+
+- Existing configured Vitest suite with jsdom setup.
+
+Assertions:
+
+- Existing frontend regressions plus telemetry consent component tests.
+
+Coverage:
+
+- No coverage flag for full suite.
+
+Result:
+
+- PASS: 19 test files / 182 tests.
+
+## Non-blocking full lint note
+
+Command:
+
+`cd web/default && bun run lint`
+
+Dataset / fixtures / mocks:
+
+- Entire `web/default/src` lint surface.
+
+Assertions:
+
+- Full-project ESLint.
+
+Coverage:
+
+- Static lint validation only.
+
+Result:
+
+- FAIL due to pre-existing unrelated full-project lint debt outside this change, mostly React hooks/compiler findings such as `react-hooks/set-state-in-effect`, `react-hooks/purity`, and declaration-order issues in components/hooks unrelated to the touched Profile files.
+- Touched-file ESLint passes.

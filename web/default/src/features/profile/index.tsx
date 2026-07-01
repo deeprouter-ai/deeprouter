@@ -32,6 +32,7 @@ import { ProfileHeader } from './components/profile-header'
 import { ProfileSecurityCard } from './components/profile-security-card'
 import { ProfileSettingsCard } from './components/profile-settings-card'
 import { SidebarModulesCard } from './components/sidebar-modules-card'
+import { TelemetryConsentCard } from './components/telemetry-consent-card'
 import { TwoFACard } from './components/two-fa-card'
 import { useProfile } from './hooks'
 
@@ -73,6 +74,11 @@ export function Profile() {
                 />
                 <LanguagePreferencesCard
                   profile={profile}
+                  onProfileUpdate={refreshProfile}
+                />
+                <TelemetryConsentCard
+                  profile={profile}
+                  loading={loading}
                   onProfileUpdate={refreshProfile}
                 />
                 <ProfileSecurityCard profile={profile} loading={loading} />
