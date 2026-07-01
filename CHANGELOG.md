@@ -4,6 +4,9 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-07-01
 
+- 新增 Admin create user validation 任务 PRD，明确 Users 创建表单密码校验、root 可创建普通/Admin 用户且不可创建 root 用户的验收范围（`docs/tasks/admin-create-user-validation-prd.md`）
+- 修复 Admin Users 创建用户时短密码/空密码只在后端失败导致看似无法添加用户的问题：创建模式下前端先校验 8-20 位密码并显示字段级错误，后端补 root 创建普通/Admin 成功且创建 root 被拒的回归测试（`web/default/src/features/users/components/users-mutate-drawer.tsx`, `controller/user_create_test.go`）
+- 更新 Admin create user validation 任务 PRD 状态为 eval，并记录聚焦后端/前端、完整 Go、typecheck、build、full Vitest 与 lint 结果（`docs/tasks/admin-create-user-validation-prd.md`, `docs/test-results/admin-create-user-validation.txt`）
 - 新增 User Tier 2 Telemetry Consent 任务 PRD，定义用户在 Profile / Privacy 自助开启/关闭 Skill usage telemetry consent、Admin 只读不可代开、以及 raw content 不展示范围（`docs/tasks/user-tier2-telemetry-consent-prd.md`）
 - 实现 User Tier 2 Telemetry Consent：新增当前用户 GET/PUT `/api/user/telemetry-consent`、`/api/user/self` 返回 consent 状态，Profile 新增 Privacy 卡片允许用户自助开启/关闭 Tier 2 telemetry consent，Admin 用户编辑路径不可代开，并补后端/前端回归测试与测试结果记录（`controller/user.go`, `router/api-router.go`, `web/default/src/features/profile/`, `docs/test-results/user-tier2-telemetry-consent.txt`）
 - 更新 User Tier 2 Telemetry Consent 任务 PRD 状态为 eval，进入 review/check 阶段（`docs/tasks/user-tier2-telemetry-consent-prd.md`）

@@ -2793,6 +2793,7 @@
     "Password changed successfully": "密码更改成功",
     "Password copied to clipboard: {{password}}": "密码已复制到剪贴板：{{password}}",
     "Password has been copied to clipboard": "密码已复制到剪贴板",
+    "Password must be 8-20 characters": "密码必须为 8-20 个字符",
     "Password must be at least 8 characters": "密码必须至少 8 个字符",
     "Password must be at least 8 characters long": "密码必须至少 8 个字符长",
     "Password reset and copied to clipboard: {{password}}": "密码已重置并复制到剪贴板：{{password}}",

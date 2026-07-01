@@ -2793,6 +2793,7 @@
     "Password changed successfully": "Password changed successfully",
     "Password copied to clipboard: {{password}}": "Password copied to clipboard: {{password}}",
     "Password has been copied to clipboard": "Password has been copied to clipboard",
+    "Password must be 8-20 characters": "Password must be 8-20 characters",
     "Password must be at least 8 characters": "Password must be at least 8 characters",
     "Password must be at least 8 characters long": "Password must be at least 8 characters long",
     "Password reset and copied to clipboard: {{password}}": "Password reset and copied to clipboard: {{password}}",
