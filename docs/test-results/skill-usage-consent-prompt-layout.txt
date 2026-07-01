@@ -115,6 +115,26 @@ Result:
 
 - PASS.
 
+Command:
+
+`cd web/default && bun run build`
+
+Dataset / fixtures / mocks:
+
+- Full `web/default` production bundle.
+
+Assertions:
+
+- Rsbuild production bundle succeeds after the dialog width override.
+
+Coverage:
+
+- Build validation only.
+
+Result:
+
+- PASS.
+
 ## Production build
 
 Command:
@@ -208,3 +228,73 @@ Result:
   mostly React hooks/compiler rules such as `react-hooks/set-state-in-effect`,
   `react-hooks/purity`, and declaration-order issues. Touched-file ESLint
   passes.
+
+## Follow-up: Admin Skill usage dialog width override
+
+Command:
+
+`cd web/default && bunx eslint src/features/users/components/dialogs/user-skill-usage-dialog.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- Touched Admin Skill usage dialog and focused regression test.
+
+Assertions:
+
+- No lint regression in the explicit `sm:max-w-[900px]` / `xl:max-w-[1120px]`
+  dialog width override or table scroll-wrapper assertions.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- PASS.
+
+Command:
+
+`cd web/default && bunx vitest run src/features/users/__tests__/skill-usage-dialog.test.tsx --coverage --coverage.include='src/features/users/components/dialogs/user-skill-usage-dialog.tsx' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- Mocked Admin Skill usage API response with one downloaded Skill and one usage
+  timeline event.
+
+Assertions:
+
+- Dialog content includes `sm:max-w-[900px]` and `xl:max-w-[1120px]` so the
+  base `sm:max-w-sm` class cannot keep the dialog at 384px.
+- Downloaded Skills and Usage timeline tables retain `min-w-*` widths and are
+  wrapped by `overflow-x-auto` containers.
+- Existing consented, no-consent, API error, and Super Admin row-action
+  behavior continues to pass.
+
+Coverage:
+
+- `user-skill-usage-dialog.tsx`: 75.51% statements, 56.33% branches, 94.11%
+  funcs, 83.33% lines.
+
+Result:
+
+- PASS: 1 test file / 9 tests.
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Dataset / fixtures / mocks:
+
+- Full `web/default` TypeScript project.
+
+Assertions:
+
+- New layout classes and regression assertions compile cleanly.
+
+Coverage:
+
+- Typecheck only.
+
+Result:
+
+- PASS.

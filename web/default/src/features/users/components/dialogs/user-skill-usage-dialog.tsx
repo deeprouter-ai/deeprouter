@@ -141,7 +141,7 @@ export function UserSkillUsageDialog(props: Props) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='max-h-[88vh] w-[calc(100vw-2rem)] max-w-[1120px] overflow-hidden p-0'>
+      <DialogContent className='max-h-[88vh] w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-hidden p-0 sm:max-w-[900px] xl:max-w-[1120px]'>
         <DialogHeader className='border-border border-b px-6 py-5'>
           <DialogTitle className='flex items-center gap-2'>
             <Activity className='text-muted-foreground size-5' />

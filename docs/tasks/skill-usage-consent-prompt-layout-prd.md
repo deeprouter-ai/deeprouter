@@ -57,6 +57,8 @@ metadata should be stored for support and Admin review.
   to enable Profile / Privacy -> Tier 2 telemetry consent.
 - Admin Skill usage modal uses viewport-bounded width plus horizontal scrolling
   for wide tables.
+- Follow-up fix explicitly overrides the base dialog `sm:max-w-sm` with
+  `sm:max-w-[900px]` and keeps the wide tables in horizontal scroll wrappers.
 - Focused regression tests with coverage, touched-file lint, i18n sync,
   typecheck, production build, full frontend tests, and full Go suite passed.
 - Full-project frontend lint still fails on pre-existing unrelated lint debt.

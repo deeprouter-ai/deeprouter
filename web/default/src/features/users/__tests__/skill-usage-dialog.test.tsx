@@ -140,6 +140,30 @@ describe('DR-108 user Skill usage dialog', () => {
     expect(screen.getByText('Success')).toBeInTheDocument()
   })
 
+  it('overrides the base dialog width and keeps wide tables scrollable', async () => {
+    mockGetUserSkillUsage.mockResolvedValue({
+      data: consentedUsage,
+    })
+
+    renderWithQuery(
+      <UserSkillUsageDialog open onOpenChange={vi.fn()} user={baseUser} />
+    )
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveClass('sm:max-w-[900px]')
+    expect(dialog).toHaveClass('xl:max-w-[1120px]')
+
+    const downloadsTable = (await screen.findByText('Input tokens')).closest(
+      'table'
+    )
+    const timelineTable = screen.getByText('Model').closest('table')
+
+    expect(downloadsTable).toHaveClass('min-w-[980px]')
+    expect(downloadsTable?.parentElement).toHaveClass('overflow-x-auto')
+    expect(timelineTable).toHaveClass('min-w-[920px]')
+    expect(timelineTable?.parentElement).toHaveClass('overflow-x-auto')
+  })
+
   it('shows a privacy state when telemetry consent is missing', async () => {
     mockGetUserSkillUsage.mockResolvedValue({
       data: {
