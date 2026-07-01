@@ -4,6 +4,9 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-07-01
 
+- 修复 DR-108 Skill usage dialog 将 Skill v1 `{data, meta}` 成功响应误判为 legacy `{success, data}` 失败响应的问题，并从 v1 error envelope 显示后端错误信息（`web/default/src/features/users/api.ts`, `web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`, `web/default/src/features/users/types.ts`）
+- 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 build，记录 Skill v1 response envelope mismatch 修复范围（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
+- 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 eval，记录 Skill v1 envelope 修复已通过 focused regression、lint、typecheck 与 build（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
 - 修复 DR-108 Users 行级 `Skill usage` 菜单项点击后看似无反应的问题：不再阻止 dropdown 默认关闭，并补充点击后打开 dialog state 且菜单关闭的回归测试（`web/default/src/features/users/components/data-table-row-actions.tsx`, `web/default/src/features/users/__tests__/skill-usage-dialog.test.tsx`）
 - 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 build，记录 row action 可用性修复范围（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）
 - 更新 DR-108 Admin Users Skill Usage UI 任务 PRD 状态为 eval，记录 row action 修复已通过 focused regression（`docs/tasks/dr108-admin-users-skill-usage-ui-prd.md`）

@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { isAxiosError } from 'axios'
 import { Activity, AlertCircle, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTimeStr, formatNumber } from '@/lib/format'
@@ -85,6 +86,17 @@ function successLabel(t: (key: string) => string, success?: boolean) {
   return t('Unknown')
 }
 
+function skillUsageErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const body = error.response?.data as
+      | { error?: { message?: string }; message?: string }
+      | undefined
+    return body?.error?.message || body?.message || error.message
+  }
+  if (error instanceof Error) return error.message
+  return 'Failed to load Skill usage'
+}
+
 function StatusPill({
   children,
   tone = 'neutral',
@@ -118,8 +130,8 @@ export function UserSkillUsageDialog(props: Props) {
     queryFn: async () => {
       if (!userID) throw new Error('Missing user')
       const response = await getUserSkillUsage(userID)
-      if (!response.success || !response.data) {
-        throw new Error(response.message || 'Failed to load Skill usage')
+      if (!response.data) {
+        throw new Error('Failed to load Skill usage')
       }
       return response.data
     },
@@ -151,7 +163,7 @@ export function UserSkillUsageDialog(props: Props) {
               <StateMessage
                 icon={<AlertCircle className='size-4' />}
                 title={t('Failed to load Skill usage')}
-                description={t('Please try again or check admin access.')}
+                description={t(skillUsageErrorMessage(query.error))}
               />
             )}
             {query.data && <UsageContent usage={query.data} />}

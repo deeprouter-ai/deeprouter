@@ -26,6 +26,7 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
+  SkillApiEnvelope,
   UserSkillUsageResponse,
 } from './types'
 
@@ -143,7 +144,7 @@ export async function getGroups(): Promise<ApiResponse<string[]>> {
  */
 export async function getUserSkillUsage(
   userId: number
-): Promise<ApiResponse<UserSkillUsageResponse>> {
+): Promise<SkillApiEnvelope<UserSkillUsageResponse>> {
   const res = await api.get(
     `/api/v1/admin/users/${userId}/skill-usage`,
     { skipErrorHandler: true } as Record<string, unknown>

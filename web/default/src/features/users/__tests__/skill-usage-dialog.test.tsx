@@ -125,7 +125,6 @@ beforeEach(() => {
 describe('DR-108 user Skill usage dialog', () => {
   it('renders consented per-Skill totals and usage timeline', async () => {
     mockGetUserSkillUsage.mockResolvedValue({
-      success: true,
       data: consentedUsage,
     })
 
@@ -143,7 +142,6 @@ describe('DR-108 user Skill usage dialog', () => {
 
   it('shows a privacy state when telemetry consent is missing', async () => {
     mockGetUserSkillUsage.mockResolvedValue({
-      success: true,
       data: {
         ...consentedUsage,
         consent_granted: false,
@@ -172,9 +170,7 @@ describe('DR-108 user Skill usage dialog', () => {
     expect(
       await screen.findByText('Failed to load Skill usage')
     ).toBeInTheDocument()
-    expect(
-      screen.getByText('Please try again or check admin access.')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Forbidden')).toBeInTheDocument()
   })
 })
 

@@ -182,6 +182,13 @@ export interface UserSkillUsageResponse {
   usage_timeline: UserSkillUsageTimelineRow[]
 }
 
+export interface SkillApiEnvelope<T = unknown> {
+  data: T
+  meta?: {
+    request_id?: string
+  }
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================
