@@ -32,8 +32,11 @@ backgrounds.
 
 - Skill Analytics includes a dashboard-style visual overview using existing
   overview metrics.
-- Skill Analytics metric cards show colored mini visual indicators instead of
-  neutral placeholder bars.
+- Skill Analytics percentage metric cards show a solid single-color
+  light-to-deep semicircle gauge based on the real percentage value instead of
+  neutral placeholder bars or trend-like mini charts.
+- Skill Analytics count metric cards show unit icons for absolute counts instead
+  of progress bars that imply a hidden maximum.
 - Super Admin Skill usage dialog includes a visual token/cost summary and a
   recent activity strip before the tables.
 - Visuals remain legible in light and dark themes by using theme chart tokens.
@@ -44,7 +47,11 @@ backgrounds.
 
 - Skill Analytics now includes a theme-token visual usage overview with activity
   mix and conversion funnel sections.
-- Metric cards now show colored mini bars instead of neutral placeholder bars.
+- Percentage metric cards now show a solid single-color light-to-deep
+  semicircle gauge based on the real percentage value instead of neutral
+  placeholder bars or trend-like mini charts.
+- Count metric cards now show unit icons for absolute counts, and Activity mix /
+  Conversion funnel bars use single-color light-to-deep gradients.
 - Super Admin Skill usage dialog now includes token split, estimated cost, and
   recent activity visuals before the detailed tables.
 - Existing day/night theme and backgrounds are unchanged.

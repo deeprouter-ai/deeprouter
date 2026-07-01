@@ -57,6 +57,15 @@ function formatUsd(value: number | null): string | null {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+const PERCENT_CARD_COLORS = {
+  ctr: 'var(--chart-1)',
+  enable: 'var(--chart-2)',
+  firstUse: 'var(--chart-4)',
+  repeat: 'var(--chart-1)',
+  block: 'var(--chart-5)',
+  monetization: 'var(--chart-2)',
+} as const
+
 function formatDuration(value: number | null): string | null {
   if (value === null) return null
   if (value < 3600) return `${Math.round(value / 60)}m`
@@ -124,24 +133,32 @@ export function SkillAnalyticsDashboard() {
     {
       title: t('Weekly Active Skill Users'),
       value: data ? fmtCount(data.wasu) : null,
+      countValue: data?.wasu ?? null,
+      countVariant: 'users' as const,
       description: t('Users who ran at least one skill call during the period'),
       icon: Users,
     },
     {
       title: t('Total Skill Runs'),
       value: data ? fmtCount(data.total_skill_runs) : null,
+      countValue: data?.total_skill_runs ?? null,
+      countVariant: 'runs' as const,
       description: t('Total skill relay requests in the period'),
       icon: Play,
     },
     {
       title: t('Skill Detail CTR'),
       value: data ? formatPercent(data.detail_ctr) : null,
+      progressValue: data?.detail_ctr ?? null,
+      progressColor: PERCENT_CARD_COLORS.ctr,
       description: t('Users who viewed a skill detail page then ran the skill'),
       icon: MousePointerClick,
     },
     {
       title: t('Enable Rate'),
       value: data ? formatPercent(data.enable_rate) : null,
+      progressValue: data?.enable_rate ?? null,
+      progressColor: PERCENT_CARD_COLORS.enable,
       description: t(
         'Share of eligible users who have enabled at least one skill'
       ),
@@ -150,12 +167,16 @@ export function SkillAnalyticsDashboard() {
     {
       title: t('First Use Rate'),
       value: data ? formatPercent(data.first_use_rate) : null,
+      progressValue: data?.first_use_rate ?? null,
+      progressColor: PERCENT_CARD_COLORS.firstUse,
       description: t('First-time skill users as a share of total active users'),
       icon: UserCheck,
     },
     {
       title: t('Repeat Use Rate'),
       value: data ? formatPercent(data.repeat_use_rate) : null,
+      progressValue: data?.repeat_use_rate ?? null,
+      progressColor: PERCENT_CARD_COLORS.repeat,
       description: t(
         'Users who made a skill call more than once in the period'
       ),
@@ -164,6 +185,8 @@ export function SkillAnalyticsDashboard() {
     {
       title: t('Block Rate'),
       value: data ? formatPercent(data.block_rate) : null,
+      progressValue: data?.block_rate ?? null,
+      progressColor: PERCENT_CARD_COLORS.block,
       description: t('Skill calls blocked by policy or quota enforcement'),
       icon: ShieldX,
     },
@@ -182,6 +205,8 @@ export function SkillAnalyticsDashboard() {
           {
             title: t('Recharge to First Skill Use'),
             value: data ? formatPercent(data.recharge_to_first_use_rate) : null,
+            progressValue: data?.recharge_to_first_use_rate ?? null,
+            progressColor: PERCENT_CARD_COLORS.monetization,
             description: t(
               'Attribution: successful top-ups followed by first Skill use'
             ),
@@ -192,6 +217,8 @@ export function SkillAnalyticsDashboard() {
             value: data
               ? formatPercent(data.skill_use_to_repeat_recharge_rate)
               : null,
+            progressValue: data?.skill_use_to_repeat_recharge_rate ?? null,
+            progressColor: PERCENT_CARD_COLORS.monetization,
             description: t('Attribution: Skill users who recharged again'),
             icon: Repeat2,
           },
@@ -277,6 +304,16 @@ export function SkillAnalyticsDashboard() {
                   loading={isLoading}
                   trackingFailed={trackingFailed}
                   accentIndex={cards.indexOf(card)}
+                  progressValue={
+                    'progressValue' in card ? card.progressValue : null
+                  }
+                  progressColor={
+                    'progressColor' in card ? card.progressColor : undefined
+                  }
+                  countValue={'countValue' in card ? card.countValue : null}
+                  countVariant={
+                    'countVariant' in card ? card.countVariant : undefined
+                  }
                 />
               </StaggerItem>
             ))}
@@ -319,25 +356,25 @@ function SkillAnalyticsVisualOverview({
       label: t('Active users'),
       value: fmtCount(data?.wasu ?? null) ?? '—',
       width: scaledValue(data?.wasu, runMax),
-      className: 'bg-chart-1',
+      color: 'var(--chart-1)',
     },
     {
       label: t('Skill runs'),
       value: fmtCount(data?.total_skill_runs ?? null) ?? '—',
       width: scaledValue(data?.total_skill_runs, runMax),
-      className: 'bg-chart-2',
+      color: 'var(--chart-2)',
     },
     {
       label: t('Repeat users'),
       value: formatPercent(data?.repeat_use_rate ?? null) ?? '—',
       width: pctValue(data?.repeat_use_rate),
-      className: 'bg-chart-4',
+      color: 'var(--chart-4)',
     },
     {
       label: t('Blocked'),
       value: formatPercent(data?.block_rate ?? null) ?? '—',
       width: pctValue(data?.block_rate),
-      className: 'bg-chart-5',
+      color: 'var(--chart-5)',
     },
   ]
   const funnel = [
@@ -345,19 +382,19 @@ function SkillAnalyticsVisualOverview({
       label: t('Detail CTR'),
       value: formatPercent(data?.detail_ctr ?? null) ?? '—',
       width: pctValue(data?.detail_ctr),
-      className: 'from-chart-1 to-chart-2',
+      color: 'var(--chart-1)',
     },
     {
       label: t('Enable Rate'),
       value: formatPercent(data?.enable_rate ?? null) ?? '—',
       width: pctValue(data?.enable_rate),
-      className: 'from-chart-2 to-chart-3',
+      color: 'var(--chart-2)',
     },
     {
       label: t('First Use Rate'),
       value: formatPercent(data?.first_use_rate ?? null) ?? '—',
       width: pctValue(data?.first_use_rate),
-      className: 'from-chart-4 to-chart-2',
+      color: 'var(--chart-4)',
     },
   ]
 
@@ -413,8 +450,11 @@ function SkillAnalyticsVisualOverview({
                   </div>
                   <div className='bg-muted/40 h-3 overflow-hidden rounded-full'>
                     <div
-                      className={`${item.className} h-full rounded-full`}
-                      style={{ width: `${item.width}%` }}
+                      className='h-full rounded-full'
+                      style={{
+                        width: `${item.width}%`,
+                        background: `linear-gradient(90deg, color-mix(in srgb, ${item.color} 22%, transparent), ${item.color})`,
+                      }}
                     />
                   </div>
                 </div>
@@ -437,8 +477,11 @@ function SkillAnalyticsVisualOverview({
                   </div>
                   <div className='bg-muted/40 h-8 overflow-hidden rounded-md'>
                     <div
-                      className={`h-full rounded-md bg-linear-to-r ${item.className}`}
-                      style={{ width: `${Math.max(6, item.width)}%` }}
+                      className='h-full rounded-md'
+                      style={{
+                        width: `${Math.max(6, item.width)}%`,
+                        background: `linear-gradient(90deg, color-mix(in srgb, ${item.color} 22%, transparent), ${item.color})`,
+                      }}
                     />
                   </div>
                 </div>

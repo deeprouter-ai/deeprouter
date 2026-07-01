@@ -2,12 +2,10 @@
 Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
-
 // Coverage: MetricCard component — loading / no-data / tracking-failed / normal states
-
-import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { Users } from 'lucide-react'
+import { describe, it, expect, vi } from 'vitest'
 import { MetricCard } from '../components/metric-card'
 
 vi.mock('react-i18next', () => ({
@@ -31,7 +29,9 @@ describe('MetricCard', () => {
     render(<MetricCard {...base} />)
     expect(screen.getByText('1,234')).toBeInTheDocument()
     expect(
-      screen.getByText('Users who ran at least one skill call during the period')
+      screen.getByText(
+        'Users who ran at least one skill call during the period'
+      )
     ).toBeInTheDocument()
   })
 
@@ -40,7 +40,10 @@ describe('MetricCard', () => {
     // Skeletons are divs with "animate-pulse" style — value text absent
     expect(screen.queryByText('1,234')).not.toBeInTheDocument()
     // at least one skeleton element present
-    expect(container.querySelectorAll('[class*="skeleton"], [class*="animate"]').length).toBeGreaterThan(0)
+    expect(
+      container.querySelectorAll('[class*="skeleton"], [class*="animate"]')
+        .length
+    ).toBeGreaterThan(0)
   })
 
   it('shows "—" and "No data in this period" when value is null', () => {
@@ -66,10 +69,48 @@ describe('MetricCard', () => {
     expect(screen.queryByText('No data in this period')).not.toBeInTheDocument()
   })
 
-  it('renders sparkline placeholder bars (12 bars)', () => {
-    const { container } = render(<MetricCard {...base} />)
-    // The aria-hidden sparkline container has 12 child spans
-    const sparklines = container.querySelectorAll('[aria-hidden="true"] > span')
-    expect(sparklines).toHaveLength(12)
+  it('does not render a graph when no real progress value is provided', () => {
+    render(<MetricCard {...base} />)
+    expect(screen.queryByTestId('metric-card-progress')).not.toBeInTheDocument()
+  })
+
+  it('renders a real percentage progress meter when progressValue is provided', () => {
+    const { container } = render(
+      <MetricCard {...base} value='50.0%' progressValue={0.5} />
+    )
+    const meter = screen.getByTestId('metric-card-progress')
+    expect(meter).toHaveAttribute('role', 'meter')
+    expect(meter).toHaveAttribute('aria-valuenow', '50')
+    expect(container.querySelector('linearGradient')).toBeInTheDocument()
+    expect(container.querySelector('clipPath path')).toHaveAttribute(
+      'd',
+      'M8 50 A42 42 0 0 1 92 50 L8 50 Z'
+    )
+  })
+
+  it('uses one provided color with light-to-deep opacity stops for percentage meters', () => {
+    const { container } = render(
+      <MetricCard
+        {...base}
+        value='50.0%'
+        progressValue={0.5}
+        progressColor='var(--chart-2)'
+      />
+    )
+
+    const stops = container.querySelectorAll('stop')
+    expect(stops[0]).toHaveAttribute('stop-color', 'var(--chart-2)')
+    expect(stops[0]).toHaveAttribute('stop-opacity', '0.22')
+    expect(stops[1]).toHaveAttribute('stop-color', 'var(--chart-2)')
+    expect(stops[1]).toHaveAttribute('stop-opacity', '1')
+  })
+
+  it('renders count unit icons for count metrics', () => {
+    render(
+      <MetricCard {...base} value='7' countValue={7} countVariant='runs' />
+    )
+
+    expect(screen.getByTestId('metric-card-count-visual')).toBeInTheDocument()
+    expect(screen.queryByTestId('metric-card-progress')).not.toBeInTheDocument()
   })
 })

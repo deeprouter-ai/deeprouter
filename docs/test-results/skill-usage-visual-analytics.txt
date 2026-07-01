@@ -44,8 +44,8 @@ Dataset / fixtures / mocks:
 Assertions:
 
 - Skill Analytics renders the visual usage overview, activity mix, conversion
-  funnel, and colored metric card mini bars while preserving existing metric,
-  stale tracking, date range, monetization, and table behavior.
+  funnel, and a single colored metric card status accent while preserving
+  existing metric, stale tracking, date range, monetization, and table behavior.
 - Admin Skill usage dialog renders visual token split, estimated cost, recent
   activity summary, and still preserves consent gate, API error, row action, and
   horizontal table scroll behavior.
@@ -129,3 +129,88 @@ Coverage:
 Result:
 
 - PASS: 20 test files / 190 tests.
+
+## Follow-up: replace fixed decorative bars with data-bound visuals
+
+Command:
+
+`cd web/default && bunx eslint src/features/skill-analytics/components/metric-card.tsx src/features/skill-analytics/__tests__/metric-card.test.tsx src/features/users/components/dialogs/user-skill-usage-dialog.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- Touched MetricCard and Admin Skill usage dialog components plus regression
+  tests.
+
+Assertions:
+
+- Fixed decorative mini bars are removed from MetricCard.
+- MetricCard renders a solid single-color light-to-deep semicircle gauge only
+  when the card has a real percentage value.
+- MetricCard renders unit icons for absolute count metrics.
+- Activity mix and Conversion funnel bars use single-color light-to-deep
+  gradients instead of cross-color gradients.
+- Admin Skill usage shows Top Skill token share only from actual per-Skill token
+  totals.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- PASS.
+
+Command:
+
+`cd web/default && bunx vitest run src/features/skill-analytics/__tests__/metric-card.test.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx --coverage --coverage.include='src/features/skill-analytics/components/metric-card.tsx' --coverage.include='src/features/users/components/dialogs/user-skill-usage-dialog.tsx' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- MetricCard unit fixture.
+- Mocked Admin user Skill usage response with one downloaded Skill and one
+  usage timeline event.
+
+Assertions:
+
+- MetricCard renders a solid single-color light-to-deep semicircle percentage
+  gauge with an ARIA meter value, plus unit icon visuals for count metrics.
+- Admin Skill usage visual summary renders token split, estimated cost,
+  Top Skill token share, and recent activity while preserving consent, API error,
+  row action, and table scroll behavior.
+
+Coverage:
+
+- Aggregate focused coverage: 85.05% statements, 65.89% branches, 93.1%
+  functions, 90% lines.
+- `metric-card.tsx`: 100% statements, 92.68% branches, 100% functions, 100%
+  lines.
+- `user-skill-usage-dialog.tsx`: 81.69% statements, 53.4% branches, 92.59%
+  functions, 87.5% lines.
+
+Result:
+
+- PASS: 2 test files / 21 tests.
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Result:
+
+- PASS.
+
+Command:
+
+`cd web/default && bun run build`
+
+Result:
+
+- PASS: Rsbuild completed successfully.
+
+Command:
+
+`cd web/default && bun run test`
+
+Result:
+
+- PASS: 20 test files / 193 tests.

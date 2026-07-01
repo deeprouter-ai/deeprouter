@@ -2,10 +2,13 @@
 Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
+import { useId, type CSSProperties } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
+
+type CountVisualVariant = 'users' | 'runs'
 
 interface MetricCardProps {
   title: string
@@ -15,16 +18,21 @@ interface MetricCardProps {
   loading?: boolean
   trackingFailed?: boolean
   accentIndex?: number
+  progressValue?: number | null
+  progressColor?: string
+  countValue?: number | null
+  countVariant?: CountVisualVariant
   className?: string
 }
 
-const SPARKLINE_HEIGHTS = [34, 52, 44, 68, 58, 76, 48, 62, 86, 72, 56, 78]
-const ACCENT_CLASSES = [
-  'from-chart-1/80 via-chart-1/35',
-  'from-chart-2/80 via-chart-2/35',
-  'from-chart-3/80 via-chart-3/35',
-  'from-chart-4/80 via-chart-4/35',
-  'from-chart-5/80 via-chart-5/35',
+const MAX_COUNT_MARKS = 8
+
+const DEFAULT_PROGRESS_COLORS = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
 ]
 
 export function MetricCard({
@@ -35,10 +43,31 @@ export function MetricCard({
   loading,
   trackingFailed,
   accentIndex = 0,
+  progressValue,
+  progressColor,
+  countValue,
+  countVariant,
   className,
 }: MetricCardProps) {
   const { t } = useTranslation()
-  const accentClass = ACCENT_CLASSES[accentIndex % ACCENT_CLASSES.length]
+  const gaugeId = useId().replace(/:/g, '')
+  const gaugeColor =
+    progressColor ??
+    DEFAULT_PROGRESS_COLORS[accentIndex % DEFAULT_PROGRESS_COLORS.length]
+  const gradientId = `metric-gradient-${gaugeId}`
+  const clipId = `metric-clip-${gaugeId}`
+  const progressPercent =
+    progressValue == null || Number.isNaN(progressValue)
+      ? null
+      : Math.max(0, Math.min(100, progressValue * 100))
+  const normalizedCount =
+    countValue == null || Number.isNaN(countValue)
+      ? null
+      : Math.max(0, Math.floor(countValue))
+  const visibleCount =
+    normalizedCount == null ? 0 : Math.min(normalizedCount, MAX_COUNT_MARKS)
+  const overflowCount =
+    normalizedCount == null ? 0 : normalizedCount - visibleCount
 
   const displayValue = trackingFailed || value === null ? '—' : value
 
@@ -86,24 +115,76 @@ export function MetricCard({
         </div>
       )}
 
-      <div
-        className='flex h-8 items-end gap-1'
-        aria-hidden='true'
-        data-testid='metric-card-visual'
-      >
-        {SPARKLINE_HEIGHTS.map((height, i) => (
-          <span
-            key={i}
-            className={cn(
-              'flex-1 rounded-t-sm bg-linear-to-t to-transparent',
-              trackingFailed || value === null
-                ? 'from-muted-foreground/20 via-muted-foreground/10 opacity-25'
-                : accentClass
-            )}
-            style={{ height: `${height}%` }}
+      {progressPercent !== null && !trackingFailed ? (
+        <svg
+          viewBox='0 0 100 52'
+          className='h-12 w-full'
+          aria-label={t('Metric percentage progress')}
+          role='meter'
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progressPercent)}
+          data-testid='metric-card-progress'
+        >
+          <defs>
+            <clipPath id={clipId}>
+              <path d='M8 50 A42 42 0 0 1 92 50 L8 50 Z' />
+            </clipPath>
+            <linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
+              <stop offset='0%' stopColor={gaugeColor} stopOpacity='0.22' />
+              <stop offset='100%' stopColor={gaugeColor} stopOpacity='1' />
+            </linearGradient>
+          </defs>
+          <path
+            d='M8 50 A42 42 0 0 1 92 50 L8 50 Z'
+            fill='currentColor'
+            className='text-muted-foreground/15'
           />
-        ))}
-      </div>
+          <g clipPath={`url(#${clipId})`}>
+            <rect
+              x={8}
+              y={8}
+              width={(84 * progressPercent) / 100}
+              height={42}
+              fill={`url(#${gradientId})`}
+            />
+          </g>
+        </svg>
+      ) : normalizedCount !== null && !trackingFailed ? (
+        <div
+          className='flex h-12 items-center gap-1.5'
+          role='img'
+          aria-label={t('Metric count visualization')}
+          data-testid='metric-card-count-visual'
+        >
+          {Array.from({ length: visibleCount }, (_, index) => {
+            const opacity =
+              visibleCount <= 1 ? 1 : 0.28 + (index / (visibleCount - 1)) * 0.72
+            return (
+              <span
+                key={index}
+                className={cn(
+                  'shrink-0 text-[color:var(--metric-color)]',
+                  countVariant === 'runs'
+                    ? 'h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-current'
+                    : 'size-3.5 rounded-full bg-current'
+                )}
+                style={
+                  {
+                    '--metric-color': gaugeColor,
+                    opacity,
+                  } as CSSProperties
+                }
+              />
+            )
+          })}
+          {overflowCount > 0 ? (
+            <span className='text-muted-foreground rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums'>
+              +{overflowCount}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

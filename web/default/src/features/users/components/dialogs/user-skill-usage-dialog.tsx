@@ -296,10 +296,9 @@ function UsageVisualSummary({ usage }: { usage: UserSkillUsageResponse }) {
   const failedCount = usage.usage_timeline.filter(
     (row) => row.success === false
   ).length
-  const maxSkillTokens = Math.max(
-    ...usage.downloads.map((row) => row.total_tokens),
-    1
-  )
+  const topTokenSkills = [...usage.downloads]
+    .sort((a, b) => b.total_tokens - a.total_tokens)
+    .slice(0, 3)
 
   return (
     <section
@@ -357,19 +356,44 @@ function UsageVisualSummary({ usage }: { usage: UserSkillUsageResponse }) {
           <div className='font-mono text-2xl font-semibold tabular-nums'>
             {formatUSD(totalCost)}
           </div>
-          <div className='mt-4 flex h-12 items-end gap-1' aria-hidden='true'>
-            {usage.downloads.slice(0, 10).map((row) => (
-              <div
-                key={row.skill_id}
-                className='from-chart-4/80 via-chart-4/35 flex-1 rounded-t-sm bg-linear-to-t to-transparent'
-                style={{
-                  height: `${Math.max(12, (row.total_tokens / maxSkillTokens) * 100)}%`,
-                }}
-              />
-            ))}
+          <div className='mt-4 space-y-2' data-testid='top-skill-token-share'>
+            {topTokenSkills.length > 0 ? (
+              topTokenSkills.map((row, index) => {
+                const share = (row.total_tokens / totalTokens) * 100
+                return (
+                  <div key={row.skill_id} className='space-y-1'>
+                    <div className='flex items-center justify-between gap-2 text-xs'>
+                      <span className='text-muted-foreground min-w-0 truncate'>
+                        {row.skill_name || row.skill_slug || row.skill_id}
+                      </span>
+                      <span className='font-mono tabular-nums'>
+                        {share.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className='bg-muted/40 h-2 overflow-hidden rounded-full'>
+                      <div
+                        className={cn(
+                          'h-full rounded-full',
+                          index === 0
+                            ? 'bg-chart-4'
+                            : index === 1
+                              ? 'bg-chart-1'
+                              : 'bg-chart-2'
+                        )}
+                        style={{ width: `${share}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <div className='text-muted-foreground text-xs'>
+                {t('No downloaded Skills')}
+              </div>
+            )}
           </div>
           <p className='text-muted-foreground mt-2 text-xs'>
-            {t('Per downloaded Skill token volume')}
+            {t('Top Skill token share')}
           </p>
         </div>
 

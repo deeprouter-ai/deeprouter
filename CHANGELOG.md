@@ -4,6 +4,7 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-07-01
 
+- 修复 Skill Analytics 与 Admin Skill usage 彩色可视化中固定柱状图可能误导为真实趋势的问题：百分比 Metric card 改为实心单色浅深半圆进度，计数 Metric card 改为单位图标，Activity mix / Conversion funnel 改为单色浅深渐变，Admin 弹窗改为基于真实 token totals 的 Top Skill token share，并更新回归测试（`web/default/src/features/skill-analytics/components/metric-card.tsx`, `web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`）
 - 新增 Skill Usage 彩色可视化任务 PRD，并在 Skill Analytics 与 Super Admin Skill usage 弹窗加入主题色图形摘要、mini bars、token/cost/activity 可视化和回归测试（`docs/tasks/skill-usage-visual-analytics-prd.md`, `web/default/src/features/skill-analytics/`, `web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`）
 - 修复 Skill usage dialog 宽度仍被基础 `sm:max-w-sm` 覆盖导致 Super Admin 页面右侧被截断的问题：显式设置 `sm:max-w-[900px]` / `xl:max-w-[1120px]` 并补充宽表横向滚动回归断言（`web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`, `web/default/src/features/users/__tests__/skill-usage-dialog.test.tsx`）
 - 新增 Skill usage consent prompt and Admin layout 任务 PRD，定义用户首次下载 Skill/Runner 前主动选择 Tier 2 telemetry consent、Admin no-consent 引导和 Skill usage modal 横向滚动修复范围（`docs/tasks/skill-usage-consent-prompt-layout-prd.md`）

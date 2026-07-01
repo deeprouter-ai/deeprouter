@@ -132,7 +132,9 @@ describe('DR-108 user Skill usage dialog', () => {
       <UserSkillUsageDialog open onOpenChange={vi.fn()} user={baseUser} />
     )
 
-    expect((await screen.findAllByText('Polished Writer')).length).toBe(2)
+    expect(
+      (await screen.findAllByText('Polished Writer')).length
+    ).toBeGreaterThanOrEqual(2)
     expect(screen.getAllByText('polished-writer').length).toBe(2)
     expect(screen.getAllByText('1,650').length).toBeGreaterThan(0)
     expect(screen.getAllByText('$0.0123').length).toBeGreaterThan(0)
@@ -153,9 +155,8 @@ describe('DR-108 user Skill usage dialog', () => {
     expect(screen.getByText('Token split')).toBeInTheDocument()
     expect(screen.getByText('Estimated cost')).toBeInTheDocument()
     expect(screen.getByText('Recent activity')).toBeInTheDocument()
-    expect(
-      screen.getByText('Per downloaded Skill token volume')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Top Skill token share')).toBeInTheDocument()
+    expect(screen.getByTestId('top-skill-token-share')).toBeInTheDocument()
     expect(screen.getByText('1 success / 0 failed')).toBeInTheDocument()
   })
 
