@@ -1,0 +1,274 @@
+# Admin Create User Validation Test Results
+
+Date: 2026-07-01
+
+## Focused backend create-user tests
+
+Command:
+
+`go test ./controller -run 'TestRootCanCreate|TestRootCannotCreate'`
+
+Dataset / fixtures / mocks:
+
+- In-memory SQLite database.
+- `model.User` and `model.Log` migrated for the real `CreateUser -> User.Insert`
+  path.
+- Root caller simulated through Gin context role.
+- Redis disabled for test scope.
+
+Assertions:
+
+- Root caller can create a common user.
+- Root caller can create an admin user.
+- Created users receive the default `default` group.
+- Created password is hashed before storage.
+- Root caller cannot create another root user.
+
+Coverage:
+
+- Included in focused controller coverage below.
+
+Result:
+
+- PASS.
+
+## Focused backend controller coverage
+
+Command:
+
+`go test ./controller -run 'TestRootCanCreate|TestRootCannotCreate|TestTelemetryConsent|TestAdminUpdateUserCannotEnableTelemetryConsent' -cover`
+
+Dataset / fixtures / mocks:
+
+- Admin create-user fixtures plus existing Tier 2 telemetry consent controller
+  fixtures.
+
+Assertions:
+
+- Create-user regression and consent regression tests pass together in the
+  controller package.
+
+Coverage:
+
+- Controller package coverage: 0.8% statements. The target handlers are
+  covered; aggregate package coverage is low because controller contains many
+  unrelated handlers.
+
+Result:
+
+- PASS.
+
+## Backend controller/router tests
+
+Command:
+
+`go test ./controller ./router`
+
+Dataset / fixtures / mocks:
+
+- Existing controller/router fixtures plus new create-user fixtures.
+
+Assertions:
+
+- Touched controller code and router package regressions pass.
+
+Coverage:
+
+- No coverage flag.
+
+Result:
+
+- PASS.
+
+## Full Go suite
+
+Command:
+
+`go test ./...`
+
+Dataset / fixtures / mocks:
+
+- Full repository Go test suite.
+- `web/default/dist` generated first with `bun run build` so the root embed
+  package can compile.
+
+Assertions:
+
+- Backend, router, middleware, relay, Skill marketplace, shared packages, and
+  root package all pass.
+
+Coverage:
+
+- No coverage flag.
+
+Result:
+
+- PASS.
+
+## Focused frontend create drawer tests
+
+Command:
+
+`cd web/default && bunx vitest run src/features/users/__tests__/users-mutate-drawer.test.tsx --coverage --coverage.include='src/features/users/**' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- Mocked `createUser`, `getGroups`, `useUsers`, `sonner`, and i18n passthrough.
+- Create drawer rendered open inside a React Query provider.
+
+Assertions:
+
+- Create mode blocks a short password with the field-level message
+  `Password must be 8-20 characters`.
+- Create mode blocks an empty password with the same field-level message.
+- Invalid create input does not call `createUser`.
+- Valid password submits the expected create-user payload and refreshes the
+  Users table.
+
+Coverage:
+
+- `users-mutate-drawer.tsx`: 53.62% statements, 35.63% branches, 25% functions,
+  54.41% lines.
+- Included `src/features/users/**` aggregate: 10.59% statements, 8.1% branches,
+  5.03% functions, 11.11% lines because it includes many unrelated Users files.
+
+Result:
+
+- PASS: 1 file / 3 tests.
+
+## Frontend i18n sync
+
+Command:
+
+`cd web/default && bun run i18n:sync`
+
+Dataset / fixtures / mocks:
+
+- Registered frontend locales `en` and `zh`.
+
+Assertions:
+
+- New create-user password validation string is present and locale files are
+  normalized.
+
+Coverage:
+
+- i18n consistency only.
+
+Result:
+
+- PASS.
+
+## Focused frontend lint
+
+Command:
+
+`cd web/default && bunx eslint src/features/users/components/users-mutate-drawer.tsx src/features/users/__tests__/users-mutate-drawer.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- Touched Users frontend files only.
+
+Assertions:
+
+- ESLint and React hooks/compiler rules pass for touched frontend files.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- PASS.
+
+## Typecheck
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Dataset / fixtures / mocks:
+
+- TypeScript project references from `tsc -b`.
+
+Assertions:
+
+- New drawer validation, test mocks, and i18n calls compile.
+
+Coverage:
+
+- Compile-time validation only.
+
+Result:
+
+- PASS.
+
+## Production build
+
+Command:
+
+`cd web/default && bun run build`
+
+Dataset / fixtures / mocks:
+
+- Rsbuild production frontend build.
+
+Assertions:
+
+- Users create drawer bundles successfully.
+- Generates `web/default/dist` required by root Go embed tests.
+
+Coverage:
+
+- Build validation only.
+
+Result:
+
+- PASS.
+
+## Full frontend test suite
+
+Command:
+
+`cd web/default && bun run test`
+
+Dataset / fixtures / mocks:
+
+- Existing configured Vitest suite with jsdom setup.
+
+Assertions:
+
+- Existing frontend regressions plus new Users create drawer tests.
+
+Coverage:
+
+- No coverage flag for full suite.
+
+Result:
+
+- PASS: 20 test files / 185 tests.
+
+## Full frontend lint note
+
+Command:
+
+`cd web/default && bun run lint`
+
+Dataset / fixtures / mocks:
+
+- Entire `web/default/src` lint surface.
+
+Assertions:
+
+- Full-project ESLint.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- FAIL due to pre-existing unrelated full-project lint debt outside this
+  change. Failures are primarily React hooks/compiler findings such as
+  `react-hooks/set-state-in-effect`, `react-hooks/purity`, and declaration-order
+  issues in existing components/hooks. Touched-file ESLint passes.

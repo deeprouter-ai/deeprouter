@@ -124,6 +124,17 @@ export function UsersMutateDrawer({
   const onSubmit = async (data: UserFormValues) => {
     setIsSubmitting(true)
     try {
+      if (!isUpdate) {
+        const password = data.password || ''
+        if (password.length < 8 || password.length > 20) {
+          form.setError('password', {
+            type: 'manual',
+            message: t('Password must be 8-20 characters'),
+          })
+          return
+        }
+      }
+
       const payload = transformFormDataToPayload(data, currentRow?.id)
       const result = isUpdate
         ? await updateUser(payload as typeof payload & { id: number })
@@ -286,7 +297,7 @@ export function UsersMutateDrawer({
                           placeholder={
                             isUpdate
                               ? t('Leave empty to keep unchanged')
-                              : t('Enter password (min 8 characters)')
+                              : t('Enter password (8-20 characters)')
                           }
                         />
                       </FormControl>
