@@ -48,6 +48,7 @@ import {
   SkillPaywallDialog,
   SocialProofRow,
 } from './components'
+import { useSkillTelemetryConsentPrompt } from './hooks/use-skill-telemetry-consent-prompt'
 
 interface SkillDetailProps {
   slug: string
@@ -61,6 +62,8 @@ export function SkillDetail({ slug }: SkillDetailProps) {
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const [paywallOpen, setPaywallOpen] = useState(false)
+  const { prompt: telemetryConsentPrompt, runWithConsentPrompt } =
+    useSkillTelemetryConsentPrompt()
 
   const detailQuery = useQuery({
     queryKey: ['marketplace-skill', slug],
@@ -95,6 +98,11 @@ export function SkillDetail({ slug }: SkillDetailProps) {
       setPaywallOpen(true)
       return
     }
+    await runWithConsentPrompt(downloadCurrentSkill)
+  }
+
+  async function downloadCurrentSkill() {
+    if (!detail) return
     setDownloading(true)
     setDownloadError(null)
     try {
@@ -327,6 +335,7 @@ export function SkillDetail({ slug }: SkillDetailProps) {
             </>
           )}
         </div>
+        {telemetryConsentPrompt}
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

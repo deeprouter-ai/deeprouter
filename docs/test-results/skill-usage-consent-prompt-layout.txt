@@ -1,0 +1,210 @@
+# Skill Usage Consent Prompt and Admin Layout Test Results
+
+Date: 2026-07-01
+
+## Focused frontend regression coverage
+
+Command:
+
+`cd web/default && bunx vitest run src/features/marketplace/skill-detail.test.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx src/features/user-home/__tests__/user-home.test.tsx src/features/playground/__tests__/growth-surfaces.test.tsx --coverage --coverage.include='src/features/marketplace/**' --coverage.include='src/features/users/**' --coverage.include='src/features/user-home/**' --coverage.include='src/features/playground/**' --reporter=verbose`
+
+Dataset / fixtures / mocks:
+
+- Mocked Marketplace Skill detail API and package download helper.
+- Mocked current-user telemetry consent GET/PUT APIs.
+- Mocked User Home data, Playground recommended Skill surface, Admin Users Skill
+  usage API, i18n passthrough, auth reset, navigation, and toasts.
+
+Assertions:
+
+- Skill detail happy path still downloads and shows the success toast.
+- First download with consent disabled shows the Skill/Runner usage consent
+  prompt before downloading.
+- Choosing `Enable and download` calls the current-user consent update endpoint
+  and then downloads.
+- Choosing `Download without usage details` skips consent update and still
+  downloads.
+- Admin Skill usage no-consent state tells the Super Admin to ask the user to
+  enable Profile / Privacy -> Tier 2 telemetry consent.
+- Existing User Home and Playground download surfaces still render and route
+  their CTA callbacks.
+
+Coverage:
+
+- `use-skill-telemetry-consent-prompt.tsx`: 84% statements, 56.25% branches,
+  100% functions, 87.5% lines.
+- `skill-detail.tsx`: 62.16% statements, 52% branches, 52.63% functions,
+  66.15% lines.
+- `user-home/index.tsx`: 64.7% statements, 39.47% branches, 56% functions,
+  64% lines.
+- `user-skill-usage-dialog.tsx`: 75.51% statements, 56.33% branches, 94.11%
+  functions, 83.33% lines.
+- Included multi-feature aggregate: 15.04% statements, 14.18% branches, 13.06%
+  functions, 15.73% lines because the coverage scope includes many unrelated
+  files in these feature directories.
+
+Result:
+
+- PASS: 4 test files / 20 tests.
+
+## Frontend i18n sync
+
+Command:
+
+`cd web/default && bun run i18n:sync`
+
+Dataset / fixtures / mocks:
+
+- Registered frontend locales `en` and `zh`.
+
+Assertions:
+
+- New consent prompt and Admin guidance copy are present and locale files are
+  normalized.
+
+Coverage:
+
+- i18n consistency only.
+
+Result:
+
+- PASS.
+
+## Focused frontend lint
+
+Command:
+
+`cd web/default && bunx eslint src/features/marketplace/skill-detail.tsx src/features/marketplace/skill-detail.test.tsx src/features/marketplace/hooks/use-skill-telemetry-consent-prompt.tsx src/features/user-home/index.tsx src/features/playground/index.tsx src/features/users/components/dialogs/user-skill-usage-dialog.tsx src/features/users/__tests__/skill-usage-dialog.test.tsx`
+
+Dataset / fixtures / mocks:
+
+- Touched frontend files only.
+
+Assertions:
+
+- ESLint and React hooks/compiler rules pass for the changed files.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- PASS.
+
+## Typecheck
+
+Command:
+
+`cd web/default && bun run typecheck`
+
+Dataset / fixtures / mocks:
+
+- TypeScript project references via `tsc -b`.
+
+Assertions:
+
+- Consent prompt hook, Skill detail integration, User Home integration,
+  Playground integration, Admin usage dialog layout, and tests compile.
+
+Coverage:
+
+- Compile-time validation only.
+
+Result:
+
+- PASS.
+
+## Production build
+
+Command:
+
+`cd web/default && bun run build`
+
+Dataset / fixtures / mocks:
+
+- Rsbuild production frontend build.
+
+Assertions:
+
+- Changed frontend surfaces bundle successfully.
+- Generates `web/default/dist` required by root Go embed tests.
+
+Coverage:
+
+- Build validation only.
+
+Result:
+
+- PASS.
+
+## Full frontend test suite
+
+Command:
+
+`cd web/default && bun run test`
+
+Dataset / fixtures / mocks:
+
+- Existing configured Vitest suite with jsdom setup.
+
+Assertions:
+
+- Existing frontend regressions plus new Skill detail consent prompt coverage.
+
+Coverage:
+
+- No coverage flag for full suite.
+
+Result:
+
+- PASS: 20 test files / 187 tests.
+
+## Full Go suite
+
+Command:
+
+`go test ./...`
+
+Dataset / fixtures / mocks:
+
+- Full repository Go suite.
+- `web/default/dist` generated first with `bun run build`.
+
+Assertions:
+
+- Root package embed compilation and all backend packages still pass after the
+  frontend-only change.
+
+Coverage:
+
+- No coverage flag.
+
+Result:
+
+- PASS.
+
+## Full frontend lint note
+
+Command:
+
+`cd web/default && bun run lint`
+
+Dataset / fixtures / mocks:
+
+- Entire `web/default/src` lint surface.
+
+Assertions:
+
+- Full-project ESLint.
+
+Coverage:
+
+- Static lint only.
+
+Result:
+
+- FAIL due to pre-existing unrelated full-project lint debt outside this change,
+  mostly React hooks/compiler rules such as `react-hooks/set-state-in-effect`,
+  `react-hooks/purity`, and declaration-order issues. Touched-file ESLint
+  passes.

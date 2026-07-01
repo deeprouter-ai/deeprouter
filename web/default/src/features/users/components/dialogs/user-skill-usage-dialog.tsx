@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
+import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertCircle, ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTimeStr, formatNumber } from '@/lib/format'
@@ -141,7 +141,7 @@ export function UserSkillUsageDialog(props: Props) {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent className='max-h-[88vh] max-w-[1120px] overflow-hidden p-0'>
+      <DialogContent className='max-h-[88vh] w-[calc(100vw-2rem)] max-w-[1120px] overflow-hidden p-0'>
         <DialogHeader className='border-border border-b px-6 py-5'>
           <DialogTitle className='flex items-center gap-2'>
             <Activity className='text-muted-foreground size-5' />
@@ -199,7 +199,7 @@ function UsageContent({ usage }: { usage: UserSkillUsageResponse }) {
         icon={<ShieldCheck className='size-4' />}
         title={t('Skill usage unavailable')}
         description={t(
-          'Tier 2 telemetry consent is not enabled for this user, so per-user Skill usage details are hidden.'
+          'Tier 2 telemetry consent is not enabled for this user, so per-user Skill usage details are hidden. Ask the user to open Profile / Privacy and enable Tier 2 telemetry consent.'
         )}
       />
     )
@@ -210,7 +210,7 @@ function UsageContent({ usage }: { usage: UserSkillUsageResponse }) {
 
   return (
     <div className='space-y-5'>
-      <div className='grid gap-3 md:grid-cols-3'>
+      <div className='grid gap-3 lg:grid-cols-3'>
         <SummaryCard
           label={t('Telemetry consent')}
           value={t('Granted')}
@@ -280,10 +280,10 @@ function SummaryCard({
   tone?: 'neutral' | 'success' | 'warning'
 }) {
   return (
-    <div className='border-border bg-card rounded-xl border p-4'>
+    <div className='border-border bg-card min-w-0 rounded-xl border p-4'>
       <div className='text-muted-foreground text-xs'>{label}</div>
       <div className='mt-2 flex items-center justify-between gap-2'>
-        <div className='text-foreground text-lg font-semibold tabular-nums'>
+        <div className='text-foreground min-w-0 truncate text-lg font-semibold tabular-nums'>
           {value}
         </div>
         {tone && <StatusPill tone={tone}>{value}</StatusPill>}
@@ -295,114 +295,118 @@ function SummaryCard({
 function DownloadsTable({ rows }: { rows: UserSkillUsageDownloadRow[] }) {
   const { t } = useTranslation()
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('Skill')}</TableHead>
-          <TableHead>{t('Status')}</TableHead>
-          <TableHead>{t('Enabled at')}</TableHead>
-          <TableHead>{t('Last update')}</TableHead>
-          <TableHead className='text-right'>{t('Input tokens')}</TableHead>
-          <TableHead className='text-right'>{t('Output tokens')}</TableHead>
-          <TableHead className='text-right'>{t('Total tokens')}</TableHead>
-          <TableHead className='text-right'>{t('Cost')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.skill_id}>
-            <TableCell>
-              <div className='min-w-[170px]'>
-                <div className='font-semibold'>{row.skill_name || '-'}</div>
-                <div className='text-muted-foreground text-xs'>
-                  {row.skill_slug || row.skill_id}
-                </div>
-              </div>
-            </TableCell>
-            <TableCell>
-              <StatusPill tone={row.enabled ? 'success' : 'neutral'}>
-                {row.enabled ? t('Enabled') : t('Disabled')}
-              </StatusPill>
-            </TableCell>
-            <TableCell className='tabular-nums'>
-              {formatDateTime(row.enabled_at)}
-            </TableCell>
-            <TableCell className='tabular-nums'>
-              {formatDateTime(row.last_update_time)}
-            </TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatNumber(row.input_tokens)}
-            </TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatNumber(row.output_tokens)}
-            </TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatNumber(row.total_tokens)}
-            </TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatUSD(row.cost_usd)}
-            </TableCell>
+    <div className='w-full overflow-x-auto'>
+      <Table className='min-w-[980px]'>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('Skill')}</TableHead>
+            <TableHead>{t('Status')}</TableHead>
+            <TableHead>{t('Enabled at')}</TableHead>
+            <TableHead>{t('Last update')}</TableHead>
+            <TableHead className='text-right'>{t('Input tokens')}</TableHead>
+            <TableHead className='text-right'>{t('Output tokens')}</TableHead>
+            <TableHead className='text-right'>{t('Total tokens')}</TableHead>
+            <TableHead className='text-right'>{t('Cost')}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.skill_id}>
+              <TableCell>
+                <div className='min-w-[170px]'>
+                  <div className='font-semibold'>{row.skill_name || '-'}</div>
+                  <div className='text-muted-foreground text-xs'>
+                    {row.skill_slug || row.skill_id}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <StatusPill tone={row.enabled ? 'success' : 'neutral'}>
+                  {row.enabled ? t('Enabled') : t('Disabled')}
+                </StatusPill>
+              </TableCell>
+              <TableCell className='tabular-nums'>
+                {formatDateTime(row.enabled_at)}
+              </TableCell>
+              <TableCell className='tabular-nums'>
+                {formatDateTime(row.last_update_time)}
+              </TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatNumber(row.input_tokens)}
+              </TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatNumber(row.output_tokens)}
+              </TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatNumber(row.total_tokens)}
+              </TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatUSD(row.cost_usd)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
 function TimelineTable({ rows }: { rows: UserSkillUsageTimelineRow[] }) {
   const { t } = useTranslation()
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t('Time')}</TableHead>
-          <TableHead>{t('Event')}</TableHead>
-          <TableHead>{t('Skill')}</TableHead>
-          <TableHead>{t('Model')}</TableHead>
-          <TableHead className='text-right'>{t('Total tokens')}</TableHead>
-          <TableHead className='text-right'>{t('Cost')}</TableHead>
-          <TableHead>{t('Result')}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.event_id}>
-            <TableCell className='tabular-nums'>
-              {formatDateTime(row.occurred_at)}
-            </TableCell>
-            <TableCell>{row.event_type}</TableCell>
-            <TableCell>
-              <div className='min-w-[150px]'>
-                <div className='font-semibold'>{row.skill_name || '-'}</div>
-                <div className='text-muted-foreground text-xs'>
-                  {row.skill_slug || row.skill_id || '-'}
-                </div>
-              </div>
-            </TableCell>
-            <TableCell>{row.model || '-'}</TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatNumber(row.total_tokens)}
-            </TableCell>
-            <TableCell className='text-right tabular-nums'>
-              {formatUSD(row.cost_usd)}
-            </TableCell>
-            <TableCell>
-              <StatusPill
-                tone={
-                  row.success === true
-                    ? 'success'
-                    : row.success === false
-                      ? 'danger'
-                      : 'neutral'
-                }
-              >
-                {successLabel(t, row.success)}
-              </StatusPill>
-            </TableCell>
+    <div className='w-full overflow-x-auto'>
+      <Table className='min-w-[920px]'>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('Time')}</TableHead>
+            <TableHead>{t('Event')}</TableHead>
+            <TableHead>{t('Skill')}</TableHead>
+            <TableHead>{t('Model')}</TableHead>
+            <TableHead className='text-right'>{t('Total tokens')}</TableHead>
+            <TableHead className='text-right'>{t('Cost')}</TableHead>
+            <TableHead>{t('Result')}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.event_id}>
+              <TableCell className='tabular-nums'>
+                {formatDateTime(row.occurred_at)}
+              </TableCell>
+              <TableCell>{row.event_type}</TableCell>
+              <TableCell>
+                <div className='min-w-[150px]'>
+                  <div className='font-semibold'>{row.skill_name || '-'}</div>
+                  <div className='text-muted-foreground text-xs'>
+                    {row.skill_slug || row.skill_id || '-'}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>{row.model || '-'}</TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatNumber(row.total_tokens)}
+              </TableCell>
+              <TableCell className='text-right tabular-nums'>
+                {formatUSD(row.cost_usd)}
+              </TableCell>
+              <TableCell>
+                <StatusPill
+                  tone={
+                    row.success === true
+                      ? 'success'
+                      : row.success === false
+                        ? 'danger'
+                        : 'neutral'
+                  }
+                >
+                  {successLabel(t, row.success)}
+                </StatusPill>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 

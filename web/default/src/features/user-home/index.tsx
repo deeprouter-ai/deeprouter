@@ -2,8 +2,7 @@
 Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
-import { useEffect, useMemo } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -36,6 +35,7 @@ import {
   SkillCard,
   SkillCardSkeleton,
 } from '@/features/marketplace/components'
+import { useSkillTelemetryConsentPrompt } from '@/features/marketplace/hooks/use-skill-telemetry-consent-prompt'
 import type { MarketplaceSkill, SavedSkill } from '@/features/marketplace/types'
 import { getUserHome } from './api'
 import type { UserHomeData } from './types'
@@ -44,6 +44,8 @@ export function UserHome() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { prompt: telemetryConsentPrompt, runWithConsentPrompt } =
+    useSkillTelemetryConsentPrompt()
   const query = useQuery({
     queryKey: ['user-home'],
     queryFn: getUserHome,
@@ -79,10 +81,15 @@ export function UserHome() {
 
   const handleCardCTA = (skill: MarketplaceSkill) => {
     if (skill.availability?.cta === 'download') {
-      void downloadSkillPackage(
-        skillDownloadURL(skill.slug || skill.id, entryPoint),
-        skill.slug || skill.id
-      ).catch(() => toast.error(t('Download failed')))
+      void runWithConsentPrompt(async () => {
+        await downloadSkillPackage(
+          skillDownloadURL(skill.slug || skill.id, entryPoint),
+          skill.slug || skill.id
+        )
+        toast.success(
+          t('Download started. Extract the zip to .claude/skills/ to use it.')
+        )
+      }).catch(() => toast.error(t('Download failed')))
       return
     }
     openSkill(skill)
@@ -146,6 +153,7 @@ export function UserHome() {
             <SavedRail skills={query.data.saved_skills} onOpen={openSkill} />
           </div>
         )}
+        {telemetryConsentPrompt}
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )

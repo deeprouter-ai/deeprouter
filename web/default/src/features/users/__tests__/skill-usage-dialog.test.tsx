@@ -157,6 +157,11 @@ describe('DR-108 user Skill usage dialog', () => {
     expect(
       await screen.findByText('Skill usage unavailable')
     ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Tier 2 telemetry consent is not enabled for this user, so per-user Skill usage details are hidden. Ask the user to open Profile / Privacy and enable Tier 2 telemetry consent.'
+      )
+    ).toBeInTheDocument()
     expect(screen.queryByText('Polished Writer')).not.toBeInTheDocument()
   })
 

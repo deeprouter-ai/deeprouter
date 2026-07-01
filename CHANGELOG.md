@@ -4,6 +4,9 @@ DeepRouter gateway 变更记录。规则见 `AGENTS.md` Rule 10。
 
 ## 2026-07-01
 
+- 新增 Skill usage consent prompt and Admin layout 任务 PRD，定义用户首次下载 Skill/Runner 前主动选择 Tier 2 telemetry consent、Admin no-consent 引导和 Skill usage modal 横向滚动修复范围（`docs/tasks/skill-usage-consent-prompt-layout-prd.md`）
+- 实现 Skill usage consent prompt 与 Admin Skill usage 布局修复：Skill detail、User Home、Playground 推荐下载在首次下载前提示用户开启 Skill/Runner usage details 或继续下载；Admin no-consent 状态提示用户去 Profile / Privacy 开启；Skill usage 宽表增加横向滚动避免截断，并补回归测试与测试结果记录（`web/default/src/features/marketplace/`, `web/default/src/features/user-home/index.tsx`, `web/default/src/features/playground/index.tsx`, `web/default/src/features/users/components/dialogs/user-skill-usage-dialog.tsx`, `docs/test-results/skill-usage-consent-prompt-layout.txt`）
+- 更新 Skill usage consent prompt and Admin layout 任务 PRD 状态为 eval，记录 focused coverage、typecheck、build、full frontend test、full Go suite 与 lint 结果（`docs/tasks/skill-usage-consent-prompt-layout-prd.md`）
 - 新增 Admin create user validation 任务 PRD，明确 Users 创建表单密码校验、root 可创建普通/Admin 用户且不可创建 root 用户的验收范围（`docs/tasks/admin-create-user-validation-prd.md`）
 - 修复 Admin Users 创建用户时短密码/空密码只在后端失败导致看似无法添加用户的问题：创建模式下前端先校验 8-20 位密码并显示字段级错误，后端补 root 创建普通/Admin 成功且创建 root 被拒的回归测试（`web/default/src/features/users/components/users-mutate-drawer.tsx`, `controller/user_create_test.go`）
 - 更新 Admin create user validation 任务 PRD 状态为 eval，并记录聚焦后端/前端、完整 Go、typecheck、build、full Vitest 与 lint 结果（`docs/tasks/admin-create-user-validation-prd.md`, `docs/test-results/admin-create-user-validation.txt`）

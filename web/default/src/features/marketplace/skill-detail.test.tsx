@@ -1,20 +1,28 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
-import { SkillDetail } from './skill-detail'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   DownloadSkillError,
   downloadSkillPackage,
   getMarketplaceSkill,
 } from './api'
+import { SkillDetail } from './skill-detail'
 import type { PublicSkillDetail } from './types'
 
 // Navigation + auth.reset are captured so we can assert the AUTH_REQUIRED path
 // signs out + redirects (and never the other error branches).
-const { navigateMock, resetMock } = vi.hoisted(() => ({
+const {
+  navigateMock,
+  resetMock,
+  mockGetTelemetryConsent,
+  mockUpdateTelemetryConsent,
+} = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   resetMock: vi.fn(),
+  mockGetTelemetryConsent: vi.fn(),
+  mockUpdateTelemetryConsent: vi.fn(),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -35,6 +43,11 @@ vi.mock('sonner', () => ({
 vi.mock('@/stores/auth-store', () => ({
   // Component only uses useAuthStore.getState().auth.reset().
   useAuthStore: { getState: () => ({ auth: { reset: resetMock } }) },
+}))
+
+vi.mock('@/features/profile/api', () => ({
+  getTelemetryConsent: mockGetTelemetryConsent,
+  updateTelemetryConsent: mockUpdateTelemetryConsent,
 }))
 
 // Define DownloadSkillError inside the mock so `error instanceof DownloadSkillError`
@@ -70,7 +83,10 @@ const detail: PublicSkillDetail = {
   is_kids_exclusive: false,
   ai_disclosure_required: false,
   requires_deeprouter_key: true,
-  download_cta: { url: '/api/v1/marketplace/skills/my-skill/download', method: 'GET' },
+  download_cta: {
+    url: '/api/v1/marketplace/skills/my-skill/download',
+    method: 'GET',
+  },
   instructions: {
     download_instructions: 'Extract the zip to .claude/skills/.',
     usage_instructions: 'Run the Skill from your local assistant.',
@@ -94,8 +110,17 @@ async function findDownloadButton() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.localStorage.clear()
   vi.mocked(getMarketplaceSkill).mockResolvedValue(detail)
   vi.mocked(downloadSkillPackage).mockResolvedValue(undefined)
+  mockGetTelemetryConsent.mockResolvedValue({
+    success: true,
+    data: { tier2_telemetry_consent: true },
+  })
+  mockUpdateTelemetryConsent.mockResolvedValue({
+    success: true,
+    data: { tier2_telemetry_consent: true },
+  })
 })
 
 describe('SkillDetail page', () => {
@@ -138,6 +163,50 @@ describe('SkillDetail page', () => {
     expect(resetMock).not.toHaveBeenCalled()
   })
 
+  it('prompts to enable telemetry consent before the first download', async () => {
+    mockGetTelemetryConsent.mockResolvedValue({
+      success: true,
+      data: { tier2_telemetry_consent: false },
+    })
+
+    renderDetail()
+    await userEvent.click(await findDownloadButton())
+
+    expect(
+      await screen.findByText('Enable Skill and Runner usage details?')
+    ).toBeInTheDocument()
+    expect(downloadSkillPackage).not.toHaveBeenCalled()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Enable and download' })
+    )
+
+    await waitFor(() =>
+      expect(mockUpdateTelemetryConsent).toHaveBeenCalledWith({
+        tier2_telemetry_consent: true,
+      })
+    )
+    await waitFor(() => expect(downloadSkillPackage).toHaveBeenCalledTimes(1))
+  })
+
+  it('allows downloading without enabling telemetry consent', async () => {
+    mockGetTelemetryConsent.mockResolvedValue({
+      success: true,
+      data: { tier2_telemetry_consent: false },
+    })
+
+    renderDetail()
+    await userEvent.click(await findDownloadButton())
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: 'Download without usage details',
+      })
+    )
+
+    expect(mockUpdateTelemetryConsent).not.toHaveBeenCalled()
+    await waitFor(() => expect(downloadSkillPackage).toHaveBeenCalledTimes(1))
+  })
+
   it('AUTH_REQUIRED signs out and redirects to /sign-in (not add-key)', async () => {
     vi.mocked(downloadSkillPackage).mockRejectedValue(
       new DownloadSkillError('AUTH_REQUIRED')
@@ -154,14 +223,14 @@ describe('SkillDetail page', () => {
     })
     // Must NOT surface a plan / unavailable / generic inline error for an auth failure.
     expect(
-      screen.queryByText('This Skill requires a higher plan. Upgrade to download it.')
+      screen.queryByText(
+        'This Skill requires a higher plan. Upgrade to download it.'
+      )
     ).toBeNull()
     expect(
       screen.queryByText('Download is unavailable for this Skill right now.')
     ).toBeNull()
-    expect(
-      screen.queryByText('Download failed. Please try again.')
-    ).toBeNull()
+    expect(screen.queryByText('Download failed. Please try again.')).toBeNull()
   })
 
   it('SKILL_AUTH_REQUIRED is treated the same as AUTH_REQUIRED', async () => {
@@ -180,14 +249,14 @@ describe('SkillDetail page', () => {
     })
     // Symmetric with AUTH_REQUIRED: no plan / unavailable / generic inline copy.
     expect(
-      screen.queryByText('This Skill requires a higher plan. Upgrade to download it.')
+      screen.queryByText(
+        'This Skill requires a higher plan. Upgrade to download it.'
+      )
     ).toBeNull()
     expect(
       screen.queryByText('Download is unavailable for this Skill right now.')
     ).toBeNull()
-    expect(
-      screen.queryByText('Download failed. Please try again.')
-    ).toBeNull()
+    expect(screen.queryByText('Download failed. Please try again.')).toBeNull()
   })
 
   it('SKILL_PLAN_REQUIRED opens the paywall and does not navigate', async () => {
@@ -208,7 +277,9 @@ describe('SkillDetail page', () => {
     renderDetail()
     fireEvent.click(await findDownloadButton())
     expect(
-      await screen.findByText('Download is unavailable for this Skill right now.')
+      await screen.findByText(
+        'Download is unavailable for this Skill right now.'
+      )
     ).not.toBeNull()
     expect(navigateMock).not.toHaveBeenCalled()
     expect(resetMock).not.toHaveBeenCalled()
