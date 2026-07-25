@@ -420,20 +420,35 @@ var defaultModelPrice = map[string]float64{
 	// values are safe for the ~5s default; if long clips become common, move
 	// Seedance to defaultModelRatio (Ark bills per token and ParseTaskResult
 	// already records usage) instead of raising the flat price again.
-	"doubao-seedance-2-0-260128":      1.0,   // ¥46/M → 5s cost ≈ $0.69
-	"doubao-seedance-2.0":             1.0,   // alias of the above
-	"doubao-seedance-2.0-fast":        0.8,   // ¥37/M → 5s cost ≈ $0.55
-	"doubao-seedance-2-0-fast-260128": 0.8,   // dated fast tier (= doubao-seedance-2.0-fast)
-	"doubao-seedance-1-5-pro-251215":  0.55,  // est. ~¥25/M → 5s cost ≈ $0.37
-	"doubao-seedance-1-0-pro-250528":  0.33,  // ¥15/M → 5s cost ≈ $0.22
-	"doubao-seedance-1-0-lite-t2v":    0.22,  // ¥10/M → 5s cost ≈ $0.15
-	"doubao-seedance-1-0-lite-i2v":    0.22,  // ¥10/M → 5s cost ≈ $0.15
-	"kling-v2-master":                 0.4,   // video gen (≈veo)
-	"kling-v2-6":                      0.4,   // video gen
-	"kling-v3":                        0.4,   // video gen
-	"gemini-3-pro-image":              0.134, // Nano Banana image $0.134/img (1K-2K)
-	"gemini-3.1-flash-image":          0.045, // image $0.045/img
-	"grok-imagine-image":              0.02,  // image $0.02/img
+	"doubao-seedance-2-0-260128":      1.0,  // ¥46/M → 5s cost ≈ $0.69
+	"doubao-seedance-2.0":             1.0,  // alias of the above
+	"doubao-seedance-2.0-fast":        0.8,  // ¥37/M → 5s cost ≈ $0.55
+	"doubao-seedance-2-0-fast-260128": 0.8,  // dated fast tier (= doubao-seedance-2.0-fast)
+	"doubao-seedance-1-5-pro-251215":  0.55, // est. ~¥25/M → 5s cost ≈ $0.37
+	"doubao-seedance-1-0-pro-250528":  0.33, // ¥15/M → 5s cost ≈ $0.22
+	"doubao-seedance-1-0-lite-t2v":    0.22, // ¥10/M → 5s cost ≈ $0.15
+	"doubao-seedance-1-0-lite-i2v":    0.22, // ¥10/M → 5s cost ≈ $0.15
+	// Ark dispatches DATED ids (`GET /api/v3/models`); the undated forms above are
+	// DeepRouter-side aliases. Without these rows a real Ark call on a dated id
+	// hits "价格未配置". Verified present on a live Ark account 2026-07-25.
+	"doubao-seedance-1-0-lite-t2v-250428": 0.22, // dated = doubao-seedance-1-0-lite-t2v
+	"doubao-seedance-1-0-lite-i2v-250428": 0.22, // dated = doubao-seedance-1-0-lite-i2v
+	// ⚠️ ESTIMATES — official ¥/M not published for these tiers; priced BELOW the
+	// tier above and ABOVE the tier below, so an error direction over-charges
+	// rather than loses money. Confirm against the Ark price page before launch.
+	"doubao-seedance-2-0-mini-260615":     0.5,  // est. mini tier (< 2.0-fast $0.8)
+	"doubao-seedance-1-0-pro-fast-251015": 0.25, // est. fast tier of 1.0-pro ($0.33)
+	// Seedream image prices were derived from ¥/IMAGE (not ¥/M tokens), so their
+	// unit was already right — these rows only add the ids Ark actually dispatches.
+	"doubao-seedream-4-5-251128":     0.034, // dated = doubao-seedream-4.5 (¥0.25/img)
+	"doubao-seedream-5-0-260128":     0.03,  // dated = doubao-seedream-5.0 (¥0.22/img)
+	"doubao-seedream-5-0-pro-260628": 0.05,  // ⚠️ est. pro tier (> 5.0 $0.03)
+	"kling-v2-master":                0.4,   // video gen (≈veo)
+	"kling-v2-6":                     0.4,   // video gen
+	"kling-v3":                       0.4,   // video gen
+	"gemini-3-pro-image":             0.134, // Nano Banana image $0.134/img (1K-2K)
+	"gemini-3.1-flash-image":         0.045, // image $0.045/img
+	"grok-imagine-image":             0.02,  // image $0.02/img
 }
 
 var defaultAudioRatio = map[string]float64{
