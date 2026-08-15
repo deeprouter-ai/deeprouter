@@ -7,7 +7,15 @@ var ModelList = []string{
 	"doubao-seed-2-0-pro-260215",
 	"doubao-seed-2.0-lite",
 	"doubao-seed-2.0-mini",
+	// DeepSeek hosted on Ark (same VOLCENGINE_API_KEY as the Doubao models).
+	// Ark dispatches dated ids; the undated aliases resolve on the Coding /
+	// Agent Plan endpoints.
+	"deepseek-v4-pro",
+	"deepseek-v4-flash",
+	"deepseek-v3-1-250821",
+	"deepseek-r1-250120",
 	// Seedream / Seedance (image + video generation)
+	"doubao-seedance-2-5-260628",
 	"doubao-seedream-5.0",
 	"doubao-seedream-5-0-260128",
 	"doubao-seedream-4.5",

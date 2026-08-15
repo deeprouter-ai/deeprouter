@@ -346,6 +346,23 @@ var defaultModelRatio = map[string]float64{
 	"doubao-seed-2.0-pro":             0.0032 * RMB, // ¥3.2/¥16 per 1M ≤32K (Seed 2.0, 2026-02-14)
 	"doubao-seed-2.0-lite":            0.0006 * RMB, // ¥0.6/¥3.6 per 1M ≤32K
 	"doubao-seed-2.0-mini":            0.0002 * RMB, // ¥0.2/¥2.0 per 1M ≤32K
+	// ── Seedance 2.5 video: TOKEN RATIO, not a per-call price ──
+	// Ark bills video generation per token; 2.5 allows 30s segments, so the flat
+	// per-call prices used for Seedance ≤2.0 (defaultModelPrice) would lose money
+	// on every long clip. Because the model has a ratio and no per-call price,
+	// settleTaskBillingOnComplete recalculates the charge from the task's actual
+	// TotalTokens (service/task_billing.go RecalculateTaskQuotaByTokens).
+	//
+	// $10.85 / 1M tokens is the no-video-input rate → 10.85 / 2 = 5.425.
+	// Requests that DO include video input bill at $6.51 / 1M; that discount is
+	// applied as an OtherRatio by relay/channel/task/doubao (videoInputRatioMap),
+	// so the ratio here must stay the higher, no-video figure.
+	"doubao-seedance-2-5-260628": 5.425,
+	"doubao-seedance-2.5":        5.425, // undated alias
+	// DeepSeek served through VolcEngine Ark. Ark dispatches DATED ids; the
+	// undated aliases resolve on the Coding/Agent Plan endpoints.
+	"deepseek-v3-1-250821": 0.135, // = deepseek-v3 tier
+	"deepseek-r1-250120":   0.275, // = deepseek-r1 tier
 	// MiniMax (input, USD per 1M tokens)
 	"MiniMax-M3":   0.3,  // $0.6/$2.4 per 1M (2026-06-01)
 	"MiniMax-M2":   0.15, // $0.3/$1.2 per 1M
@@ -459,6 +476,11 @@ var defaultModelPrice = map[string]float64{
 	// values are safe for the ~5s default; if long clips become common, move
 	// Seedance to defaultModelRatio (Ark bills per token and ParseTaskResult
 	// already records usage) instead of raising the flat price again.
+	//
+	// 🚫 Seedance 2.5 is deliberately NOT in this map. It generates up to 30s per
+	// segment (6x the 5s basis these flat prices assume), so it is priced by
+	// token ratio in defaultModelRatio instead — GetModelPrice is checked first,
+	// so adding it here would silently switch it back to flat per-call billing.
 	"doubao-seedance-2-0-260128":      1.0,  // ¥46/M → 5s cost ≈ $0.69
 	"doubao-seedance-2.0":             1.0,  // alias of the above
 	"doubao-seedance-2.0-fast":        0.8,  // ¥37/M → 5s cost ≈ $0.55
@@ -547,6 +569,8 @@ var defaultCompletionRatio = map[string]float64{
 	"deepseek-reasoner":        2,
 	"deepseek-v4-flash":        2,
 	"deepseek-v4-pro":          2, // $0.87/$0.435
+	"deepseek-v3-1-250821":     4, // Ark dated id (= deepseek-v3 tier)
+	"deepseek-r1-250120":       4, // Ark dated id (= deepseek-r1 tier)
 	"deepseek-v3":              4, // legacy V3 ≈ $1.1/$0.27
 	"deepseek-r1":              4, // legacy R1 ≈ $2.19/$0.55
 	"glm-5.3":                  3.14,

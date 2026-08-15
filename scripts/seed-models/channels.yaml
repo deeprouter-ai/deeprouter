@@ -288,6 +288,11 @@ channels:
       - doubao-seed-2.0-pro
       - doubao-seed-2.0-lite
       - doubao-seed-2.0-mini
+      # DeepSeek（方舟托管，与豆包共用同一把 VOLCENGINE_API_KEY）
+      - deepseek-v4-pro
+      - deepseek-v4-flash
+      - deepseek-v3-1-250821
+      - deepseek-r1-250120
       # 上一代
       - doubao-pro-32k
       - doubao-pro-128k
@@ -304,6 +309,9 @@ channels:
     test_model: doubao-seedance-1-0-lite-t2v
     tag: doubao
     models:
+      # 2.5：单段最长 30s / 原生 4K / 同步音轨。按 token 倍率计费（不是按次价），
+      # 见 setting/ratio_setting/model_ratio.go 的说明。
+      - doubao-seedance-2-5-260628
       - doubao-seedance-1-0-pro-250528
       - doubao-seedance-1-0-lite-t2v
       - doubao-seedance-1-0-lite-i2v
