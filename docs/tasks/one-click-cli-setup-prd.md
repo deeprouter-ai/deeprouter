@@ -1,7 +1,7 @@
 # PRD — 一键配置终端 AI 工具（One-Click CLI Setup）
 
 > Status: spec · 2026-08-25 · author: Claude（待评审）
-> Owner: TBD
+> **Owner: @sam**（Sam Wang）—— 拆出的 P1–P4 四张卡也都归他
 > **看板短名（board prefix）: `One-Click CLI Setup`** — 本 PRD 拆出的每一张卡，
 > `title` 都以它开头，逐字一致（`rules/adlc.md` §1）。不要写成 `One-Click Setup`
 > 之类的近义词，那会在看板上静默裂成两组。
@@ -59,7 +59,7 @@
 |---|---|---|---|
 | **F1** | **只有真环境变量能让 Claude Code 跳过登录**；项目级 `.claude/settings.json` 的 `env` 块**不生效**——仍然弹出 "Select login method" | D2 把「写工具自己的配置文件」列为第 1 优先，Claude Code 走这条 | **D2 优先级反转**，见 §3 |
 | **F2** | **Base URL 不是常量** —— 存在**两套独立部署**，各有各的数据库，**密钥不通用**（见下表） | 全文硬编码单一域名 | §4.1 令牌接口必须连 Base URL 一起返回。🔴 **本条的价值不在「哪个是正式的」，而在「这个问题的答案会变」** —— 它已经变过一次 |
-| **F3** | **模型名也不是常量，而且 `deeprouter-auto` 在生产上 100% 失败** —— 🔴 **原文写的机制是错的**：原以为「smart-router 未启用 → 退回硬编码的 `gpt-4o-mini` → 该部署无此渠道 → `model_not_found`」。在 `.co` 上实测是**反的**:smart-router **是活的**(三个 prompt 选出两个不同模型)，但选出的模型**不在令牌白名单里** → 403 `该令牌无权访问模型`。两套部署的模型目录也确实不同(R1) | 全文写死 `deeprouter-auto` | §4.3 必须探测后再决定，**且探测第 1 步不能省**。根因另立卡 `auto-model-token-whitelist-task.md` |
+| **F3** | **模型名不是常量** —— 两套部署的模型目录**实测不同**（R1）；且 `deeprouter-auto` 曾因令牌白名单在生产 **100% 失败**（R4，✅ 已修复 ADR-0007，待部署） | 全文写死 `deeprouter-auto` | §4.3 必须探测后再决定，探测第 1 步不能省 |
 | **F16** | 🔴 **验证请求用哪个模型，决定它成不成功** —— 同一个账号、同一句 `hi`：`Claude Opus 4.7 (thinking)` 要求预扣 **$0.816000**（余额 $0.039954，403）；`GPT-4o mini` **直接通过**。预扣额 = 模型单价 × `max_tokens` 预授权，**与实际用量无关** | §4.3 的探测与 §4.4 的「四种协议各验一次」**都没规定用哪个模型** | 🔴 **探测与验证一律挑目录里最便宜的模型**，并把 `max_tokens` 压到最小。新用户余额小，拿贵模型探测会 403，而脚本会把「余额不够跑这个模型」误报成「配置失败」——机制是好的，却因为挑错了模型而报错。§6 的 403 文案要能区分这两件事 |
 | **F17** | 🔴 **Gemini CLI 在 `.co` 上三条路全堵，但堵点在网关的协议转换，不在缺 Gemini 渠道** —— 配 `gemini-*` → 403（该部署确无 Gemini 渠道）；配 **`gpt-4o-mini` → 400 `Unrecognized request argument supplied: top_k`**；配 **`claude-sonnet-4-6` → 500 `convert_request_failed` / not implemented**。🔴 **而同样的 Gemini 端点用 curl 打 `gpt-4o-mini` 是 200** —— 差别只在 CLI 会发 `top_k` | §3 D1「Phase 1 = 四个工具全做」 | 🔴 **D1 不变，Gemini CLI 留在 Phase 1**。真正要修的是网关，另立卡 `gemini-protocol-conversion-task.md` |
 | **F18** | **Gemini CLI 在 headless 下有信任门** —— `gemini -p` 直接报 `not running in a trusted directory`，一个请求都不发。要 `--skip-trust` 或 `GEMINI_CLI_TRUST_WORKSPACE=true` | §4.4「四种协议各验一次」默认脚本能直接跑 `gemini -p` 来验 | **脚本的验证步骤要带上这个标志**，否则 Gemini 那一条永远验不过，且报错和配置无关、极难排查 |
@@ -70,33 +70,21 @@
 | **F14** | **Codex 走 `POST <base>/v1/responses`，不是 `/v1/chat/completions`** —— 实测如此；已确认网关支持该端点（无 key 探测返回 401 而非 404） | §4.4 验证表把 OpenCode 与 Codex 归在同一个 `/v1/chat/completions` 下 | **验证表拆开为两行** |
 | **F10** | **Gemini CLI 不是纯环境变量** —— 必须写 `~/.gemini/settings.json`，且键是**嵌套的** `security.auth.selectedType = "gemini-api-key"`。不写它，`gemini -p` 直接报 `Invalid auth method selected.`，**一个请求都不发**。顶层 `selectedAuthType`（旧结构）在 v0.57 上无效；`GEMINI_DEFAULT_AUTH_TYPE` 环境变量**只在交互路径生效** | D2 把 Gemini 归入第 3 级「纯环境变量」 | **Gemini 也要写 JSON** → §4.3 的合并保护 / 备份 / 卸载还原全部适用于它，**这部分工程量原本没算** |
 | **F11** | **`GOOGLE_GEMINI_BASE_URL` 不能带 `/v1beta`** —— CLI 自己会拼，带了就是 `POST /v1beta/v1beta/models/…`，网关返回 `Invalid URL`。**与 Cherry Studio 的 `/v1/v1` 同一个坑** | §4.3 写的是 `GOOGLE_GEMINI_BASE_URL=<base>/v1beta` | 去掉 `/v1beta`。**「Base URL 该不该带版本段」这件事每个工具的答案都不同，一个都不能想当然** |
-| **F12** | **`GEMINI_MODEL` 实测无效** —— 设 `gemini-2.5-flash`，实际请求打的是 `models/gemini-3.5-flash`（v0.57 内置默认）。🔴 **2026-08-26 查清了原因，且它有解**：翻 v0.57 的 bundle，**`env.GEMINI_MODEL` 一次都没被读** —— 那个名字在包里只是常量名，根本不是环境变量入口。真正的键是 **`settings.json` 里的 `model.name`**（`settings.model?.name`），**已实测生效** | §4.3 写 `GEMINI_MODEL=gemini-2.5-flash` | 🔴 **改为写 `settings.json` 的 `model.name`**。脚本本来就要写这个文件（F10 的认证键在同一份里），**等于零额外成本**。原「模型名的落点是 Gemini 上唯一没有结论的一项」**已作废** |
-| **F9** | **「装没装」不能用配置目录判断** —— 实测装 **ChatGPT 桌面应用**会创建一个内容丰富的 `~/.codex/config.toml`（`[marketplaces.openai-bundled]` / `[plugins…]` / `[mcp_servers.node_repl]`），但 `codex` **在 PowerShell 与 cmd 里都不是命令**。发现纯属意外：为做 U6 去装 Codex CLI，装成了 ChatGPT 桌面版 | §4.2 闸 2 写的是「配置目录存在 **或** 可执行文件在 PATH」 | **判据改为可执行文件**。OR 判据下脚本会认定 Codex 已装、写配置、并让用户敲一个**不存在的命令**。ChatGPT 桌面版装机量很大，不是边缘情况 |
+| **F12** | **`GEMINI_MODEL` 环境变量无效——它根本没被读**（v0.57 bundle 里 `env.GEMINI_MODEL` 零命中）。真正的键是 `settings.json` 的 **`model.name`**，已实测生效 | §4.3 写 `GEMINI_MODEL=gemini-2.5-flash` | 🔴 **改写 `settings.json` 的 `model.name`** —— F10 的认证键在同一份文件里，零额外成本 |
+| **F9** | **「装没装」不能用配置目录判断** —— 实测装 **ChatGPT 桌面应用**会创建一个内容丰富的 `~/.codex/config.toml`（`[marketplaces.openai-bundled]` / `[plugins…]` / `[mcp_servers.node_repl]`），但 `codex` **在 PowerShell 与 cmd 里都不是命令**。| §4.2 闸 2 写的是「配置目录存在 **或** 可执行文件在 PATH」 | **判据改为可执行文件**。OR 判据下脚本会认定 Codex 已装、写配置、并让用户敲一个**不存在的命令**。ChatGPT 桌面版装机量很大，不是边缘情况 |
 | **F8** | **Windows 的持久化不能照 POSIX 镜像** —— `$PROFILE` + `env.ps1` 在默认的 `Restricted` execution policy 下不加载，且**每次开终端报红**。改用 `[Environment]::SetEnvironmentVariable(…,'User')`（写注册表，与 policy 无关） | D2 的语法表里 Windows 一行是「`. $HOME\.deeprouter\env.ps1`」 | **D2 的 Windows 机制整条改写**，连带 §4.3 清单与 §4.6 卸载；并推翻了「fish 是唯一能弄坏终端的路径」这句 |
 
 > F2/F3 合起来印证了 `key-setup-guide-prd.md` §6.3 早就写下的硬约束：**「Base URL / model 只能来自后端 API 注入，前端不得硬编码」**。那条规则原本是为「显示了 dev 端口 17231」那次事故写的；现在它有了第二个、更严重的理由。
 
-#### 🔴 两套部署 —— 正式的是 `deeprouter.co`（2026-08-26，**本条被订正过一次，见末尾**）
+#### 两套部署 —— 正式的是 `deeprouter.co`
 
-POC 时只知道“有两个”，不知道哪个算数。两套都活着、跑同一份代码（`/api/status` 字段完全一致，各 102 行），差异全在**设置**与**基础设施**：
+存在**第二套独立部署 `deep-router.com`**：同一份代码、独立数据库、**密钥互不通用**
+（一套的 key 打另一套 401，已验）。完整对照表与定位归 **`deeprouter-ai/deploy/README.md`
+§"There is a second deployment"** 管，本 PRD 只留对规格的影响：
 
-| | `deeprouter.co` ✅ **正式** | `deep-router.com` |
-|---|---|---|
-| DNS | `13.239.187.249` —— 悉尼 EC2 | Cloudflare（`104.21.46.120` / `172.67.138.139`） |
-| 边缘 | `Via: 1.1 Caddy` —— **本仓库 `deploy/Caddyfile`** | `Server: cloudflare` |
-| `server_address` | `https://api.deeprouter.co` | `https://deep-router.com` |
-| logo / footer | ✅ 有 | ❌ 空 |
-| 邮箱验证 | ✅ 开 | ❌ 关 |
-| 隐私政策 / 用户协议 | ✅ 开 | ❌ 关 |
-| 签到 | ✅ 开 | ❌ 关 |
-
-**判据是下半张表，不是上半张。** 一个面向真实付费用户的站不可能没有邮箱验证、没有隐私政策和用户协议；而 `deeprouter.co` 恰好是 `deploy/settings.env` 那套品牌与合规设置**唯一进到的地方**，也是本仓库的部署管线（`infra-ec2/` + `deploy/`）真正指向的那台机器。
-
-> 🔴 **本条订正过一次**：最初按口头结论写成 `deep-router.com`。上面那张设置对照表当天就采集到了，
-> 却被当成「奇怪现象」而非**反证**。教训:**手上的数据与被告知的结论冲突时，先把冲突摆出来。**
-
-**对规格的影响:§4.1「取该实例自己的 `server_address`」从「防御性设计」变成「必须」** ——
-两套库不通，写错地址的用户一路 401。📌 连人都答错过一次，脚本更不能把答案写死。
+🔴 **§4.1「Base URL 取该实例自己的 `server_address`」是必须，不是防御性设计** ——
+写错地址的用户一路 401。本条结论曾被答错过一次（详见 deploy/README.md 与 LOG），
+连人都会答错，脚本更不能把答案写死。
 
 #### 在 `.co` 上的重测（2026-08-26，Cherry Studio + curl）
 
@@ -108,22 +96,21 @@ POC 全部做在 `.com` 上。**工具侧机制**（F1 / F8 / F9 / F10–F15）�
 | **R1** | 模型目录 | 🔴 **两套不一样**。按 `.com` 量到的 `claude-opus-4-8` 写死，在正式部署上直接 `model_not_found` —— §4.3「先探测再写」的实证 |
 | **R2** | 计费链路 | ✅ **通**。`gpt-4o-mini` 发 `hi` 正常回话，密钥→鉴权→选模型→预扣费→上游→计费全程跑通 |
 | **R3** | 预扣费门槛 | 🔴 同一账号同一句 `hi`：Opus 4.7 thinking 要预扣 **$0.816**（余额 $0.04 → 403）；`gpt-4o-mini` **直接通过**。预扣额 = 单价 × `max_tokens`，**与实际用量无关** → **F16** |
-| **R4** | `deeprouter-auto` | 🔴 **100% 失败，机制与 F3 原文相反**。三个 prompt 选出**两个不同模型**（`claude-haiku-4-5-20251001` / `deepseek-v4-flash`）——smart-router **是活的**；但每次 403 `该令牌无权访问模型`。**挡住的是令牌白名单** |
+| **R4** | `deeprouter-auto` | 🔴 曾 **100% 失败**：三个 prompt 选出**两个不同模型**——smart-router 是活的，挡住的是**令牌白名单**。✅ **已修复**（ADR-0007，`e13548a8`，本地 stash 前后对照验证：403→200；**待合并部署，`.co` 上今天仍是坏的**） |
 
-**R4 的根因**（`middleware/distributor.go`）：`deeprouter-auto`（L54）经 `ResolveAutoModel`
-从**租户 group 的目录**取模型，输出不受约束；紧邻的 Simple-mode 虚拟模型（L65）注释写明
-发令牌时**已把解析目标写进 `Token.ModelLimits`**；而白名单检查（L95）跑在**已解析出的模型名**上。
-smart-router 的 `filterByCatalog` 没滤错 —— **目录按租户算，权限按令牌算**，两个口径。
+根因与修法在 **`docs/adr/0007-auto-model-token-whitelist.md`**（一句话版：目录按**租户**算、
+权限按**令牌**算，smart-router 的选择合法但令牌开不了；修复让解析结果在白名单**内**重选）。
 
-🔴 **对规格的两个影响：**
+**对规格的两个影响（修复后更新）：**
 
-1. **§4.3 探测第 1 步（先试 `deeprouter-auto`）从「保险起见」变成「必须」** ——
-   它在正式部署上就是坏的，不探测等于给每个用户发一份必然 403 的配置。
-2. 🔴 **P1 的未决约束**：脚本发的令牌带白名单则 `deeprouter-auto` 必挂；不带又与控制台常规做法不一致。
+1. **§4.3 探测第 1 步（先试 `deeprouter-auto`）仍然必须** —— 修复在分支里，哪些部署带着它、
+   目录长什么样，都随部署变；探测是唯一不赌部署状态的做法。
+2. ✅ **P1 的未决约束已解除**：修复后**带白名单的令牌也能用 `deeprouter-auto`**（路由在白名单内进行），
+   P1 不必再在「不带白名单」和「等修复」之间二选一。
 
-> 根因另立卡「Fix: deeprouter-auto resolves to models the token may not use, 403 on every request」。
-> ⚠️ 与 Gemini 那条**是两个独立 bug**：那条在解析**之前**（取不到消息），这条在解析**之后**
-> （调用了、选对了、但令牌用不了）。修好任一条，另一条依旧成立。
+> 修复卡「Fix: deeprouter-auto resolves to models the token may not use, 403 on every request」在 **eval**。
+> ⚠️ 与 Gemini 那条**是两个独立 bug**（一个在解析前取不到消息，一个在解析后令牌用不了），修好任一条另一条依旧成立
+> —— **且必须先修本条**：Gemini 那条今天正替它挡着子弹，单独修 Gemini 会让线上从「静默用错模型」变成 403。
 
 #### 四种协议 × 具体模型名（2026-08-26，生产 `.co`，curl）
 
@@ -168,8 +155,7 @@ Gemini→OpenAI 本身是通的，**坏在一个参数上**。
 - ✅ **D1 不变，Gemini CLI 留在 Phase 1。** 要修的是网关 → 卡「Fix: Gemini-protocol requests fail
   on every model, top_k leak and no Claude converter」，其 `top_k` 那半约 2h。
 
-> 🔴 **本 PRD 一度据「该部署没有 Gemini 渠道」把 Gemini CLI 判出 Phase 1，那是错的** ——
-> 判断建立在 F12「**原因未查清**」之上。**标着「未查清」的发现不能作为砍范围的依据。**
+> 📌 教训（详见 LOG）：**标着「未查清」的发现不能作为砍范围的依据** —— D1 曾因此误砍过 Gemini CLI，已撤回。
 
 ### ⚠️ 另外四条工程/文案发现
 
@@ -384,10 +370,9 @@ DeepRouter 一键配置
 
 Claude Code、OpenCode、Codex CLI、Gemini CLI。覆盖文档站「AI CODING ASSISTANTS (TERMINAL)」分类的全部四项。
 
-> 🔴 **Gemini CLI 这项被判过一次「移出 Phase 1」，已撤回**（§0.1 F17）。
-> 判断建立在 F12「**原因未查清**」之上；查清后模型名**是能设的**（`settings.json` 的 `model.name`，
-> 而脚本本来就要写那个文件，零额外成本）。**真正的堵点在网关的协议转换** ——
-> 待卡「Fix: Gemini-protocol requests fail on every model…」的 `top_k` 那半（约 2h）修好即可。
+> 🔴 **Gemini CLI 的前提**（§0.1 F17）：模型名可经 `settings.json` 的 `model.name` 设置（F12），
+> 堵点在**网关的协议转换** —— 待卡「Fix: Gemini-protocol requests fail on every model…」的
+> `top_k` 那半（约 2h）修好即可，工具侧无额外工作。
 
 ### D2 · 写 shell 配置：只加一行引用，绝不塞内容
 
@@ -561,7 +546,8 @@ DR_PROBE NOT SET
 **所以流程是「按优先级试，用真请求确认」，不是「查表算出一个」：**
 
 1. 用 `deeprouter-auto` 发一次最小请求 → 通了就用它（能享受智能路由）
-   🔴 **这一步不能省**：`deeprouter-auto` 在正式部署 `.co` 上**实测 100% 失败**（§0.1 R4）。
+   🔴 **这一步不能省**：`deeprouter-auto` 曾因令牌白名单在生产 100% 失败（§0.1 R4，已修复待部署），
+   而哪些部署带着修复、目录长什么样都随部署变 —— 探测是唯一不赌部署状态的做法。
 2. 不通 → 取 `GET <base>/v1/models`（**令牌口径**，这是唯一能确定「这张令牌能用什么」的来源），
    按下面的顺序过滤与排序，得到候选列表：
    - 🔴 **先按 `supported_endpoint_types` 筛**：该工具用的协议必须在里面。
@@ -1142,8 +1128,8 @@ if (url.includes('{cherryConfig}')) {
 
 - [ ] 🔴 **验收在正式部署 `deeprouter.co` 上做**，不是 `deep-router.com`（§0.1）。两套库不通，在非正式那套上验收通过**不代表**真实用户能用。
 - [x] 模型清单与计费链路在 `.co` 上重测过（§0.1 R1/R2，2026-08-26）—— 两套部署的模型目录**确实不同**（`.co` 有 Opus 4.7 thinking / GPT-4o mini），且 `GPT-4o mini` 完整跑通一次调用。
-- [x] F3 的 `deeprouter-auto` 已在 `.co` 上重测（§0.1 R4，2026-08-26）——**100% 失败，且机制与原文相反**：smart-router 是活的，挡住的是令牌白名单。根因另立卡 `auto-model-token-whitelist-task.md`。
-- [ ] 🔴 **脚本发出去的令牌能真的用 `deeprouter-auto`**（§0.1 R4）——拿脚本实际拿到的令牌发一次 `deeprouter-auto`，**返回 200**。🔴 带模型白名单的令牌今天必然 403，所以这条要么等 `auto-model-token-whitelist-task.md` 修好，要么 P1 明确「本流程发的令牌不带白名单」并写清代价。
+- [x] F3 的 `deeprouter-auto` 已在 `.co` 上重测（§0.1 R4，2026-08-26）——曾 100% 失败（令牌白名单）。✅ **已修复**：ADR-0007，`e13548a8`，本地 stash 前后对照 403→200，卡在 eval，待合并部署。
+- [ ] 🔴 **脚本发出去的令牌能真的用 `deeprouter-auto`**（§0.1 R4）——拿脚本实际拿到的令牌发一次 `deeprouter-auto`，**返回 200**。✅ 白名单冲突已修复（ADR-0007，`e13548a8`，eval）——P1 **不必**再决定「不带白名单」；本条在修复合并部署后的 `.co` 上实测。
 - [ ] 🔴 **Base URL 全程来自令牌接口**，脚本、前端、文案里搜不到任何硬编码的 `https://api.deeprouter.co`。用两个不同部署的令牌各跑一次，各自指向正确的主机。
 - [ ] 🔴 **模型名经探测后决定**：在一个 `deeprouter-auto` 不可用的部署上跑，脚本能自动改用 `/v1/models` 里的真实模型，并在输出里说明。
 - [ ] 🔴 **探测与验证请求用的是目录里最便宜的模型**（§4.3、§0.1 F16）—— 在一个余额只够小模型的账号上跑，脚本能配完并验证成功，**不会因为拿贵模型探测而 403**。

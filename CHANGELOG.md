@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-27
+
+- 一键 CLI 配置 PRD 通审并指派负责人（`@sam`）：白名单 bug 修复落地后，把文中三处「`deeprouter-auto` 在生产 100% 失败」改成**曾失败、已修复（ADR-0007）、待合并部署**——修复还在分支上，写成「已经好了」与写成「现在是坏的」同样不准确。**P1 的未决约束正式解除**（修复后带模型白名单的令牌也能用 `deeprouter-auto`，路由在白名单内进行），§7 对应验收项同步改写；§4.3 探测第 1 步的理由从「生产上是坏的」换成「哪些部署带修复、目录长什么样都随部署变」——原理由会在部署后失效。删掉已有正主的重复内容（R4 根因归 ADR-0007、两套部署对照表归 `deeprouter-ai/deploy/README.md`、两处「订正过一次」的过程叙事归 LOG），保留 F 表——它是「原规格为什么错」的证据基（`docs/tasks/one-click-cli-setup-prd.md`）
+
 ## 2026-08-26
 
 - 新增一键 CLI 配置 PRD（`docs/tasks/one-click-cli-setup-prd.md`）：让非技术用户在密钥页拿一条命令，自动把 Claude Code / OpenCode / Codex CLI / Gemini CLI 配好并验证。三轮 POC 在真实部署上**推翻或补充了 20 条原有规格**，其中改变设计的有：项目级 `.claude/settings.json` 的 `env` 块**不生效**（Claude Code 只认真环境变量）；Windows 的 `$PROFILE` 在默认 `Restricted` 下不加载且每次开终端报红（改走注册表）；`deeprouter-auto` 在正式部署上 **100% 失败**（令牌白名单，已另行修复）；Gemini CLI 的模型名落点是 `settings.json` 的 `model.name` 而非 `GEMINI_MODEL` 环境变量（后者在 v0.57 的包里零命中）；Gemini 协议请求带的 `top_k` 被网关原样透传给 OpenAI 导致 400；`/v1/models`（令牌口径）与 `/api/pricing`（租户口径）**互不包含**且前者无价格字段，所以模型探测不能查表算、只能按优先级实发确认；预扣费 = 单价 × `max_tokens`，最小请求探测通过**不代表**工具实发能通过（Claude Code 实发需预扣 $0.16）。含 100 条验收，已拆成 P1–P4 四张卡（`deeprouter-ai/docs/adlc/tasks/one-click-*`）
