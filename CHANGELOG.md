@@ -2,6 +2,8 @@
 
 ## 2026-08-26
 
+- 新增一键 CLI 配置 PRD（`docs/tasks/one-click-cli-setup-prd.md`）：让非技术用户在密钥页拿一条命令，自动把 Claude Code / OpenCode / Codex CLI / Gemini CLI 配好并验证。三轮 POC 在真实部署上**推翻或补充了 20 条原有规格**，其中改变设计的有：项目级 `.claude/settings.json` 的 `env` 块**不生效**（Claude Code 只认真环境变量）；Windows 的 `$PROFILE` 在默认 `Restricted` 下不加载且每次开终端报红（改走注册表）；`deeprouter-auto` 在正式部署上 **100% 失败**（令牌白名单，已另行修复）；Gemini CLI 的模型名落点是 `settings.json` 的 `model.name` 而非 `GEMINI_MODEL` 环境变量（后者在 v0.57 的包里零命中）；Gemini 协议请求带的 `top_k` 被网关原样透传给 OpenAI 导致 400；`/v1/models`（令牌口径）与 `/api/pricing`（租户口径）**互不包含**且前者无价格字段，所以模型探测不能查表算、只能按优先级实发确认；预扣费 = 单价 × `max_tokens`，最小请求探测通过**不代表**工具实发能通过（Claude Code 实发需预扣 $0.16）。含 100 条验收，已拆成 P1–P4 四张卡（`deeprouter-ai/docs/adlc/tasks/one-click-*`）
+
 - 修复 `deeprouter-auto` 对带模型白名单令牌 100% 403 的生产缺陷（`deeprouter.co` 实测：三个 prompt 全部 `该令牌无权访问模型 X`，X 是用户从未输入过的模型）。根因是两条虚拟模型路径不对称：Simple-mode 发令牌时把解析目标写进 `Token.ModelLimits`，而 `deeprouter-auto` 从**租户目录**（实测 77 个）选模型、白名单检查却按**令牌**口径（29 个）跑在解析后的名字上。修法为 ADR-0007 的 C 方案——解析后在网关内用与 Distribute 完全相同的检查（`FormatMatchingModelName` + `MatchModelLimit`）重选：primary → fallback chain 首个白名单项 → 组内最便宜的白名单聊天模型（排除按次计价，按名字破平）；存进 `ContextKeySmartRouterFallback` 的链同步过滤（`relay_cross_model.go` 重试会逐个走）；调整通过 `X-DeepRouter-Routed-Reason` 的 `+token_whitelist` / `+token_whitelist_degraded` 后缀可见。白名单与组交集为空时保持原选择、让 Distribute 自己的 403 生效——令牌什么都用不了时掩盖只会把错误挪到更不诚实的地方。5 个回归测试（链回退 / 通配符 / 降级选最便宜 / sidecar 挂掉仍守白名单 / 交集为空不掩盖），命名沿用 `TestResolveAutoModel` 前缀自动进双 CI 门（`middleware/smart_router.go`, `middleware/smart_router_test.go`, `docs/adr/0007-auto-model-token-whitelist.md`）
 
 ## 2026-08-15
