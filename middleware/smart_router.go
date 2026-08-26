@@ -2,12 +2,16 @@ package middleware
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/internal/smart_router_client"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -74,6 +78,7 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 	resolved := DefaultAutoFallbackModel
 	reason := "smart_router_disabled"
 	strategy := ""
+	var fallbackChain []string
 
 	switch {
 	case !client.Enabled():
@@ -100,8 +105,20 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 			resolved = decision.Primary
 			reason = decision.Reason
 			strategy = decision.StrategyVersion
-			common.SetContextKey(c, constant.ContextKeySmartRouterFallback, decision.FallbackChain)
+			fallbackChain = decision.FallbackChain
 		}
+	}
+
+	// The token's model whitelist is enforced later in Distribute on whatever
+	// name we return here (MatchModelLimit on the RESOLVED name) — but
+	// smart-router picks from the TENANT's catalog, which is wider than any
+	// one token's whitelist. Without this re-filter, a limited token gets a
+	// hard 403 on a model the user never typed. Re-pick inside the whitelist:
+	// primary → fallback chain → cheapest whitelisted model the group can
+	// serve. See docs/adr/0007-auto-model-token-whitelist.md.
+	resolved, fallbackChain, reason = filterByTokenWhitelist(c, resolved, fallbackChain, reason)
+	if len(fallbackChain) > 0 {
+		common.SetContextKey(c, constant.ContextKeySmartRouterFallback, fallbackChain)
 	}
 
 	common.SetContextKey(c, constant.ContextKeyAliasResolvedFrom, originalModel)
@@ -117,4 +134,94 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 	}
 
 	return resolved
+}
+
+// filterByTokenWhitelist re-checks a smart-router pick against the token's
+// model whitelist — the exact check Distribute runs later (FormatMatchingModelName
+// + MatchModelLimit), so whatever this returns is guaranteed to pass it.
+//
+// Selection order: primary if allowed → first allowed fallback-chain entry →
+// cheapest whitelisted model the request's group can actually serve. The chain
+// is also filtered, because controller/relay_cross_model.go retries through it
+// and a non-whitelisted entry there would hit the same 403 on retry.
+//
+// Inputs come back unchanged when the token has no whitelist, or when nothing
+// at all survives the filter — in that last case the later 403 is honest: the
+// token cannot use anything, and hiding that would only move the error.
+func filterByTokenWhitelist(c *gin.Context, primary string, chain []string, reason string) (string, []string, string) {
+	if !common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled) {
+		return primary, chain, reason
+	}
+	raw, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
+	if !ok {
+		return primary, chain, reason
+	}
+	limits, ok := raw.(map[string]bool)
+	if !ok || len(limits) == 0 {
+		return primary, chain, reason
+	}
+	allowed := func(m string) bool {
+		return model.MatchModelLimit(limits, ratio_setting.FormatMatchingModelName(m))
+	}
+
+	kept := make([]string, 0, len(chain))
+	for _, m := range chain {
+		if allowed(m) {
+			kept = append(kept, m)
+		}
+	}
+	if allowed(primary) {
+		return primary, kept, reason
+	}
+	if len(kept) > 0 {
+		return kept[0], kept[1:], reason + "+token_whitelist"
+	}
+	if m := cheapestAllowedGroupModel(c, allowed); m != "" {
+		return m, nil, reason + "+token_whitelist_degraded"
+	}
+	return primary, chain, reason
+}
+
+// groupModelsForWhitelistFallback lists the models the request's group can
+// serve, expanding the "auto" pseudo-group the same way channel selection
+// does. Package-level var so unit tests can stub the DB-backed lookup.
+var groupModelsForWhitelistFallback = func(c *gin.Context) []string {
+	usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if usingGroup != "auto" {
+		return model.GetGroupEnabledModels(usingGroup)
+	}
+	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+	seen := make(map[string]bool)
+	var out []string
+	for _, g := range service.GetUserAutoGroup(userGroup) {
+		for _, m := range model.GetGroupEnabledModels(g) {
+			if !seen[m] {
+				seen[m] = true
+				out = append(out, m)
+			}
+		}
+	}
+	return out
+}
+
+// cheapestAllowedGroupModel picks the cheapest chat-usable whitelisted model
+// the group can serve; empty string when none qualifies. Per-call-priced
+// models (image / video / audio — the same set the router catalog skips) are
+// excluded: routing a chat request to them fails or pre-charges nonsense.
+func cheapestAllowedGroupModel(c *gin.Context, allowed func(string) bool) string {
+	best, bestRatio := "", math.MaxFloat64
+	for _, m := range groupModelsForWhitelistFallback(c) {
+		if m == "" || !allowed(m) {
+			continue
+		}
+		if _, perCall := ratio_setting.GetModelPrice(m, false); perCall {
+			continue
+		}
+		ratio, _, _ := ratio_setting.GetModelRatio(m)
+		// Tie-break by name so the pick is deterministic across restarts.
+		if ratio < bestRatio || (ratio == bestRatio && m < best) {
+			best, bestRatio = m, ratio
+		}
+	}
+	return best
 }

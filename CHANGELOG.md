@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-26
+
+- 修复 `deeprouter-auto` 对带模型白名单令牌 100% 403 的生产缺陷（`deeprouter.co` 实测：三个 prompt 全部 `该令牌无权访问模型 X`，X 是用户从未输入过的模型）。根因是两条虚拟模型路径不对称：Simple-mode 发令牌时把解析目标写进 `Token.ModelLimits`，而 `deeprouter-auto` 从**租户目录**（实测 77 个）选模型、白名单检查却按**令牌**口径（29 个）跑在解析后的名字上。修法为 ADR-0007 的 C 方案——解析后在网关内用与 Distribute 完全相同的检查（`FormatMatchingModelName` + `MatchModelLimit`）重选：primary → fallback chain 首个白名单项 → 组内最便宜的白名单聊天模型（排除按次计价，按名字破平）；存进 `ContextKeySmartRouterFallback` 的链同步过滤（`relay_cross_model.go` 重试会逐个走）；调整通过 `X-DeepRouter-Routed-Reason` 的 `+token_whitelist` / `+token_whitelist_degraded` 后缀可见。白名单与组交集为空时保持原选择、让 Distribute 自己的 403 生效——令牌什么都用不了时掩盖只会把错误挪到更不诚实的地方。5 个回归测试（链回退 / 通配符 / 降级选最便宜 / sidecar 挂掉仍守白名单 / 交集为空不掩盖），命名沿用 `TestResolveAutoModel` 前缀自动进双 CI 门（`middleware/smart_router.go`, `middleware/smart_router_test.go`, `docs/adr/0007-auto-model-token-whitelist.md`）
+
 ## 2026-08-15
 
 - 修复 Claude 5 系列输出 token 按输入价计费的漏洞：`getHardcodedCompletionModelRatio` 只识别 `claude-3` / `claude-*-4`，Opus 5 / Sonnet 5 / Fable 5 / Mythos 5 及其 effort / `-thinking` 变体全部落到 1x completion ratio（输出实际是输入的 5 倍价）。新增 `claude-*-5` 分支并补齐 `defaultModelRatio` / `defaultCacheRatio` / `defaultCreateCacheRatio` 条目；同时修正 GPT-5.6 三档（sol/terra/luna）会继承通用 `gpt-5` 的 8x completion ratio 而非实际 6x 的问题（`setting/ratio_setting/model_ratio.go`, `setting/ratio_setting/cache_ratio.go`）

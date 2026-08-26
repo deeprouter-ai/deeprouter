@@ -12,6 +12,7 @@ import (
 
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/internal/smart_router_client"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
 )
@@ -240,5 +241,168 @@ func TestResolveAutoModel_HeadersAlwaysSet(t *testing.T) {
 				t.Errorf("X-DeepRouter-Routed-Reason must be set on every code path")
 			}
 		})
+	}
+}
+
+// --- token-whitelist re-filter (docs/adr/0007-auto-model-token-whitelist.md) ---
+//
+// Regression tests for the production bug where deeprouter-auto resolved to a
+// model outside the token's model whitelist and every request 403'd with
+// "该令牌无权访问模型 X" on a model the user never typed.
+
+// setTokenWhitelist wires the context keys the auth middleware sets for a
+// token that has model_limits enabled.
+func setTokenWhitelist(c *gin.Context, entries ...string) {
+	limits := map[string]bool{}
+	for _, e := range entries {
+		limits[e] = true
+	}
+	c.Set(string(constant.ContextKeyTokenModelLimitEnabled), true)
+	c.Set(string(constant.ContextKeyTokenModelLimit), limits)
+}
+
+// stubGroupModels swaps the DB-backed group-model lookup for a fixed list,
+// restoring the original on cleanup.
+func stubGroupModels(t *testing.T, models ...string) {
+	t.Helper()
+	orig := groupModelsForWhitelistFallback
+	groupModelsForWhitelistFallback = func(*gin.Context) []string { return models }
+	t.Cleanup(func() { groupModelsForWhitelistFallback = orig })
+}
+
+func TestResolveAutoModel_WhitelistFallsToChain(t *testing.T) {
+	// smart-router's primary is outside the whitelist but its fallback chain
+	// has an allowed entry — that entry must win, silently, before the 403.
+	url, cleanup := stubServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"primary":        "claude-haiku-4-5",
+			"fallback_chain": []string{"gpt-4o-mini"},
+			"reason":         "short_question",
+		})
+	})
+	defer cleanup()
+
+	c, w := newCtxForResolve(t, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	}, 42)
+	setTokenWhitelist(c, "gpt-4o-mini")
+	client := smart_router_client.NewClient(url, time.Second)
+
+	got := resolveAutoModel(c, VirtualModelAuto, client)
+
+	if got != "gpt-4o-mini" {
+		t.Errorf("whitelisted fallback should win, got %q", got)
+	}
+	if v := w.Header().Get("X-DeepRouter-Routed-Model"); v != "gpt-4o-mini" {
+		t.Errorf("model header = %q", v)
+	}
+	if v := w.Header().Get("X-DeepRouter-Routed-Reason"); v != "short_question+token_whitelist" {
+		t.Errorf("reason header = %q, want short_question+token_whitelist", v)
+	}
+	// The one allowed entry was promoted to primary; nothing is left to retry
+	// through, so the cross-model fallback key must not be set.
+	if _, ok := c.Get(string(constant.ContextKeySmartRouterFallback)); ok {
+		t.Error("fallback chain should be empty after promotion")
+	}
+}
+
+func TestResolveAutoModel_WhitelistWildcardMatchesChain(t *testing.T) {
+	// Wildcard entries ("claude-*") must match the same way the later
+	// Distribute check does.
+	url, cleanup := stubServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"primary":        "deepseek-v4-flash",
+			"fallback_chain": []string{"claude-haiku-4-5", "gpt-4o-mini"},
+			"reason":         "chinese_short",
+		})
+	})
+	defer cleanup()
+
+	c, _ := newCtxForResolve(t, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "你好"}},
+	}, 42)
+	setTokenWhitelist(c, "claude-*")
+	client := smart_router_client.NewClient(url, time.Second)
+
+	if got := resolveAutoModel(c, VirtualModelAuto, client); got != "claude-haiku-4-5" {
+		t.Errorf("wildcard whitelist should keep claude-haiku-4-5, got %q", got)
+	}
+}
+
+func TestResolveAutoModel_WhitelistDegradesToCheapestGroupModel(t *testing.T) {
+	// Neither primary nor chain passes the whitelist → degrade to the
+	// cheapest whitelisted model the group can serve. Per-call-priced models
+	// (dall-e-3) must be skipped even when whitelisted: a chat request routed
+	// there fails.
+	ratio_setting.InitRatioSettings() // gpt-4o=1.25, gpt-4=15, dall-e-3=per-call
+
+	url, cleanup := stubServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"primary":        "deepseek-v4-flash",
+			"fallback_chain": []string{"claude-haiku-4-5"},
+			"reason":         "chinese_short",
+		})
+	})
+	defer cleanup()
+
+	c, w := newCtxForResolve(t, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "你好"}},
+	}, 42)
+	setTokenWhitelist(c, "gpt-4", "gpt-4o", "dall-e-3")
+	stubGroupModels(t, "gpt-4", "dall-e-3", "gpt-4o")
+	client := smart_router_client.NewClient(url, time.Second)
+
+	if got := resolveAutoModel(c, VirtualModelAuto, client); got != "gpt-4o" {
+		t.Errorf("should degrade to cheapest whitelisted chat model gpt-4o, got %q", got)
+	}
+	if v := w.Header().Get("X-DeepRouter-Routed-Reason"); v != "chinese_short+token_whitelist_degraded" {
+		t.Errorf("reason header = %q", v)
+	}
+}
+
+func TestResolveAutoModel_DisabledClientRespectsWhitelist(t *testing.T) {
+	// Sidecar down + whitelist that excludes DefaultAutoFallbackModel: the
+	// graceful-degradation pick must ALSO honour the whitelist, or the outage
+	// path 403s for limited tokens.
+	c, w := newCtxForResolve(t, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	}, 42)
+	setTokenWhitelist(c, "claude-sonnet-4-6")
+	stubGroupModels(t, "claude-sonnet-4-6")
+	disabled := smart_router_client.NewClient("", time.Second)
+
+	if got := resolveAutoModel(c, VirtualModelAuto, disabled); got != "claude-sonnet-4-6" {
+		t.Errorf("degradation should stay inside the whitelist, got %q", got)
+	}
+	if v := w.Header().Get("X-DeepRouter-Routed-Reason"); v != "smart_router_disabled+token_whitelist_degraded" {
+		t.Errorf("reason header = %q", v)
+	}
+}
+
+func TestResolveAutoModel_WhitelistNothingUsableLeavesPick(t *testing.T) {
+	// Whitelist matches nothing the group can serve. Keep the smart-router
+	// pick and let Distribute's own 403 fire — the token can use nothing, and
+	// masking that would only move the error somewhere less honest.
+	url, cleanup := stubServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"primary":        "claude-haiku-4-5",
+			"fallback_chain": []string{"gpt-4o-mini"},
+			"reason":         "short_question",
+		})
+	})
+	defer cleanup()
+
+	c, w := newCtxForResolve(t, map[string]any{
+		"messages": []map[string]string{{"role": "user", "content": "hi"}},
+	}, 42)
+	setTokenWhitelist(c, "no-such-model")
+	stubGroupModels(t) // group serves nothing whitelisted
+	client := smart_router_client.NewClient(url, time.Second)
+
+	if got := resolveAutoModel(c, VirtualModelAuto, client); got != "claude-haiku-4-5" {
+		t.Errorf("nothing usable → keep the pick unchanged, got %q", got)
+	}
+	if v := w.Header().Get("X-DeepRouter-Routed-Reason"); v != "short_question" {
+		t.Errorf("reason must stay unchanged, got %q", v)
 	}
 }
