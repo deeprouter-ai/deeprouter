@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -29,16 +31,201 @@ const (
 	smartRouterCallTimeout = 150 * time.Millisecond
 )
 
-// chatRequestSnippet is a minimal subset of the OpenAI chat request used to
-// extract messages for the smart-router call. We intentionally avoid coupling
-// to dto.GeneralOpenAIRequest because:
-//   - The dto type carries fields the smart-router doesn't need (functions,
+// chatRequestSnippet is a minimal subset of an incoming request used to
+// extract the conversation for the smart-router call. We intentionally avoid
+// coupling to dto.GeneralOpenAIRequest / dto.GeminiChatRequest because:
+//   - The dto types carry fields the smart-router doesn't need (functions,
 //     tool definitions, response format) and parsing them adds latency.
-//   - Smart-router's input contract is stable (PRD §6.1); the dto type evolves
+//   - Smart-router's input contract is stable (PRD §6.1); the dto types evolve
 //     with upstream features.
+//
+// It covers all four protocols the gateway relays. Only OpenAI and Anthropic
+// name the conversation `messages`; Gemini uses `contents` and the OpenAI
+// Responses API (what Codex CLI speaks) uses `input`, each keeping its system
+// prompt in a separate top-level field. A body only ever populates one shape.
 type chatRequestSnippet struct {
+	// OpenAI /v1/chat/completions and Anthropic /v1/messages.
 	Messages []smart_router_client.Message `json:"messages"`
-	Stream   bool                          `json:"stream,omitempty"`
+
+	// Google Gemini /v1beta/models/*. Google accepts systemInstruction in
+	// either case convention, so both spellings are read (same as dto).
+	Contents               []geminiContentSnippet `json:"contents"`
+	SystemInstruction      *geminiContentSnippet  `json:"systemInstruction"`
+	SystemInstructionSnake *geminiContentSnippet  `json:"system_instruction"`
+
+	// OpenAI Responses /v1/responses.
+	Input        json.RawMessage `json:"input"`
+	Instructions string          `json:"instructions"`
+
+	Stream bool `json:"stream,omitempty"`
+}
+
+type geminiContentSnippet struct {
+	Role  string              `json:"role"`
+	Parts []geminiPartSnippet `json:"parts"`
+}
+
+type geminiPartSnippet struct {
+	Text            string          `json:"text"`
+	InlineData      json.RawMessage `json:"inlineData"`
+	InlineDataSnake json.RawMessage `json:"inline_data"`
+	FileData        json.RawMessage `json:"fileData"`
+}
+
+// responsesInputItem is one turn of a Responses `input` array. Its content is
+// itself either a bare string or an array of typed parts.
+type responsesInputItem struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+// conversation returns the request's messages in smart-router's neutral
+// format, whichever protocol they arrived in. Returning nothing here is what
+// makes resolveAutoModel fall back to the default model — which is correct for
+// a genuinely empty request, and was the bug for Gemini and Responses.
+func (s *chatRequestSnippet) conversation() []smart_router_client.Message {
+	if len(s.Messages) > 0 {
+		return s.Messages
+	}
+	if msgs := s.geminiConversation(); len(msgs) > 0 {
+		return msgs
+	}
+	return s.responsesConversation()
+}
+
+func (s *chatRequestSnippet) geminiConversation() []smart_router_client.Message {
+	system := s.SystemInstruction
+	if system == nil {
+		system = s.SystemInstructionSnake
+	}
+	out := make([]smart_router_client.Message, 0, len(s.Contents)+1)
+	if system != nil {
+		if content := geminiPartsContent(system.Parts); content != nil {
+			out = append(out, smart_router_client.Message{Role: "system", Content: content})
+		}
+	}
+	for _, c := range s.Contents {
+		content := geminiPartsContent(c.Parts)
+		if content == nil {
+			continue
+		}
+		out = append(out, smart_router_client.Message{Role: geminiRole(c.Role), Content: content})
+	}
+	return out
+}
+
+// geminiRole maps Gemini's speaker names onto the OpenAI ones the contract
+// declares. Gemini says "model" where OpenAI says "assistant".
+func geminiRole(role string) string {
+	switch role {
+	case "model":
+		return "assistant"
+	case "":
+		return "user"
+	default:
+		return role
+	}
+}
+
+// geminiPartsContent flattens one Gemini message's parts. A message may carry
+// several and keeping only the first drops most of the prompt.
+func geminiPartsContent(parts []geminiPartSnippet) any {
+	var texts []string
+	media := 0
+	for _, p := range parts {
+		if p.Text != "" {
+			texts = append(texts, p.Text)
+		}
+		if len(p.InlineData) > 0 || len(p.InlineDataSnake) > 0 || len(p.FileData) > 0 {
+			media++
+		}
+	}
+	return neutralContent(texts, media)
+}
+
+func (s *chatRequestSnippet) responsesConversation() []smart_router_client.Message {
+	var out []smart_router_client.Message
+	if s.Instructions != "" {
+		out = append(out, smart_router_client.Message{Role: "system", Content: s.Instructions})
+	}
+	switch common.GetJsonType(s.Input) {
+	case "string":
+		var text string
+		if err := json.Unmarshal(s.Input, &text); err == nil && text != "" {
+			out = append(out, smart_router_client.Message{Role: "user", Content: text})
+		}
+	case "array":
+		var items []responsesInputItem
+		if err := json.Unmarshal(s.Input, &items); err == nil {
+			for _, item := range items {
+				content := responsesItemContent(item.Content)
+				if content == nil {
+					continue
+				}
+				role := item.Role
+				if role == "" {
+					role = "user"
+				}
+				out = append(out, smart_router_client.Message{Role: role, Content: content})
+			}
+		}
+	}
+	return out
+}
+
+// responsesItemContent flattens one Responses turn. Codex CLI sends the array
+// form, but the single-turn string form is equally valid and skipping it would
+// leave the most common shape untranslated.
+func responsesItemContent(raw json.RawMessage) any {
+	switch common.GetJsonType(raw) {
+	case "string":
+		var text string
+		if err := json.Unmarshal(raw, &text); err == nil && text != "" {
+			return text
+		}
+	case "array":
+		var parts []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		}
+		if err := json.Unmarshal(raw, &parts); err != nil {
+			return nil
+		}
+		var texts []string
+		media := 0
+		for _, p := range parts {
+			if p.Text != "" {
+				texts = append(texts, p.Text)
+			}
+			if p.Type == "input_image" {
+				media++
+			}
+		}
+		return neutralContent(texts, media)
+	}
+	return nil
+}
+
+// neutralContent picks the content shape smart-router can actually read: a
+// plain string for text (what every other protocol sends), or the parts array
+// when the turn has media — that array is the only form its vision detection
+// recognises, so text-only flattening would silently route an image request to
+// a model that cannot see.
+func neutralContent(texts []string, media int) any {
+	if media == 0 {
+		if len(texts) == 0 {
+			return nil
+		}
+		return strings.Join(texts, "\n")
+	}
+	out := make([]any, 0, len(texts)+media)
+	for _, t := range texts {
+		out = append(out, map[string]any{"type": "text", "text": t})
+	}
+	for i := 0; i < media; i++ {
+		out = append(out, map[string]any{"type": "image_url"})
+	}
+	return out
 }
 
 // ResolveAutoModel attempts to swap modelName == "deeprouter-auto" for a
@@ -48,7 +235,8 @@ type chatRequestSnippet struct {
 //
 // Failure modes (all return DefaultAutoFallbackModel + recorded reason):
 //   - SMART_ROUTER_URL unset → "smart_router_disabled"
-//   - empty messages parsed from body → "smart_router_no_messages"
+//   - no conversation found in the body, in ANY of the four protocol shapes →
+//     "smart_router_no_messages" (see chatRequestSnippet.conversation)
 //   - smart-router HTTP call errored → "smart_router_error"
 //   - smart-router returned a sentinel no-decision response → "smart_router_no_decision"
 //
@@ -72,6 +260,7 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 	// is non-fatal — we fall back to the default model.
 	var snippet chatRequestSnippet
 	_ = common.UnmarshalBodyReusable(c, &snippet)
+	messages := snippet.conversation()
 
 	tenantID := strconv.Itoa(common.GetContextKeyInt(c, constant.ContextKeyUserId))
 
@@ -83,14 +272,14 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 	switch {
 	case !client.Enabled():
 		reason = "smart_router_disabled"
-	case len(snippet.Messages) == 0:
+	case len(messages) == 0:
 		reason = "smart_router_no_messages"
 	default:
 		ctx, cancel := context.WithTimeout(c.Request.Context(), smartRouterCallTimeout)
 		defer cancel()
 		req := smart_router_client.RouteRequest{
 			TenantID:  tenantID,
-			Messages:  snippet.Messages,
+			Messages:  messages,
 			RequestID: c.GetString("request_id"),
 			Stream:    snippet.Stream,
 		}
