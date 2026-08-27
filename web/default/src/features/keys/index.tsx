@@ -19,10 +19,10 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { ApiKeysDialogs } from './components/api-keys-dialogs'
+import { ApiKeysOneClickCard } from './components/api-keys-one-click-card'
 import { ApiKeysPrimaryButtons } from './components/api-keys-primary-buttons'
 import { ApiKeysProvider } from './components/api-keys-provider'
 import { ApiKeysTable } from './components/api-keys-table'
-import { ApiKeysTutorialCard } from './components/api-keys-tutorial-card'
 
 export function ApiKeys() {
   const { t } = useTranslation()
@@ -39,7 +39,13 @@ export function ApiKeys() {
           <ApiKeysPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <ApiKeysTutorialCard />
+          {/* One-click setup leads: it is the shortest path from "I have a
+              key" to "my tool works". The older tutorial card that used to sit
+              here was removed — the same three steps (copy credentials, pick
+              how to connect, send one request) are covered by the Setup guide
+              dialog in the header, and two stacked explainers pushed the keys
+              themselves below the fold. */}
+          <ApiKeysOneClickCard />
           <ApiKeysTable />
         </SectionPageLayout.Content>
       </SectionPageLayout>

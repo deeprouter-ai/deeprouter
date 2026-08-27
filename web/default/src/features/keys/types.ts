@@ -165,3 +165,27 @@ export type ApiKeysDialogType =
   | 'batch-delete'
   | 'cc-switch'
   | 'integration'
+
+// ============================================================================
+// One-Click CLI Setup (docs/tasks/one-click-cli-setup-prd.md)
+// ============================================================================
+
+/** A terminal AI tool the install script knows how to configure. */
+export interface ConnectTool {
+  id: string
+  name: string
+}
+
+/**
+ * A freshly issued one-time token. `base_url` comes from the instance that
+ * issued it and is never assumed by the client: several independent
+ * deployments exist with keys that do not work across them, and a wrong
+ * address fails as a run of 401s that never mentions the address.
+ */
+export interface ConnectTokenResponse {
+  token: string
+  expires_in: number
+  base_url: string
+  tools: string[]
+  script_path: string
+}
