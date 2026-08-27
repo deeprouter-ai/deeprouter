@@ -13,15 +13,20 @@
 
 ---
 
-## 0. 为什么要这份 PRD
+## 0. 这份 PRD 做什么（先读这个）
 
-`casual-journey-readiness-prd.md` 审计过八步旅程，结论是**前七步都已经绿了**：注册、充值、拿 key、自检、文案都做完了。唯一没关上的是**第八步——用户离开 DeepRouter，去配置他自己的工具**。
+**一句话：让买了密钥（key）的用户不需要懂任何技术，就能把自己电脑上的 AI 工具接到
+DeepRouter 上 —— 网页上勾一勾、贴一条命令，或者干脆只点一个按钮。**
 
-那一步今天长这样（`docs/integrations/claude-code.md:39`）：
+用户买完 key 之后的最后一步，是把 key 填进自己用的 AI 工具里。`casual-journey-readiness-prd.md`
+审计过八步旅程，结论是**前七步都已经绿了**：注册、充值、拿 key、自检、文案都做完了。
+唯一没关上的就是这一步 —— 用户离开 DeepRouter 网站之后、自己配置工具的那一步。
+它今天长这样（`docs/integrations/claude-code.md:39`）：
 
 > Add these to your shell profile (`~/.zshrc`, `~/.bashrc`, or `~/.config/fish/config.fish`)
 
-对一个刚付完钱的用户，这句话里有四个他不需要知道的概念：shell、profile、这三个文件分别是什么、以及改完要重载。
+对一个刚付完钱的用户（律师、老师、创作者 —— 不是程序员），这句话里有四个他不需要知道的概念：
+shell、profile、这三个文件分别是什么、以及改完要重载。
 
 ### 三个已核实的具体问题
 
@@ -31,188 +36,37 @@
 | P2 | **产品内片段在 Windows 上直接报错** | `lib/integration.ts:80` 生成 `# Run in your terminal` + `export ...`；PowerShell / cmd 不认识 `export`。`features/keys/` 全目录无任何平台检测 |
 | P3 | **配完不知道成没成** | 用户只能自己开 `claude` 试。失败了不知道错在哪一步 |
 
+### 方案一览：三条路，对应三类用户
+
+| 用户用的是什么 | 我们给什么 | 规格在哪 |
+|---|---|---|
+| **终端工具**（Claude Code / OpenCode / Codex CLI / Gemini CLI） | 密钥页勾选工具 → 复制一条命令 → 贴进终端。脚本自动检测装了什么、挑一个真能用的模型、安全写入配置、实发请求验证、用人话汇报 —— 并且**一条命令能卸载干净** | **Track A**：§2 旅程 · §4.1–4.6 |
+| **图形界面应用**（Cherry Studio 这类装上就点的聊天软件） | 密钥页一个按钮，**点一下应用自动配好**。用的是「深链」—— 一种点击后把地址和密钥直接塞给本机应用的特殊链接。机制已在生产上实测点通，只是入口藏着、指南一个字没提 | **Track B1 / B3**：§4.7 |
+| **其他应用**（深链和脚本都覆盖不到的，如 Chatbox / Cursor） | 把接入文档改成 **AI 读得懂**的形态 —— 这类用户的真实做法是去问 AI，胜负在于 AI 能不能拿到正确资料，而不是靠猜 | **Track B2**：§4.7 |
+
+### 现状（2026-08-27）
+
+- ✅ 已拆成 4 张卡：**P1** 网页区块与一次性令牌 · **P2** 双平台脚本 · **P3** 深链入口与四份指南 ·
+  **P4** 文档对 AI 可读。共 **43h、100 条验收**，明细见 §10，
+  卡在 `deeprouter-ai/docs/adlc/tasks/one-click-*-task.md`。
+- 🔴 动手实测（POC）推翻了第一版规格的相当一部分（详见文末附录 §0.1），并顺带发现**三个网关 bug**：
+  ① `deeprouter-auto` 撞令牌白名单必 403 —— ✅ 已修复（ADR-0007），待部署；
+  ② Gemini 协议转换错误（`top_k` 等）—— 待修，**挡着 P2 的 Gemini 那一份**；
+  ③ Gemini / Responses 协议静默绕过智能路由 —— 待修。②③ 各有独立的修复卡。
+
+### 怎么读这份文档
+
+| 你想 | 去 |
+|---|---|
+| 看用户会看到什么 | **§2**（页面示意 + 终端输出示意） |
+| 动手实现 | **§3**（范围与三条决策）→ **§4**（技术规格）→ **§5**（安全）→ **§6**（失败文案） |
+| 验收 | **§7**（100 条，已按四张卡拆分） |
+| 知道为什么不那样做 | **§8**（已关闭的问题）· **§9**（被否决的方案） |
+| 查某条实测证据 | **文末附录 §0.1** —— 全文所有 **F / R / V / U 编号**（如 F1、R4）的出处 |
+
+📌 正文凡与 §0.1 的实测冲突，**以 §0.1 为准** —— 第一版规格有 11 条是被它推翻后重写的。
+
 ---
-
-## 0.1 POC 实测记录（2026-08-26）
-
-本 PRD 的第一版全部来自**读文档与读源码**。在写任何产品代码之前先跑了一个约 60 行的一次性 POC（Windows / Claude Code v2.1.177 / 真实生产网关），**结论与文档不一致的地方以此为准**。
-
-### ✅ 已验证成立
-
-| # | 结论 | 证据 |
-|---|---|---|
-| V1 | Claude Code **确实能被配置成走 DeepRouter** —— 核心机制成立 | `claude` 发出的请求由 DeepRouter 返回 `403 预扣费额度失败，用户剩余额度：$0.039042`。「预扣费额度」是 new-api 术语，request id 也是网关格式 —— 请求确实到了 DeepRouter，没走订阅 |
-| V2 | Anthropic 原生 Base URL **不带 `/v1`** 是对的 | `POST https://<host>/v1/messages` 返回 401 而非 404 |
-| V3 | `x-api-key` 与 `Authorization: Bearer` 均被网关接受 | 两者都进到了 token 校验 |
-| V4 | 端到端计费链路通 | 一次成功调用后**账户余额下降** |
-| **V5** | **Windows 注册表这条接缝通了** —— 写 `HKCU\Environment` → **关掉终端 → 新开一个** → 四个变量全部读到 | POC #3（2026-08-26）。刻意用 `DRPOC_*` 而非 `ANTHROPIC_*`：被测的是「注册表写入能否到达新终端」，操作系统不关心变量叫什么，而用真名会顶掉本人的订阅认证（§4.2.1） |
-| **V6** | **值里的 `%` 不会被展开** —— `literal%USERPROFILE%literal` 原样读回 | `SetEnvironmentVariable` 存的是 `REG_SZ` 而非 `REG_EXPAND_SZ`。**这条本来是个「错了不报错」的坑**：若存成后者，含 `%` 的密钥会被静默改写。已排除 |
-| **V7** | **不需要管理员权限** | 在非提权会话（`IsInRole(Administrator) = False`）里写 `HKCU\Environment` 成功。**脚本不必要求「以管理员身份运行」** —— 那一步会劝退大量目标用户 |
-| **V8** | **卸载按名删除是干净的** | `-Clean` 后四个 `DRPOC_*` 消失，用户原有的 6 个变量（`GOPATH` / `OneDrive` / `OneDriveConsumer` / `Path` / `TEMP` / `TMP`）逐字还在 |
-| **V11** | 🔴 **U2 全链路通过**（本 PRD 最后一段未验证的接缝）—— 真写注册表 `ANTHROPIC_*` → 完全关终端 → 新开 → `claude` **直接可用，不再问登录方式** | 🔴 判据不是“没问登录”，而是 **Claude Code 自己在首屏写的 `Opus 4.8 · API Usage Billing`** —— 它自己声明了走的是 API 计费而非订阅。随后 `hi` 返回网关的 403 预扣费错误 + request id。卸载后 4 个变量消失、原有 6 个逐字还在、`~/.claude/.credentials.json` 的 size+mtime **未变** |
-| **V9** | **OpenCode 的 PRD 配置逐字可用** —— 四个工具里唯一一个一字不改就跑通的 | 写入 `~/.config/opencode/opencode.json` 后，`opencode models` 列出 `deeprouter/deeprouter-auto`；`opencode run` 返回网关的 `Invalid token` + request id（假密钥） |
-| **V10** | **Codex 的独立 profile 文件方案（Q7）成立** —— 本卡原本**最大的工程风险**（在 sh 与 PowerShell 里手写 TOML 增删改）确实被消掉 | 造一份「用户原有的」`config.toml`，另写 `deeprouter.config.toml`，`codex exec --profile deeprouter` 输出 `provider: deeprouter`，请求到达网关，**用户原文件逐字未变** |
-
-### 🔴 推翻或补充了本 PRD 原有规格的十六条
-
-| # | 实测 | 原规格 | 影响 |
-|---|---|---|---|
-| **F1** | **只有真环境变量能让 Claude Code 跳过登录**；项目级 `.claude/settings.json` 的 `env` 块**不生效**——仍然弹出 "Select login method" | D2 把「写工具自己的配置文件」列为第 1 优先，Claude Code 走这条 | **D2 优先级反转**，见 §3 |
-| **F2** | **Base URL 不是常量** —— 存在**两套独立部署**，各有各的数据库，**密钥不通用**（见下表） | 全文硬编码单一域名 | §4.1 令牌接口必须连 Base URL 一起返回。🔴 **本条的价值不在「哪个是正式的」，而在「这个问题的答案会变」** —— 它已经变过一次 |
-| **F3** | **模型名不是常量** —— 两套部署的模型目录**实测不同**（R1）；且 `deeprouter-auto` 曾因令牌白名单在生产 **100% 失败**（R4，✅ 已修复 ADR-0007，待部署） | 全文写死 `deeprouter-auto` | §4.3 必须探测后再决定，探测第 1 步不能省 |
-| **F16** | 🔴 **验证请求用哪个模型，决定它成不成功** —— 同一个账号、同一句 `hi`：`Claude Opus 4.7 (thinking)` 要求预扣 **$0.816000**（余额 $0.039954，403）；`GPT-4o mini` **直接通过**。预扣额 = 模型单价 × `max_tokens` 预授权，**与实际用量无关** | §4.3 的探测与 §4.4 的「四种协议各验一次」**都没规定用哪个模型** | 🔴 **探测与验证一律挑目录里最便宜的模型**，并把 `max_tokens` 压到最小。新用户余额小，拿贵模型探测会 403，而脚本会把「余额不够跑这个模型」误报成「配置失败」——机制是好的，却因为挑错了模型而报错。§6 的 403 文案要能区分这两件事 |
-| **F17** | 🔴 **Gemini CLI 在 `.co` 上三条路全堵，但堵点在网关的协议转换，不在缺 Gemini 渠道** —— 配 `gemini-*` → 403（该部署确无 Gemini 渠道）；配 **`gpt-4o-mini` → 400 `Unrecognized request argument supplied: top_k`**；配 **`claude-sonnet-4-6` → 500 `convert_request_failed` / not implemented**。🔴 **而同样的 Gemini 端点用 curl 打 `gpt-4o-mini` 是 200** —— 差别只在 CLI 会发 `top_k` | §3 D1「Phase 1 = 四个工具全做」 | 🔴 **D1 不变，Gemini CLI 留在 Phase 1**。真正要修的是网关，另立卡 `gemini-protocol-conversion-task.md` |
-| **F18** | **Gemini CLI 在 headless 下有信任门** —— `gemini -p` 直接报 `not running in a trusted directory`，一个请求都不发。要 `--skip-trust` 或 `GEMINI_CLI_TRUST_WORKSPACE=true` | §4.4「四种协议各验一次」默认脚本能直接跑 `gemini -p` 来验 | **脚本的验证步骤要带上这个标志**，否则 Gemini 那一条永远验不过，且报错和配置无关、极难排查 |
-| **F19** | 🔴 **模型元数据不足以挑模型 —— §4.3 的探测流程按原文不可实现**。四条实测：① **`/v1/models` 没有任何价格字段**（只有 `id`/`object`/`created`/`owned_by`/`supported_endpoint_types`）；② 两个模型接口**互不包含**，4 个能用的模型（含实测 200 的 `gpt-4o-mini`、`claude-sonnet-4-6`）**任何地方都查不到价格**；③ `/v1/models` 里**混着根本不能对话的模型** —— `gpt-4o-mini-tts` 发对话返回 **403 预扣费 $0.36**（不是「模型类型不对」！），`gpt-4o-audio-preview` 返回 **404 does not exist**；④ 🔴 **`supported_endpoint_types` 里没有任何模型声明 `gemini`**（25 个 `[anthropic, openai]` + 4 个 `[openai]`）| §4.3「不通 → `GET /v1/models` 取模型选一个」+ F16「按价格升序试」 | 🔴 **§4.3 探测流程重写**：不能靠元数据挑，必须**实发请求确认**。③ 尤其危险 —— 它会被 F16 的新规则误报成「余额不足」，把用户送去为一个**永远不能对话的模型**充值 |
-| **F20** | 🔴 **「探测通过」不等于「工具能用」—— 预扣费随 `max_tokens` 线性放大**。同一模型 `claude-sonnet-4-6`、同一账号($0.0396):`max_tokens` 16 / 1024 → **200**;4096 → 403 预扣 $0.0435;8192 → 403 预扣 $0.0583;**Claude Code 实发 → 403 预扣 $0.1600**(推算 ≈ 25k tokens)。**脚本用最小请求探测会拿到 200,写下配置,用户发第一句话就 403** | §4.3 第 3 步「逐个实发**最小**请求,第一个返回 200 的才写进配置」 | 🔴 **探测必须用与工具实发相当的 `max_tokens`**,或至少把「这个模型每次对话需要约 $X 预扣」告诉用户。最小请求探测**只能证明鉴权与模型可达,不能证明用户能真的对话** |
-| **F15** | 🔴 **配上 DeepRouter 会关掉 claude.ai connectors** —— Claude Code 底部常驻一行警告：`claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over…` | 全文**从未提过这个代价** | 必须写进输出与指南。这是**本方案目前已知的唯一一项功能损失** —— 不说的话用户不会知道自己失去了什么，更不会知道是我们的脚本干的 |
-| **F13** | **Codex 的 `wire_api = "chat"` 已被移除**（v0.149.1）—— 写了它 Codex **连配置都加载不了**：`Error loading config.toml: 'wire_api = "chat"' is no longer supported.` | §4.3 的 Codex TOML 写的就是 `wire_api = "chat"` | 改成 `"responses"` |
-| **F14** | **Codex 走 `POST <base>/v1/responses`，不是 `/v1/chat/completions`** —— 实测如此；已确认网关支持该端点（无 key 探测返回 401 而非 404） | §4.4 验证表把 OpenCode 与 Codex 归在同一个 `/v1/chat/completions` 下 | **验证表拆开为两行** |
-| **F10** | **Gemini CLI 不是纯环境变量** —— 必须写 `~/.gemini/settings.json`，且键是**嵌套的** `security.auth.selectedType = "gemini-api-key"`。不写它，`gemini -p` 直接报 `Invalid auth method selected.`，**一个请求都不发**。顶层 `selectedAuthType`（旧结构）在 v0.57 上无效；`GEMINI_DEFAULT_AUTH_TYPE` 环境变量**只在交互路径生效** | D2 把 Gemini 归入第 3 级「纯环境变量」 | **Gemini 也要写 JSON** → §4.3 的合并保护 / 备份 / 卸载还原全部适用于它，**这部分工程量原本没算** |
-| **F11** | **`GOOGLE_GEMINI_BASE_URL` 不能带 `/v1beta`** —— CLI 自己会拼，带了就是 `POST /v1beta/v1beta/models/…`，网关返回 `Invalid URL`。**与 Cherry Studio 的 `/v1/v1` 同一个坑** | §4.3 写的是 `GOOGLE_GEMINI_BASE_URL=<base>/v1beta` | 去掉 `/v1beta`。**「Base URL 该不该带版本段」这件事每个工具的答案都不同，一个都不能想当然** |
-| **F12** | **`GEMINI_MODEL` 环境变量无效——它根本没被读**（v0.57 bundle 里 `env.GEMINI_MODEL` 零命中）。真正的键是 `settings.json` 的 **`model.name`**，已实测生效 | §4.3 写 `GEMINI_MODEL=gemini-2.5-flash` | 🔴 **改写 `settings.json` 的 `model.name`** —— F10 的认证键在同一份文件里，零额外成本 |
-| **F9** | **「装没装」不能用配置目录判断** —— 实测装 **ChatGPT 桌面应用**会创建一个内容丰富的 `~/.codex/config.toml`（`[marketplaces.openai-bundled]` / `[plugins…]` / `[mcp_servers.node_repl]`），但 `codex` **在 PowerShell 与 cmd 里都不是命令**。| §4.2 闸 2 写的是「配置目录存在 **或** 可执行文件在 PATH」 | **判据改为可执行文件**。OR 判据下脚本会认定 Codex 已装、写配置、并让用户敲一个**不存在的命令**。ChatGPT 桌面版装机量很大，不是边缘情况 |
-| **F8** | **Windows 的持久化不能照 POSIX 镜像** —— `$PROFILE` + `env.ps1` 在默认的 `Restricted` execution policy 下不加载，且**每次开终端报红**。改用 `[Environment]::SetEnvironmentVariable(…,'User')`（写注册表，与 policy 无关） | D2 的语法表里 Windows 一行是「`. $HOME\.deeprouter\env.ps1`」 | **D2 的 Windows 机制整条改写**，连带 §4.3 清单与 §4.6 卸载；并推翻了「fish 是唯一能弄坏终端的路径」这句 |
-
-> F2/F3 合起来印证了 `key-setup-guide-prd.md` §6.3 早就写下的硬约束：**「Base URL / model 只能来自后端 API 注入，前端不得硬编码」**。那条规则原本是为「显示了 dev 端口 17231」那次事故写的；现在它有了第二个、更严重的理由。
-
-#### 两套部署 —— 正式的是 `deeprouter.co`
-
-存在**第二套独立部署 `deep-router.com`**：同一份代码、独立数据库、**密钥互不通用**
-（一套的 key 打另一套 401，已验）。完整对照表与定位归 **`deeprouter-ai/deploy/README.md`
-§"There is a second deployment"** 管，本 PRD 只留对规格的影响：
-
-🔴 **§4.1「Base URL 取该实例自己的 `server_address`」是必须，不是防御性设计** ——
-写错地址的用户一路 401。本条结论曾被答错过一次（详见 deploy/README.md 与 LOG），
-连人都会答错，脚本更不能把答案写死。
-
-#### 在 `.co` 上的重测（2026-08-26，Cherry Studio + curl）
-
-POC 全部做在 `.com` 上。**工具侧机制**（F1 / F8 / F9 / F10–F15）与网关无关、不受影响；
-**部署侧事实**必须重测，结果如下（旧密钥属于 `.com`，在 `api.deeprouter.co` 上 401，已另开账号）：
-
-| # | 重测项 | 结果 |
-|---|---|---|
-| **R1** | 模型目录 | 🔴 **两套不一样**。按 `.com` 量到的 `claude-opus-4-8` 写死，在正式部署上直接 `model_not_found` —— §4.3「先探测再写」的实证 |
-| **R2** | 计费链路 | ✅ **通**。`gpt-4o-mini` 发 `hi` 正常回话，密钥→鉴权→选模型→预扣费→上游→计费全程跑通 |
-| **R3** | 预扣费门槛 | 🔴 同一账号同一句 `hi`：Opus 4.7 thinking 要预扣 **$0.816**（余额 $0.04 → 403）；`gpt-4o-mini` **直接通过**。预扣额 = 单价 × `max_tokens`，**与实际用量无关** → **F16** |
-| **R4** | `deeprouter-auto` | 🔴 曾 **100% 失败**：三个 prompt 选出**两个不同模型**——smart-router 是活的，挡住的是**令牌白名单**。✅ **已修复**（ADR-0007，`e13548a8`，本地 stash 前后对照验证：403→200；**待合并部署，`.co` 上今天仍是坏的**） |
-
-根因与修法在 **`docs/adr/0007-auto-model-token-whitelist.md`**（一句话版：目录按**租户**算、
-权限按**令牌**算，smart-router 的选择合法但令牌开不了；修复让解析结果在白名单**内**重选）。
-
-**对规格的两个影响（修复后更新）：**
-
-1. **§4.3 探测第 1 步（先试 `deeprouter-auto`）仍然必须** —— 修复在分支里，哪些部署带着它、
-   目录长什么样，都随部署变；探测是唯一不赌部署状态的做法。
-2. ✅ **P1 的未决约束已解除**：修复后**带白名单的令牌也能用 `deeprouter-auto`**（路由在白名单内进行），
-   P1 不必再在「不带白名单」和「等修复」之间二选一。
-
-> 修复卡「Fix: deeprouter-auto resolves to models the token may not use, 403 on every request」在 **eval**。
-> ⚠️ 与 Gemini 那条**是两个独立 bug**（一个在解析前取不到消息，一个在解析后令牌用不了），修好任一条另一条依旧成立
-> —— **且必须先修本条**：Gemini 那条今天正替它挡着子弹，单独修 Gemini 会让线上从「静默用错模型」变成 403。
-
-#### 四种协议 × 具体模型名（2026-08-26，生产 `.co`，curl）
-
-R4 测的是 `deeprouter-auto`；脚本实际写的是**具体模型名**，所以又跑了一遍。
-🔴 **§4.4「四种协议各验一次」由此第一次真正在正式部署上跑通。**
-
-| 协议 | 模型 | 结果 |
-|---|---|---|
-| OpenAI `/v1/chat/completions` | `gpt-4o-mini` | ✅ 200 |
-| Anthropic `/v1/messages` | `claude-sonnet-4-6` | ✅ 200 |
-| Responses `/v1/responses` | `gpt-4o-mini` | ✅ 200 |
-| Gemini `/v1beta/…` | `gpt-4o-mini` | ✅ **200** ← 协议本身没问题 |
-| Gemini `/v1beta/…` | `gemini-3.5-flash` / `gemini-2.5-flash` | 🔴 403 —— **该部署 Gemini 渠道为 0** |
-
-#### 🔴 两个模型接口互不包含 —— 这是 §4.3 探测流程的地基
-
-| | 数量 |
-|---|---|
-| `/v1/models`（**令牌**口径） | 29 |
-| `/api/pricing`（**租户**口径，`TryUserAuth()`，无需登录） | 77（claude 26 · gpt 25 · doubao 16 · eleven 4 · chatgpt 2 · deepseek 2 · glm/omni 各 1 · **gemini 0**） |
-| **交集** | **25** |
-| 🔴 **只在 `/v1/models`：能用，却任何地方都查不到价格** | **4** —— `gpt-4o-mini` · `gpt-4o` · `claude-sonnet-4-6` · `claude-opus-4-7` |
-| 只在 `/api/pricing`：有价格，令牌却用不了 | 52 |
-
-- 🔴 那 4 个「能用但无价格」的**恰好包含实测跑通 200 的两个** → **F16 的「按价格升序试」按原文不可实现**（F19）。
-- ✅ 同时坐实令牌白名单那个 bug：smart-router 挑中的 `claude-haiku-4-5-20251001` / `deepseek-v4-flash` **在 77 里、不在 29 里**。
-- 📌 **两个口径都不完整。** 只看 `/v1/models` 就会把「模型不存在」和「这张令牌不能用」混为一谈。
-
-#### 🔴 Gemini CLI：三条路，三个不同的堵点
-
-| Gemini CLI 配的模型 | 结果 | 堵点 |
-|---|---|---|
-| `gemini-*` | 403 | 该部署确无 Gemini 渠道 |
-| **`gpt-4o-mini`** | 🔴 **400** `Unrecognized request argument supplied: top_k` | 网关把 Gemini 的 `top_k` 原样塞进 OpenAI 请求 |
-| **`claude-sonnet-4-6`** | 🔴 **500** `convert_request_failed` / `not implemented` | 网关没有 Gemini→Claude 转换 |
-
-🔴 **决定性对照：同一端点用 curl 打 `gpt-4o-mini` 是 200 —— 差别只在 CLI 会发 `top_k`。**
-Gemini→OpenAI 本身是通的，**坏在一个参数上**。
-
-- ✅ **模型名是能设的**（F12 已查清）：`env.GEMINI_MODEL` 在 v0.57 的包里**零命中**，
-  真键是 `settings.json` 的 **`model.name`**，已实测生效 —— 而脚本本来就要写那个文件，**零额外成本**。
-- ✅ **D1 不变，Gemini CLI 留在 Phase 1。** 要修的是网关 → 卡「Fix: Gemini-protocol requests fail
-  on every model, top_k leak and no Claude converter」，其 `top_k` 那半约 2h。
-
-> 📌 教训（详见 LOG）：**标着「未查清」的发现不能作为砍范围的依据** —— D1 曾因此误砍过 Gemini CLI，已撤回。
-
-### ⚠️ 另外四条工程/文案发现
-
-| # | 发现 |
-|---|---|
-| F4 | **`docs/integrations/claude-code.md` 里「按 Esc 跳过 Anthropic 登录」在 v2.1.177 上无效**——首启先是主题选择，再是三选一的登录方式，Esc 无反应。**引导流程随版本变，验收必须实测**（§7 已有此要求，现有实证） |
-| F5 | **Claude Code 把网关的 403 前缀上了错的建议**：`Please run /login · API Error: 403 预扣费额度失败，用户剩余额度：$0.039042…`。网关原文**确实也显示了**（比最初以为的好），但用户先看到的是“去登录”，而真实原因是余额不足。**这正是脚本必须自己发验证请求并翻译错误的理由**（§6）。已在 V11 里一字不差重现 |
-| F6 | 三处编码陷阱，方向互相矛盾：**`.ps1` 必须纯 ASCII**（PS 5.1 按系统 ANSI 读，非 ASCII 注释会冲掉引号导致解析失败）· **写出的 JSON 必须无 BOM** · **HTTP 请求体必须显式转 UTF-8 字节**（否则中文变 `?`，且**不报错**） |
-| F7 | **`Invoke-RestMethod` 会吞掉 HTTP 错误正文**，只剩「(401) 未经授权」。§6 的失败态映射依赖网关返回的 message，必须改用 `Invoke-WebRequest` 手动读响应流 |
-
-### 尚未验证
-
-三轮 POC 各自只隔离一件事 —— 这是**刻意的**：一次验一个变量，失败时才分得清是机制不通还是自己的代码有 bug。
-
-**验过的只是 Windows 上「环境变量」这一条线**（F1 工具确实读环境变量 · V5 注册表到达新终端 · V8 按名删除干净），而且**从没有一次是串起来跑的**。除此之外，本 PRD 的绝大部分仍是纸面推理。按风险从高到低：
-
-| # | 空白 | 为什么要紧 |
-|---|---|---|
-| **U1** | ✅ **§4.2.1 的检测信号已核实存在**（2026-08-26）——`~/.claude/.credentials.json` 是个普通文件（566b），**存在性判断即可**；Windows Credential Manager 里没有对应条目，所以不必碰系统钥匙串。**剩下的是各工具的信号还没一一核实**（U6） | 原本是全 PRD 风险最高的空白：这是唯一一个「脚本完全正常工作、却让用户损失金钱」的路径。现在机制可行，风险从「做不做得到」降为「做不做得全」 |
-| **U2** | ✅ **已跑通**（`.com`，V11）+ ✅ **已在 `.co` 上重跑**（2026-08-26）—— Claude Code 用进程级环境变量指向 `api.deeprouter.co`，**请求到达网关**（403 预扣费 + request id），F15「claude.ai connectors are disabled」同样复现。🔴 **重跑的价值不在部署，在「真客户端 ≠ curl」** ——正是这一跑测出了 **F20**（Claude Code 实发要预扣 $0.16，而 curl 最小请求 200）。📌 持久化那半（注册表 → 新终端）**与部署无关，无需重测** |
-| U3 | ⬇️ **降级** · 默认 `Restricted` execution policy 下的行为（F8） | **改走注册表后，execution policy 对所选机制已不再相关**（`SetEnvironmentVariable` 是 .NET 调用，`irm \| iex` 也不受限）。从「设计风险」降为「回归检查」——只需确认脚本里没有别的地方依赖执行 `.ps1` 文件。开发机通常已改成 `RemoteSigned`，仍然测不出来 |
-| **U4** | ✅ **已实测点通**（2026-08-26，见 §4.7 B1）—— 深链唤起、确认框、基础 URL 逐字正确、模型自动拉到 2 个 | 原本是本 PRD 证据最弱的一处，且 §10 的排序建议架在它上面。**现在它是证据最强的一处** —— 唯一一条被端到端点通的完整用户路径。顺带推翻了本 PRD 自己的一个预判（以为用户还得手输模型 ID），并暴露一个改不掉的问题：**品牌显示为「New API」** |
-| **U5** | **后端令牌接口**（`GET /i/{token}`、单次使用、15 分钟过期、携带勾选清单） | 整个后端半边零验证。POC 全程是把密钥手敲进脚本的 |
-| U6 | ✅ **已关闭** —— 四个工具**全部**实测到网关 | 结果分化得很彻底：**Gemini 3/3 全错**（F10–F12）、**Codex 两错一对**（F13/F14 错，Q7 机制对）、**OpenCode 逐字全对**。共同点很清楚：**靠官方文档推导出来的都错了，靠查实际配置路径得出来的都对** |
-| U7 | macOS / Linux **一次都没跑过**（⬇️ 大部分可用 WSL 覆盖，见下） | POSIX 那半的 `env.sh` + 一行引用完全没验，fish 更没有 —— 而 fish 是 §7 里点名的破坏性风险 |
-| U8 | **配置文件的合并保护与备份还原**（`original_backup`） | V8 验的是**环境变量**按名删除，不是文件还原。这两件事在 Windows 上机制完全不同 |
-| U9 | ❌ **基本作废** · 全局 `~/.claude/settings.json` 的行为是否与项目级不同 | **F8 之后 Claude Code 根本不再写 `settings.json`**（改走环境变量），这个问题失去了对象。留在表里只是记录它曾经是个未知数 |
-
-> 📌 **U3 / U9 是 F8 换机制的副产品** —— 换机制不只是换实现，它顺带退掉了两个未知数。
-> 反过来说：**一个靠「等实测再看」兜底的设计比看起来更贵**，每个未知数都要占一次真机验证。
-
-🔴 **U2 / U3 有个共同点:在开发者自己的日常机器上做不到或不该做**（一个烧掉他的订阅，
-一个被他改过的 policy 掩盖）。**这类「验不了的东西」必须写进验收并写明前置条件**，
-否则会一路滑到上线 —— 因为每一次「我这边跑通了」都是真话。§7 已单列。
-
-#### 还剩什么没验
-
-**U1 / U4 / U6 已关闭**（开工前该做的三条）。剩下的 **U5 · U7 · U8** 都是「被验的东西还不存在」
-（真脚本 / 真后端 / 真合并逻辑），**不阻塞开工**。
-
-##### U7 的实际做法：不要等一台 Mac
-
-本 PRD 承诺双平台，而 `TEAM.md` **没记录谁用什么操作系统** —— 但这不该阻塞开工，
-POSIX 那半的风险绝大部分与 macOS 无关：
-
-| 要验的 | 在哪验 |
-|---|---|
-| `env.sh` + 一行引用、幂等、卸载删行 · **fish 语法**（§7 点名的破坏性风险）· bash/zsh | **WSL**（`wsl --install`，免费） |
-| 四个工具的配置路径 | `~/.codex` / `~/.gemini` / `~/.config/opencode` —— **XDG 风格，mac 与 Linux 一致** |
-| `curl \| sh` · `~/Library/Application Support/…` | 两边相同 / **这四个工具都不用它** |
-| ⚠️ **「macOS 默认 shell 就是 zsh」这一点** | 只能在真 Mac 上确认（语法本身 WSL 可覆盖） |
-
-📌 **先用 WSL 把 POSIX 那半验掉。** 真要补，GitHub Actions 的 **macOS runner 免费**，
-可跑非交互那部分；只有「开新终端、`claude` 直接进输入框」需要真人真机。
-
-> ⚠️ **「谁用什么系统」值得记进 `TEAM.md`** —— 这次是 macOS，下次可能是「谁能测 Windows 默认 policy」、
-> 「谁装了 Cherry Studio」。**每次现问一遍，就是每次都会漏一次。**
 
 ## 1. 目标 / 非目标
 
@@ -320,17 +174,17 @@ DeepRouter 一键配置
 
 > 只验证**实际配了的**工具的协议。跳过的工具不发验证请求，也不报成失败——它没配，不是没配成。
 
-**若 Claude Code 未被跳过**（用户没有订阅，或加了 `--force`），末尾还要给出：
+**若 Claude Code 未被跳过**（用户没有订阅，或加了 `--force`），末尾还要给出首次启动的提示：
 
 ```
   Claude Code 现在直接运行 claude 就能用。
-  ⚠️ 第一次运行 claude 若出现 Anthropic 登录界面，按 Esc 跳过
+  ⚠️ 第一次运行 claude 会问 Is this a project you trust?，按回车确认即可
      —— 你走的是 DeepRouter，不需要 Anthropic 账号
 ```
 
-> ⚠️ **「按 Esc」这一步脚本做不到，但必须说。** 用户可以完全没有 Anthropic 账号——`docs/integrations/claude-code.md` 的 Prerequisites 只要求 DeepRouter 账号、DeepRouter key、装好 Claude Code 三样。但首次启动仍会弹 Anthropic 登录界面（同上，第 56 行：*"press **Esc** to skip the Anthropic login — you're authenticating via DeepRouter, not via an Anthropic subscription"*）。
+> ⚠️ **这类首次启动步骤脚本做不到，但必须说。** 用户可以完全没有 Anthropic 账号——`docs/integrations/claude-code.md` 的 Prerequisites 只要求 DeepRouter 账号、DeepRouter key、装好 Claude Code 三样。不提示的话，用户会以为配置没生效——**这正是本卡要消灭的那种困惑，却发生在脚本管不到的地方。** 同类情形还有 Gemini CLI：它可能引导用户走 Google 登录，指南要求选 **API key** 那一项。凡是这类「脚本自动化不了的首次启动步骤」，都必须在输出里点名。
 >
-> 不提示的话，用户会以为配置没生效——**这正是本卡要消灭的那种困惑，却发生在脚本管不到的地方。** 同类情形还有 Gemini CLI：它可能引导用户走 Google 登录，指南要求选 **API key** 那一项。凡是这类「脚本自动化不了的首次启动步骤」，都必须在输出里点名。
+> 🔴 **具体提示什么，以当前版本实测为准，别照抄本 PRD**（§7 已把这条写进验收）。早先版本这里写的是「按 Esc 跳过 Anthropic 登录」—— F1 改走环境变量后**根本不会再弹登录**，F4 也实测 Esc 无效；当前版本（v2.1.246）实测到的是「Is this a project you trust?」信任确认。引导流程由工具方决定、随版本变。
 
 > ⚠️ 「要不要重开终端」必须**说清楚且分工具说**：
 >
@@ -701,7 +555,7 @@ GOOGLE_GEMINI_BASE_URL=<base>          ← 🔴 绝不能带 /v1beta
 > 📌 原文写的是「模型名的落点是 Gemini 上唯一没有结论的一项，原因未查清」。
 > **那句「未查清」后来被当成结论用，据此把 Gemini CLI 判出了 Phase 1 —— 是错的**（§0.1 F17）。
 
-**④ 🔴 无人值守要带信任标志（F18）**
+**④ 🔴 无人值守有个信任门（F18）—— 不影响脚本，影响测它的人**
 
 `gemini -p` 在未信任目录下**一个请求都不发**：
 
@@ -709,8 +563,9 @@ GOOGLE_GEMINI_BASE_URL=<base>          ← 🔴 绝不能带 /v1beta
 Gemini CLI is not running in a trusted directory.
 ```
 
-→ 验证步骤必须带 `--skip-trust` 或设 `GEMINI_CLI_TRUST_WORKSPACE=true`。
-⚠️ 这个报错**和配置完全无关**，不知道的话会一路去查 key 和 base URL。
+- **脚本本身不受影响** —— 它只写配置、不代替用户运行 `gemini`，§4.4 的验证走的是脚本自己发的 HTTP 请求。
+- 但凡是**人**拿 `gemini -p` 做测试或验收，要带 `--skip-trust` 或设 `GEMINI_CLI_TRUST_WORKSPACE=true`。
+  ⚠️ 这个报错**和配置完全无关**，不知道的话会一路去查 key 和 base URL。
 
 **⑤ 🔴 目前网关侧还修不通（F17）**
 
@@ -720,10 +575,6 @@ Gemini CLI is not running in a trusted directory.
 **本 PRD 的 Gemini 那一份要等 `top_k` 那半修好才能验收。**
 
 ⚠️ **Gemini 与 Codex 两个工具都不能写 `deeprouter-auto`。** 同一个原因：它们的请求体都不用 `messages`（Gemini 用 `contents`，Responses 用 `input`），smart-router 的解析器取不到消息，`deeprouter-auto` 会静默退化成 `gpt-4o-mini`。具体模型名走 §4.3 的探测流程。
-
-**④ 无人值守还有第三道闸（不影响本卡）**
-
-`gemini -p` 在未信任目录下会要求 `GEMINI_CLI_TRUST_WORKSPACE=true` 或 `--skip-trust`。**脚本不需要处理** —— 它只写配置，不代替用户运行 `gemini`；§4.4 的验证走的是脚本自己发的 HTTP 请求。记在这里是为了让实现者不被它绊住。
 
 **共享环境变量文件** — `~/.deeprouter/env.sh`（fish 为 `env.fish`）
 
@@ -1344,3 +1195,191 @@ P3 / P4 与 Track A 完全无关，可并行。两者原本 `depends_on` 域名�
 > **2h 的估值站得住，而且偏保守**：实测发现模型可以由 Cherry Studio 自动拉取，用户不必去 Model Catalog 抄模型 ID —— 那一步原以为要额外的引导文案，现在不需要。
 >
 > ⚠️ 唯一新增的工作是**文案**：应用里显示的是「New API」不是 DeepRouter（上游预设命名，改不了），要在点击前一句话说明，否则用户会以为点错了。已计入 2h。
+
+---
+
+## 0.1 POC 实测记录（2026-08-26）
+
+> 📌 **本节是全文 F / R / V / U 编号的出处** —— 每一条都是动手实测的记录，不是推理。
+> 它原在文档开头，2026-08-27 移到文末作附录：读规格不需要先读它，但**规格与它冲突时以它为准**
+> （它是实测，规格是写作）。**编号「0.1」保留不改** —— 任务卡与 LOG 里大量写着「§0.1 F<n>」，
+> 改了编号那些引用就全部落空。
+
+本 PRD 的第一版全部来自**读文档与读源码**。在写任何产品代码之前先跑了一个约 60 行的一次性 POC（Windows / Claude Code v2.1.177 / 真实生产网关），**结论与文档不一致的地方以此为准**。
+
+### ✅ 已验证成立
+
+| # | 结论 | 证据 |
+|---|---|---|
+| V1 | Claude Code **确实能被配置成走 DeepRouter** —— 核心机制成立 | `claude` 发出的请求由 DeepRouter 返回 `403 预扣费额度失败，用户剩余额度：$0.039042`。「预扣费额度」是 new-api 术语，request id 也是网关格式 —— 请求确实到了 DeepRouter，没走订阅 |
+| V2 | Anthropic 原生 Base URL **不带 `/v1`** 是对的 | `POST https://<host>/v1/messages` 返回 401 而非 404 |
+| V3 | `x-api-key` 与 `Authorization: Bearer` 均被网关接受 | 两者都进到了 token 校验 |
+| V4 | 端到端计费链路通 | 一次成功调用后**账户余额下降** |
+| **V5** | **Windows 注册表这条接缝通了** —— 写 `HKCU\Environment` → **关掉终端 → 新开一个** → 四个变量全部读到 | POC #3（2026-08-26）。刻意用 `DRPOC_*` 而非 `ANTHROPIC_*`：被测的是「注册表写入能否到达新终端」，操作系统不关心变量叫什么，而用真名会顶掉本人的订阅认证（§4.2.1） |
+| **V6** | **值里的 `%` 不会被展开** —— `literal%USERPROFILE%literal` 原样读回 | `SetEnvironmentVariable` 存的是 `REG_SZ` 而非 `REG_EXPAND_SZ`。**这条本来是个「错了不报错」的坑**：若存成后者，含 `%` 的密钥会被静默改写。已排除 |
+| **V7** | **不需要管理员权限** | 在非提权会话（`IsInRole(Administrator) = False`）里写 `HKCU\Environment` 成功。**脚本不必要求「以管理员身份运行」** —— 那一步会劝退大量目标用户 |
+| **V8** | **卸载按名删除是干净的** | `-Clean` 后四个 `DRPOC_*` 消失，用户原有的 6 个变量（`GOPATH` / `OneDrive` / `OneDriveConsumer` / `Path` / `TEMP` / `TMP`）逐字还在 |
+| **V11** | 🔴 **U2 全链路通过**（本 PRD 最后一段未验证的接缝）—— 真写注册表 `ANTHROPIC_*` → 完全关终端 → 新开 → `claude` **直接可用，不再问登录方式** | 🔴 判据不是“没问登录”，而是 **Claude Code 自己在首屏写的 `Opus 4.8 · API Usage Billing`** —— 它自己声明了走的是 API 计费而非订阅。随后 `hi` 返回网关的 403 预扣费错误 + request id。卸载后 4 个变量消失、原有 6 个逐字还在、`~/.claude/.credentials.json` 的 size+mtime **未变** |
+| **V9** | **OpenCode 的 PRD 配置逐字可用** —— 四个工具里唯一一个一字不改就跑通的 | 写入 `~/.config/opencode/opencode.json` 后，`opencode models` 列出 `deeprouter/deeprouter-auto`；`opencode run` 返回网关的 `Invalid token` + request id（假密钥） |
+| **V10** | **Codex 的独立 profile 文件方案（Q7）成立** —— 本卡原本**最大的工程风险**（在 sh 与 PowerShell 里手写 TOML 增删改）确实被消掉 | 造一份「用户原有的」`config.toml`，另写 `deeprouter.config.toml`，`codex exec --profile deeprouter` 输出 `provider: deeprouter`，请求到达网关，**用户原文件逐字未变** |
+
+### 🔴 推翻或补充了本 PRD 原有规格的十六条
+
+| # | 实测 | 原规格 | 影响 |
+|---|---|---|---|
+| **F1** | **只有真环境变量能让 Claude Code 跳过登录**；项目级 `.claude/settings.json` 的 `env` 块**不生效**——仍然弹出 "Select login method" | D2 把「写工具自己的配置文件」列为第 1 优先，Claude Code 走这条 | **D2 优先级反转**，见 §3 |
+| **F2** | **Base URL 不是常量** —— 存在**两套独立部署**，各有各的数据库，**密钥不通用**（见下表） | 全文硬编码单一域名 | §4.1 令牌接口必须连 Base URL 一起返回。🔴 **本条的价值不在「哪个是正式的」，而在「这个问题的答案会变」** —— 它已经变过一次 |
+| **F3** | **模型名不是常量** —— 两套部署的模型目录**实测不同**（R1）；且 `deeprouter-auto` 曾因令牌白名单在生产 **100% 失败**（R4，✅ 已修复 ADR-0007，待部署） | 全文写死 `deeprouter-auto` | §4.3 必须探测后再决定，探测第 1 步不能省 |
+| **F16** | 🔴 **验证请求用哪个模型，决定它成不成功** —— 同一个账号、同一句 `hi`：`Claude Opus 4.7 (thinking)` 要求预扣 **$0.816000**（余额 $0.039954，403）；`GPT-4o mini` **直接通过**。预扣额 = 模型单价 × `max_tokens` 预授权，**与实际用量无关** | §4.3 的探测与 §4.4 的「四种协议各验一次」**都没规定用哪个模型** | 🔴 **探测与验证一律挑目录里最便宜的模型**，并把 `max_tokens` 压到最小。新用户余额小，拿贵模型探测会 403，而脚本会把「余额不够跑这个模型」误报成「配置失败」——机制是好的，却因为挑错了模型而报错。§6 的 403 文案要能区分这两件事 |
+| **F17** | 🔴 **Gemini CLI 在 `.co` 上三条路全堵，但堵点在网关的协议转换，不在缺 Gemini 渠道** —— 配 `gemini-*` → 403（该部署确无 Gemini 渠道）；配 **`gpt-4o-mini` → 400 `Unrecognized request argument supplied: top_k`**；配 **`claude-sonnet-4-6` → 500 `convert_request_failed` / not implemented**。🔴 **而同样的 Gemini 端点用 curl 打 `gpt-4o-mini` 是 200** —— 差别只在 CLI 会发 `top_k` | §3 D1「Phase 1 = 四个工具全做」 | 🔴 **D1 不变，Gemini CLI 留在 Phase 1**。真正要修的是网关，另立卡 `gemini-protocol-conversion-task.md` |
+| **F18** | **Gemini CLI 在 headless 下有信任门** —— `gemini -p` 直接报 `not running in a trusted directory`，一个请求都不发。要 `--skip-trust` 或 `GEMINI_CLI_TRUST_WORKSPACE=true` | §4.4「四种协议各验一次」默认脚本能直接跑 `gemini -p` 来验 | **脚本的验证步骤要带上这个标志**，否则 Gemini 那一条永远验不过，且报错和配置无关、极难排查 |
+| **F19** | 🔴 **模型元数据不足以挑模型 —— §4.3 的探测流程按原文不可实现**。四条实测：① **`/v1/models` 没有任何价格字段**（只有 `id`/`object`/`created`/`owned_by`/`supported_endpoint_types`）；② 两个模型接口**互不包含**，4 个能用的模型（含实测 200 的 `gpt-4o-mini`、`claude-sonnet-4-6`）**任何地方都查不到价格**；③ `/v1/models` 里**混着根本不能对话的模型** —— `gpt-4o-mini-tts` 发对话返回 **403 预扣费 $0.36**（不是「模型类型不对」！），`gpt-4o-audio-preview` 返回 **404 does not exist**；④ 🔴 **`supported_endpoint_types` 里没有任何模型声明 `gemini`**（25 个 `[anthropic, openai]` + 4 个 `[openai]`）| §4.3「不通 → `GET /v1/models` 取模型选一个」+ F16「按价格升序试」 | 🔴 **§4.3 探测流程重写**：不能靠元数据挑，必须**实发请求确认**。③ 尤其危险 —— 它会被 F16 的新规则误报成「余额不足」，把用户送去为一个**永远不能对话的模型**充值 |
+| **F20** | 🔴 **「探测通过」不等于「工具能用」—— 预扣费随 `max_tokens` 线性放大**。同一模型 `claude-sonnet-4-6`、同一账号($0.0396):`max_tokens` 16 / 1024 → **200**;4096 → 403 预扣 $0.0435;8192 → 403 预扣 $0.0583;**Claude Code 实发 → 403 预扣 $0.1600**(推算 ≈ 25k tokens)。**脚本用最小请求探测会拿到 200,写下配置,用户发第一句话就 403** | §4.3 第 3 步「逐个实发**最小**请求,第一个返回 200 的才写进配置」 | 🔴 **探测必须用与工具实发相当的 `max_tokens`**,或至少把「这个模型每次对话需要约 $X 预扣」告诉用户。最小请求探测**只能证明鉴权与模型可达,不能证明用户能真的对话** |
+| **F15** | 🔴 **配上 DeepRouter 会关掉 claude.ai connectors** —— Claude Code 底部常驻一行警告：`claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over…` | 全文**从未提过这个代价** | 必须写进输出与指南。这是**本方案目前已知的唯一一项功能损失** —— 不说的话用户不会知道自己失去了什么，更不会知道是我们的脚本干的 |
+| **F13** | **Codex 的 `wire_api = "chat"` 已被移除**（v0.149.1）—— 写了它 Codex **连配置都加载不了**：`Error loading config.toml: 'wire_api = "chat"' is no longer supported.` | §4.3 的 Codex TOML 写的就是 `wire_api = "chat"` | 改成 `"responses"` |
+| **F14** | **Codex 走 `POST <base>/v1/responses`，不是 `/v1/chat/completions`** —— 实测如此；已确认网关支持该端点（无 key 探测返回 401 而非 404） | §4.4 验证表把 OpenCode 与 Codex 归在同一个 `/v1/chat/completions` 下 | **验证表拆开为两行** |
+| **F10** | **Gemini CLI 不是纯环境变量** —— 必须写 `~/.gemini/settings.json`，且键是**嵌套的** `security.auth.selectedType = "gemini-api-key"`。不写它，`gemini -p` 直接报 `Invalid auth method selected.`，**一个请求都不发**。顶层 `selectedAuthType`（旧结构）在 v0.57 上无效；`GEMINI_DEFAULT_AUTH_TYPE` 环境变量**只在交互路径生效** | D2 把 Gemini 归入第 3 级「纯环境变量」 | **Gemini 也要写 JSON** → §4.3 的合并保护 / 备份 / 卸载还原全部适用于它，**这部分工程量原本没算** |
+| **F11** | **`GOOGLE_GEMINI_BASE_URL` 不能带 `/v1beta`** —— CLI 自己会拼，带了就是 `POST /v1beta/v1beta/models/…`，网关返回 `Invalid URL`。**与 Cherry Studio 的 `/v1/v1` 同一个坑** | §4.3 写的是 `GOOGLE_GEMINI_BASE_URL=<base>/v1beta` | 去掉 `/v1beta`。**「Base URL 该不该带版本段」这件事每个工具的答案都不同，一个都不能想当然** |
+| **F12** | **`GEMINI_MODEL` 环境变量无效——它根本没被读**（v0.57 bundle 里 `env.GEMINI_MODEL` 零命中）。真正的键是 `settings.json` 的 **`model.name`**，已实测生效 | §4.3 写 `GEMINI_MODEL=gemini-2.5-flash` | 🔴 **改写 `settings.json` 的 `model.name`** —— F10 的认证键在同一份文件里，零额外成本 |
+| **F9** | **「装没装」不能用配置目录判断** —— 实测装 **ChatGPT 桌面应用**会创建一个内容丰富的 `~/.codex/config.toml`（`[marketplaces.openai-bundled]` / `[plugins…]` / `[mcp_servers.node_repl]`），但 `codex` **在 PowerShell 与 cmd 里都不是命令**。| §4.2 闸 2 写的是「配置目录存在 **或** 可执行文件在 PATH」 | **判据改为可执行文件**。OR 判据下脚本会认定 Codex 已装、写配置、并让用户敲一个**不存在的命令**。ChatGPT 桌面版装机量很大，不是边缘情况 |
+| **F8** | **Windows 的持久化不能照 POSIX 镜像** —— `$PROFILE` + `env.ps1` 在默认的 `Restricted` execution policy 下不加载，且**每次开终端报红**。改用 `[Environment]::SetEnvironmentVariable(…,'User')`（写注册表，与 policy 无关） | D2 的语法表里 Windows 一行是「`. $HOME\.deeprouter\env.ps1`」 | **D2 的 Windows 机制整条改写**，连带 §4.3 清单与 §4.6 卸载；并推翻了「fish 是唯一能弄坏终端的路径」这句 |
+
+> F2/F3 合起来印证了 `key-setup-guide-prd.md` §6.3 早就写下的硬约束：**「Base URL / model 只能来自后端 API 注入，前端不得硬编码」**。那条规则原本是为「显示了 dev 端口 17231」那次事故写的；现在它有了第二个、更严重的理由。
+
+#### 两套部署 —— 正式的是 `deeprouter.co`
+
+存在**第二套独立部署 `deep-router.com`**：同一份代码、独立数据库、**密钥互不通用**
+（一套的 key 打另一套 401，已验）。完整对照表与定位归 **`deeprouter-ai/deploy/README.md`
+§"There is a second deployment"** 管，本 PRD 只留对规格的影响：
+
+🔴 **§4.1「Base URL 取该实例自己的 `server_address`」是必须，不是防御性设计** ——
+写错地址的用户一路 401。本条结论曾被答错过一次（详见 deploy/README.md 与 LOG），
+连人都会答错，脚本更不能把答案写死。
+
+#### 在 `.co` 上的重测（2026-08-26，Cherry Studio + curl）
+
+POC 全部做在 `.com` 上。**工具侧机制**（F1 / F8 / F9 / F10–F15）与网关无关、不受影响；
+**部署侧事实**必须重测，结果如下（旧密钥属于 `.com`，在 `api.deeprouter.co` 上 401，已另开账号）：
+
+| # | 重测项 | 结果 |
+|---|---|---|
+| **R1** | 模型目录 | 🔴 **两套不一样**。按 `.com` 量到的 `claude-opus-4-8` 写死，在正式部署上直接 `model_not_found` —— §4.3「先探测再写」的实证 |
+| **R2** | 计费链路 | ✅ **通**。`gpt-4o-mini` 发 `hi` 正常回话，密钥→鉴权→选模型→预扣费→上游→计费全程跑通 |
+| **R3** | 预扣费门槛 | 🔴 同一账号同一句 `hi`：Opus 4.7 thinking 要预扣 **$0.816**（余额 $0.04 → 403）；`gpt-4o-mini` **直接通过**。预扣额 = 单价 × `max_tokens`，**与实际用量无关** → **F16** |
+| **R4** | `deeprouter-auto` | 🔴 曾 **100% 失败**：三个 prompt 选出**两个不同模型**——smart-router 是活的，挡住的是**令牌白名单**。✅ **已修复**（ADR-0007，`e13548a8`，本地 stash 前后对照验证：403→200；**待合并部署，`.co` 上今天仍是坏的**） |
+
+根因与修法在 **`docs/adr/0007-auto-model-token-whitelist.md`**（一句话版：目录按**租户**算、
+权限按**令牌**算，smart-router 的选择合法但令牌开不了；修复让解析结果在白名单**内**重选）。
+
+**对规格的两个影响（修复后更新）：**
+
+1. **§4.3 探测第 1 步（先试 `deeprouter-auto`）仍然必须** —— 修复在分支里，哪些部署带着它、
+   目录长什么样，都随部署变；探测是唯一不赌部署状态的做法。
+2. ✅ **P1 的未决约束已解除**：修复后**带白名单的令牌也能用 `deeprouter-auto`**（路由在白名单内进行），
+   P1 不必再在「不带白名单」和「等修复」之间二选一。
+
+> 修复卡「Fix: deeprouter-auto resolves to models the token may not use, 403 on every request」在 **eval**。
+> ⚠️ 与 Gemini 那条**是两个独立 bug**（一个在解析前取不到消息，一个在解析后令牌用不了），修好任一条另一条依旧成立
+> —— **且必须先修本条**：Gemini 那条今天正替它挡着子弹，单独修 Gemini 会让线上从「静默用错模型」变成 403。
+
+#### 四种协议 × 具体模型名（2026-08-26，生产 `.co`，curl）
+
+R4 测的是 `deeprouter-auto`；脚本实际写的是**具体模型名**，所以又跑了一遍。
+🔴 **§4.4「四种协议各验一次」由此第一次真正在正式部署上跑通。**
+
+| 协议 | 模型 | 结果 |
+|---|---|---|
+| OpenAI `/v1/chat/completions` | `gpt-4o-mini` | ✅ 200 |
+| Anthropic `/v1/messages` | `claude-sonnet-4-6` | ✅ 200 |
+| Responses `/v1/responses` | `gpt-4o-mini` | ✅ 200 |
+| Gemini `/v1beta/…` | `gpt-4o-mini` | ✅ **200** ← 协议本身没问题 |
+| Gemini `/v1beta/…` | `gemini-3.5-flash` / `gemini-2.5-flash` | 🔴 403 —— **该部署 Gemini 渠道为 0** |
+
+#### 🔴 两个模型接口互不包含 —— 这是 §4.3 探测流程的地基
+
+| | 数量 |
+|---|---|
+| `/v1/models`（**令牌**口径） | 29 |
+| `/api/pricing`（**租户**口径，`TryUserAuth()`，无需登录） | 77（claude 26 · gpt 25 · doubao 16 · eleven 4 · chatgpt 2 · deepseek 2 · glm/omni 各 1 · **gemini 0**） |
+| **交集** | **25** |
+| 🔴 **只在 `/v1/models`：能用，却任何地方都查不到价格** | **4** —— `gpt-4o-mini` · `gpt-4o` · `claude-sonnet-4-6` · `claude-opus-4-7` |
+| 只在 `/api/pricing`：有价格，令牌却用不了 | 52 |
+
+- 🔴 那 4 个「能用但无价格」的**恰好包含实测跑通 200 的两个** → **F16 的「按价格升序试」按原文不可实现**（F19）。
+- ✅ 同时坐实令牌白名单那个 bug：smart-router 挑中的 `claude-haiku-4-5-20251001` / `deepseek-v4-flash` **在 77 里、不在 29 里**。
+- 📌 **两个口径都不完整。** 只看 `/v1/models` 就会把「模型不存在」和「这张令牌不能用」混为一谈。
+
+#### 🔴 Gemini CLI：三条路，三个不同的堵点
+
+| Gemini CLI 配的模型 | 结果 | 堵点 |
+|---|---|---|
+| `gemini-*` | 403 | 该部署确无 Gemini 渠道 |
+| **`gpt-4o-mini`** | 🔴 **400** `Unrecognized request argument supplied: top_k` | 网关把 Gemini 的 `top_k` 原样塞进 OpenAI 请求 |
+| **`claude-sonnet-4-6`** | 🔴 **500** `convert_request_failed` / `not implemented` | 网关没有 Gemini→Claude 转换 |
+
+🔴 **决定性对照：同一端点用 curl 打 `gpt-4o-mini` 是 200 —— 差别只在 CLI 会发 `top_k`。**
+Gemini→OpenAI 本身是通的，**坏在一个参数上**。
+
+- ✅ **模型名是能设的**（F12 已查清）：`env.GEMINI_MODEL` 在 v0.57 的包里**零命中**，
+  真键是 `settings.json` 的 **`model.name`**，已实测生效 —— 而脚本本来就要写那个文件，**零额外成本**。
+- ✅ **D1 不变，Gemini CLI 留在 Phase 1。** 要修的是网关 → 卡「Fix: Gemini-protocol requests fail
+  on every model, top_k leak and no Claude converter」，其 `top_k` 那半约 2h。
+
+> 📌 教训（详见 LOG）：**标着「未查清」的发现不能作为砍范围的依据** —— D1 曾因此误砍过 Gemini CLI，已撤回。
+
+### ⚠️ 另外四条工程/文案发现
+
+| # | 发现 |
+|---|---|
+| F4 | **`docs/integrations/claude-code.md` 里「按 Esc 跳过 Anthropic 登录」在 v2.1.177 上无效**——首启先是主题选择，再是三选一的登录方式，Esc 无反应。**引导流程随版本变，验收必须实测**（§7 已有此要求，现有实证） |
+| F5 | **Claude Code 把网关的 403 前缀上了错的建议**：`Please run /login · API Error: 403 预扣费额度失败，用户剩余额度：$0.039042…`。网关原文**确实也显示了**（比最初以为的好），但用户先看到的是“去登录”，而真实原因是余额不足。**这正是脚本必须自己发验证请求并翻译错误的理由**（§6）。已在 V11 里一字不差重现 |
+| F6 | 三处编码陷阱，方向互相矛盾：**`.ps1` 必须纯 ASCII**（PS 5.1 按系统 ANSI 读，非 ASCII 注释会冲掉引号导致解析失败）· **写出的 JSON 必须无 BOM** · **HTTP 请求体必须显式转 UTF-8 字节**（否则中文变 `?`，且**不报错**） |
+| F7 | **`Invoke-RestMethod` 会吞掉 HTTP 错误正文**，只剩「(401) 未经授权」。§6 的失败态映射依赖网关返回的 message，必须改用 `Invoke-WebRequest` 手动读响应流 |
+
+### 尚未验证
+
+三轮 POC 各自只隔离一件事 —— 这是**刻意的**：一次验一个变量，失败时才分得清是机制不通还是自己的代码有 bug。
+
+**验过的只是 Windows 上「环境变量」这一条线**（F1 工具确实读环境变量 · V5 注册表到达新终端 · V8 按名删除干净），而且**从没有一次是串起来跑的**。除此之外，本 PRD 的绝大部分仍是纸面推理。按风险从高到低：
+
+| # | 空白 | 为什么要紧 |
+|---|---|---|
+| **U1** | ✅ **§4.2.1 的检测信号已核实存在**（2026-08-26）——`~/.claude/.credentials.json` 是个普通文件（566b），**存在性判断即可**；Windows Credential Manager 里没有对应条目，所以不必碰系统钥匙串。**剩下的是各工具的信号还没一一核实**（U6） | 原本是全 PRD 风险最高的空白：这是唯一一个「脚本完全正常工作、却让用户损失金钱」的路径。现在机制可行，风险从「做不做得到」降为「做不做得全」 |
+| **U2** | ✅ **已跑通**（`.com`，V11）+ ✅ **已在 `.co` 上重跑**（2026-08-26）—— Claude Code 用进程级环境变量指向 `api.deeprouter.co`，**请求到达网关**（403 预扣费 + request id），F15「claude.ai connectors are disabled」同样复现。🔴 **重跑的价值不在部署，在「真客户端 ≠ curl」** ——正是这一跑测出了 **F20**（Claude Code 实发要预扣 $0.16，而 curl 最小请求 200）。📌 持久化那半（注册表 → 新终端）**与部署无关，无需重测** |
+| U3 | ⬇️ **降级** · 默认 `Restricted` execution policy 下的行为（F8） | **改走注册表后，execution policy 对所选机制已不再相关**（`SetEnvironmentVariable` 是 .NET 调用，`irm \| iex` 也不受限）。从「设计风险」降为「回归检查」——只需确认脚本里没有别的地方依赖执行 `.ps1` 文件。开发机通常已改成 `RemoteSigned`，仍然测不出来 |
+| **U4** | ✅ **已实测点通**（2026-08-26，见 §4.7 B1）—— 深链唤起、确认框、基础 URL 逐字正确、模型自动拉到 2 个 | 原本是本 PRD 证据最弱的一处，且 §10 的排序建议架在它上面。**现在它是证据最强的一处** —— 唯一一条被端到端点通的完整用户路径。顺带推翻了本 PRD 自己的一个预判（以为用户还得手输模型 ID），并暴露一个改不掉的问题：**品牌显示为「New API」** |
+| **U5** | **后端令牌接口**（`GET /i/{token}`、单次使用、15 分钟过期、携带勾选清单） | 整个后端半边零验证。POC 全程是把密钥手敲进脚本的 |
+| U6 | ✅ **已关闭** —— 四个工具**全部**实测到网关 | 结果分化得很彻底：**Gemini 3/3 全错**（F10–F12）、**Codex 两错一对**（F13/F14 错，Q7 机制对）、**OpenCode 逐字全对**。共同点很清楚：**靠官方文档推导出来的都错了，靠查实际配置路径得出来的都对** |
+| U7 | macOS / Linux **一次都没跑过**（⬇️ 大部分可用 WSL 覆盖，见下） | POSIX 那半的 `env.sh` + 一行引用完全没验，fish 更没有 —— 而 fish 是 §7 里点名的破坏性风险 |
+| U8 | **配置文件的合并保护与备份还原**（`original_backup`） | V8 验的是**环境变量**按名删除，不是文件还原。这两件事在 Windows 上机制完全不同 |
+| U9 | ❌ **基本作废** · 全局 `~/.claude/settings.json` 的行为是否与项目级不同 | **F8 之后 Claude Code 根本不再写 `settings.json`**（改走环境变量），这个问题失去了对象。留在表里只是记录它曾经是个未知数 |
+
+> 📌 **U3 / U9 是 F8 换机制的副产品** —— 换机制不只是换实现，它顺带退掉了两个未知数。
+> 反过来说：**一个靠「等实测再看」兜底的设计比看起来更贵**，每个未知数都要占一次真机验证。
+
+🔴 **U2 / U3 有个共同点:在开发者自己的日常机器上做不到或不该做**（一个烧掉他的订阅，
+一个被他改过的 policy 掩盖）。**这类「验不了的东西」必须写进验收并写明前置条件**，
+否则会一路滑到上线 —— 因为每一次「我这边跑通了」都是真话。§7 已单列。
+
+#### 还剩什么没验
+
+**U1 / U4 / U6 已关闭**（开工前该做的三条）。剩下的 **U5 · U7 · U8** 都是「被验的东西还不存在」
+（真脚本 / 真后端 / 真合并逻辑），**不阻塞开工**。
+
+##### U7 的实际做法：不要等一台 Mac
+
+本 PRD 承诺双平台，而 `TEAM.md` **没记录谁用什么操作系统** —— 但这不该阻塞开工，
+POSIX 那半的风险绝大部分与 macOS 无关：
+
+| 要验的 | 在哪验 |
+|---|---|
+| `env.sh` + 一行引用、幂等、卸载删行 · **fish 语法**（§7 点名的破坏性风险）· bash/zsh | **WSL**（`wsl --install`，免费） |
+| 四个工具的配置路径 | `~/.codex` / `~/.gemini` / `~/.config/opencode` —— **XDG 风格，mac 与 Linux 一致** |
+| `curl \| sh` · `~/Library/Application Support/…` | 两边相同 / **这四个工具都不用它** |
+| ⚠️ **「macOS 默认 shell 就是 zsh」这一点** | 只能在真 Mac 上确认（语法本身 WSL 可覆盖） |
+
+📌 **先用 WSL 把 POSIX 那半验掉。** 真要补，GitHub Actions 的 **macOS runner 免费**，
+可跑非交互那部分；只有「开新终端、`claude` 直接进输入框」需要真人真机。
+
+> ⚠️ **「谁用什么系统」值得记进 `TEAM.md`** —— 这次是 macOS，下次可能是「谁能测 Windows 默认 policy」、
+> 「谁装了 Cherry Studio」。**每次现问一遍，就是每次都会漏一次。**
