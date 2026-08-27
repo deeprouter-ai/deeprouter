@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -19,9 +20,22 @@ import (
 type Adaptor struct {
 }
 
-func (a *Adaptor) ConvertGeminiRequest(*gin.Context, *relaycommon.RelayInfo, *dto.GeminiChatRequest) (any, error) {
-	//TODO implement me
-	return nil, errors.New("not implemented")
+// ConvertGeminiRequest lets a Gemini-format request run on a Claude channel.
+//
+// It composes the two converters that already exist rather than adding a third,
+// direct one: the converter graph is a hub around the OpenAI shape (Gemini↔OpenAI
+// and OpenAI↔Claude are both implemented and tested in both directions), so
+// Gemini→OpenAI→Claude reuses two proven edges instead of introducing an
+// untested one. The OpenAI adaptor bridges Gemini requests the same way.
+func (a *Adaptor) ConvertGeminiRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeminiChatRequest) (any, error) {
+	if request == nil {
+		return nil, errors.New("request is nil")
+	}
+	openaiRequest, err := service.GeminiToOpenAIRequest(request, info)
+	if err != nil {
+		return nil, err
+	}
+	return RequestOpenAI2ClaudeMessage(c, *openaiRequest)
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
