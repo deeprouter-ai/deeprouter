@@ -25,9 +25,12 @@ var Chats = []map[string]string{
 	{
 		"DeepChat": "deepchat://provider/install?v=1&data={deepchatConfig}",
 	},
-	{
-		"Lobe Chat 官方示例": "https://chat-preview.lobehub.com/?settings={\"keyVaults\":{\"openai\":{\"apiKey\":\"{key}\",\"baseURL\":\"{address}/v1\"}}}",
-	},
+	// Removed 2026-08-28 (@sam): chat-preview.lobehub.com was retired by
+	// LobeHub — the chain now 302s into app.lobehub.com's sign-in wall, so the
+	// settings in the URL are never applied and the button reads as broken.
+	//{
+	//	"Lobe Chat 官方示例": "https://chat-preview.lobehub.com/?settings={\"keyVaults\":{\"openai\":{\"apiKey\":\"{key}\",\"baseURL\":\"{address}/v1\"}}}",
+	//},
 	{
 		"AI as Workspace": "https://aiaw.app/set-provider?provider={\"type\":\"openai\",\"settings\":{\"apiKey\":\"{key}\",\"baseURL\":\"{address}/v1\",\"compatibility\":\"strict\"}}",
 	},
