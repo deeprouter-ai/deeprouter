@@ -22,24 +22,19 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { getApiKeys, getConnectTools, issueConnectToken } from '../api'
+import { issueConnectToken } from '../api'
 import type { ApiKey, ConnectTool } from '../types'
-import { useApiKeys } from './api-keys-provider'
 
 /** Where the script template lives, for the "read it first" link (PRD §5.3). */
 const SCRIPT_SOURCE_URL =
   'https://github.com/deeprouter-ai/deeprouter/tree/main/internal/connect/templates'
 
 /**
- * One-click setup block for terminal AI tools.
+ * One-click setup section for terminal AI tools.
+ *
+ * A section of `ApiKeysSetupCard`, not a card of its own: the key it
+ * configures is chosen once for the whole box, so it arrives as a prop rather
+ * than being picked here.
  *
  * The user ticks what they have installed, copies one line, and pastes it into
  * a terminal. What travels in that line is a one-time token, never the key:
@@ -71,90 +66,34 @@ const SCRIPT_SOURCE_URL =
  * persona for the same reason: someone who has Claude Code installed is a user
  * of it whatever persona the console assigned them.
  */
-export function ApiKeysOneClickCard() {
+export function ApiKeysOneClickSection({
+  tools,
+  apiKey,
+}: {
+  tools: ConnectTool[]
+  apiKey: ApiKey
+}) {
   const { t } = useTranslation()
-  const { refreshTrigger } = useApiKeys()
 
-  const [tools, setTools] = useState<ConnectTool[]>([])
-  const [selected, setSelected] = useState<string[]>([])
-  const [keys, setKeys] = useState<ApiKey[]>([])
-  const [keyId, setKeyId] = useState<number | null>(null)
+  // `null` means the user has not touched the list, which reads as "all of
+  // them": someone who does not want to think should be able to copy and go.
+  // Derived rather than seeded from an effect so a late `tools` needs no
+  // second render to show the right ticks.
+  const [picked, setPicked] = useState<string[] | null>(null)
   const [scriptUrl, setScriptUrl] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [issuing, setIssuing] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
-
-  const apiKey = useMemo(
-    () => keys.find((k) => k.id === keyId) ?? null,
-    [keys, keyId]
-  )
-
-  // `label` is what the closed trigger renders, so the restriction hint has to
-  // be baked into the string there; inside the open list it is a separate muted
-  // span, which reads better but cannot be reused for the trigger.
-  const keyOptions = useMemo(
-    () =>
-      keys.map((key) => ({
-        value: String(key.id),
-        name: key.name,
-        limited: key.model_limits_enabled,
-        label: key.model_limits_enabled
-          ? `${key.name} ${t('(limited to some models)')}`
-          : key.name,
-      })),
-    [keys, t]
-  )
 
   const isWindows = useMemo(() => {
     if (typeof navigator === 'undefined') return false
     return /win/i.test(navigator.platform || navigator.userAgent || '')
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await getConnectTools()
-        if (cancelled || !res.success || !res.data) return
-        setTools(res.data)
-        // Default to everything ticked: someone who does not want to think
-        // should be able to copy and go. Still visible, still changeable.
-        setSelected(res.data.map((tool) => tool.id))
-      } catch {
-        /* leave the block hidden rather than showing a broken control */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        // The list comes back newest-first, which is also the default pick:
-        // creating a key and then setting it up is the common path.
-        const res = await getApiKeys({ p: 1, size: 50 })
-        if (cancelled) return
-        const items = res.data?.items ?? []
-        setKeys(items)
-        setKeyId((prev) =>
-          prev !== null && items.some((k) => k.id === prev)
-            ? prev
-            : (items[0]?.id ?? null)
-        )
-      } catch {
-        if (!cancelled) {
-          setKeys([])
-          setKeyId(null)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [refreshTrigger])
+  const selected = useMemo(
+    () => picked ?? tools.map((tool) => tool.id),
+    [picked, tools]
+  )
 
   // Re-issue whenever the key or the tool selection changes: the token carries
   // both, so a stale command would set up the wrong thing. Older tokens are
@@ -189,11 +128,15 @@ export function ApiKeysOneClickCard() {
     }
   }, [apiKey, selected])
 
-  const toggle = useCallback((id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    )
-  }, [])
+  const toggle = useCallback(
+    (id: string) => {
+      setPicked((prev) => {
+        const base = prev ?? tools.map((tool) => tool.id)
+        return base.includes(id) ? base.filter((x) => x !== id) : [...base, id]
+      })
+    },
+    [tools]
+  )
 
   const handleCopy = useCallback(
     async (value: string, id: string) => {
@@ -208,9 +151,7 @@ export function ApiKeysOneClickCard() {
     [t]
   )
 
-  // No key yet means there is nothing to configure; the create flow above is
-  // the right next step, and a disabled block here would only add noise.
-  if (!apiKey || tools.length === 0) return null
+  if (tools.length === 0) return null
 
   const selectedNames = tools
     .filter((tool) => selected.includes(tool.id))
@@ -274,67 +215,8 @@ export function ApiKeysOneClickCard() {
   )
 
   return (
-    <div className='bg-muted/30 mb-4 rounded-lg border p-4 sm:p-5'>
-      <h3 className='text-sm font-semibold'>{t('One-click setup')}</h3>
-      <p className='text-muted-foreground mt-1 text-xs'>
-        {t(
-          'Already using an AI tool in your terminal? Tick it below, then paste one line — no settings to find, nothing to type by hand.'
-        )}
-      </p>
-
-      {/* Which key this configures. With one key there is nothing to decide,
-          so the row is not shown at all; with several, leaving it implicit
-          would bake whichever sorts first into the command and only surface
-          as a 403 inside some tool days later. */}
-      {keys.length > 1 && (
-        <div className='mt-3'>
-          <label htmlFor='one-click-key' className='text-xs font-medium'>
-            {t('Key to set up')}
-          </label>
-          {/* Not a native <select>: its popup is drawn by the OS and ignores
-              the app's theme, so it showed up as a white list on a dark page. */}
-          <Select
-            items={keyOptions}
-            value={String(keyId ?? '')}
-            onValueChange={(v) => v !== null && setKeyId(Number(v))}
-          >
-            <SelectTrigger
-              id='one-click-key'
-              className='mt-1.5 w-full text-xs sm:max-w-sm'
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                {keyOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className='truncate'>{option.name}</span>
-                    {option.limited && (
-                      <span className='text-muted-foreground ml-1.5'>
-                        {t('(limited to some models)')}
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {/* A key restricted to a few models is a legitimate thing to own and a
-          poor thing to configure four tools with — say so here rather than
-          letting it turn into "model not allowed" inside the tool. */}
-      {apiKey.model_limits_enabled && (
-        <p className='text-muted-foreground mt-2 flex items-start gap-1.5 text-[11px]'>
-          <TriangleAlert className='mt-px h-3 w-3 shrink-0' />
-          <span>
-            {t(
-              'This key is limited to certain models. Tools configured with it will only work for those — pick an unrestricted key if you want everything to work.'
-            )}
-          </span>
-        </p>
-      )}
+    <section className='border-border mt-4 border-t pt-4'>
+      <h4 className='text-xs font-semibold'>{t('Terminal tools')}</h4>
 
       <fieldset className='mt-3'>
         <legend className='text-xs font-medium'>
@@ -364,7 +246,9 @@ export function ApiKeysOneClickCard() {
 
       <div className='mt-4'>
         <p className='text-xs font-medium'>
-          {t('2. Open your terminal, paste the line for your system, press Enter')}
+          {t(
+            '2. Open your terminal, paste the line for your system, press Enter'
+          )}
         </p>
 
         {selected.length === 0 ? (
@@ -520,6 +404,6 @@ export function ApiKeysOneClickCard() {
           </details>
         )}
       </div>
-    </div>
+    </section>
   )
 }

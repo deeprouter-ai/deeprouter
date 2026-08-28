@@ -1758,7 +1758,6 @@
     "Fixed price (USD)": "Fixed price (USD)",
     "Fixed request price": "Fixed request price",
     "Floating": "Floating",
-    "FluentRead extension not detected. Please ensure it is installed and active.": "FluentRead extension not detected. Please ensure it is installed and active.",
     "Flush interval (minutes)": "Flush interval (minutes)",
     "Follow the guided steps to prepare your workspace before the first login.": "Follow the guided steps to prepare your workspace before the first login.",
     "Footer": "Footer",
@@ -5089,7 +5088,6 @@
     "Usage timeline": "Usage timeline",
     "1. Choose what to set up": "1. Choose what to set up",
     "2. Open your terminal, paste the line for your system, press Enter": "2. Open your terminal, paste the line for your system, press Enter",
-    "Already using an AI tool in your terminal? Tick it below, then paste one line — no settings to find, nothing to type by hand.": "Already using an AI tool in your terminal? Tick it below, then paste one line — no settings to find, nothing to type by hand.",
     "Copy command": "Copy command",
     "Key to set up": "Key to set up",
     "One-click setup": "One-click setup",
@@ -5111,6 +5109,17 @@
     "New terminal first.": "New terminal first.",
     "New terminal first. If it asks how to sign in, pick \"API key\".": "New terminal first. If it asks how to sign in, pick \"API key\".",
     "New terminal first. If it still asks you to log in to ChatGPT, use this instead:": "New terminal first. If it still asks you to log in to ChatGPT, use this instead:",
-    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count."
+    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.",
+    "Already have one of these installed? Click it and the app opens with everything filled in — address, key and models. You type nothing.": "Already have one of these installed? Click it and the app opens with everything filled in — address, key and models. You type nothing.",
+    "Your browser will ask for permission to open the app. Inside it the provider is called \"New API\" — that is the right one.": "Your browser will ask for permission to open the app. Inside it the provider is called \"New API\" — that is the right one.",
+    "Nothing happened? {{name}} may not be installed.": "Nothing happened? {{name}} may not be installed.",
+    "Set it up by hand instead": "Set it up by hand instead",
+    "Set up whatever you already use — no settings to find, nothing to type by hand.": "Set up whatever you already use — no settings to find, nothing to type by hand.",
+    "Terminal tools": "Terminal tools",
+    "AI apps and extensions": "AI apps and extensions",
+    "If nothing opens, this app is probably not installed.": "If nothing opens, this app is probably not installed.",
+    "Some other tool?": "Some other tool?",
+    "Pick your tool and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.": "Pick your tool and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.",
+    "Your tool": "Your tool"
   }
 }

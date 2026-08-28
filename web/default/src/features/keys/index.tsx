@@ -19,9 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { ApiKeysDialogs } from './components/api-keys-dialogs'
-import { ApiKeysOneClickCard } from './components/api-keys-one-click-card'
 import { ApiKeysPrimaryButtons } from './components/api-keys-primary-buttons'
 import { ApiKeysProvider } from './components/api-keys-provider'
+import { ApiKeysSetupCard } from './components/api-keys-setup-card'
 import { ApiKeysTable } from './components/api-keys-table'
 
 export function ApiKeys() {
@@ -45,7 +45,10 @@ export function ApiKeys() {
               how to connect, send one request) are covered by the Setup guide
               dialog in the header, and two stacked explainers pushed the keys
               themselves below the fold. */}
-          <ApiKeysOneClickCard />
+          {/* Terminal commands and chat-app buttons live in one box under one
+              key choice — two boxes each picking their own key could configure
+              two different keys without saying so (@sam, 2026-08-28). */}
+          <ApiKeysSetupCard />
           <ApiKeysTable />
         </SectionPageLayout.Content>
       </SectionPageLayout>

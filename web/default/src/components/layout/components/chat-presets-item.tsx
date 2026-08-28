@@ -44,6 +44,7 @@ import { fetchActiveChatKey } from '@/features/chat/hooks/use-active-chat-key'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import {
   chatLinkRequiresApiKey,
+  chatPresetAction,
   resolveChatUrl,
   type ChatPreset,
 } from '@/features/chat/lib/chat-links'
@@ -157,7 +158,15 @@ export function ChatPresetsItem({ item }: { item: NavChatPresets }) {
   const loadingPresetIdRef = useRef<string | null>(null)
 
   const visiblePresets = useMemo(
-    () => chatPresets.filter((preset) => preset.type !== 'fluent'),
+    () =>
+      chatPresets.filter(
+        (preset) =>
+          preset.type !== 'fluent' &&
+          // CC Switch needs its import dialog, which lives on the keys page,
+          // and an unknown marker is not a link at all. Both used to be
+          // opened as relative paths from here.
+          chatPresetAction(preset.url) === 'link'
+      ),
     [chatPresets]
   )
 
@@ -206,7 +215,17 @@ export function ChatPresetsItem({ item }: { item: NavChatPresets }) {
 
       if (typeof window === 'undefined') return
 
-      window.open(url, '_blank', 'noopener')
+      // Always a custom protocol here — `web` returned at the top of this
+      // function and `fluent` never reaches the list. See the note in
+      // `api-keys-quick-apps-card.tsx`: `window.open` leaves a blank untitled
+      // tab when no app is registered, and these URLs carry the plaintext key
+      // in their query string.
+      try {
+        window.location.href = url
+      } catch {
+        window.open(url, '_blank', 'noopener')
+      }
+      toast.info(t('If nothing opens, this app is probably not installed.'))
       setOpenMobile(false)
     },
     [serverAddress, setOpenMobile, t]

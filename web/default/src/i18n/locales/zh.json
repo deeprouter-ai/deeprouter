@@ -1758,7 +1758,6 @@
     "Fixed price (USD)": "固定价格 (USD)",
     "Fixed request price": "固定按次价格",
     "Floating": "浮动",
-    "FluentRead extension not detected. Please ensure it is installed and active.": "未检测到 FluentRead 扩展。请确保已安装并激活。",
     "Flush interval (minutes)": "刷库间隔（分钟）",
     "Follow the guided steps to prepare your workspace before the first login.": "请按照引导步骤在首次登录前准备您的工作区。",
     "Footer": "页脚",
@@ -5088,7 +5087,6 @@
     "Tier 2 telemetry consent is not enabled for this user, so per-user Skill usage details are hidden. Ask the user to open Profile / Privacy and enable Tier 2 telemetry consent.": "该用户未开启 Tier 2 遥测授权，因此个人技能使用明细已隐藏。请让该用户打开 Profile / Privacy 并开启 Tier 2 telemetry consent。",
     "Usage timeline": "使用时间线",
     "One-click setup": "一键配置",
-    "Already using an AI tool in your terminal? Tick it below, then paste one line — no settings to find, nothing to type by hand.": "已经在终端里用 AI 工具了？在下面勾选，然后粘贴一行命令 —— 不用找设置，也不用手打任何东西。",
     "Key to set up": "要配置的密钥",
     "This key is limited to certain models. Tools configured with it will only work for those — pick an unrestricted key if you want everything to work.": "这把密钥只允许部分模型。用它配好的工具也只能用那些模型 —— 想让所有工具都能用，请选一把不限模型的密钥。",
     "1. Choose what to set up": "1. 选择要配置的工具",
@@ -5111,6 +5109,17 @@
     "New terminal first.": "先开一个新终端。",
     "New terminal first. If it asks how to sign in, pick \"API key\".": "先开一个新终端。第一次启动如果问你怎么登录,选「API key」那一项。",
     "New terminal first. If it still asks you to log in to ChatGPT, use this instead:": "先开一个新终端。如果它还是让你登录 ChatGPT,就改用这一条:",
-    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "「先开一个新终端」的意思是:把终端窗口全部关掉,重新开一个。从旧窗口里再开出来的不算。"
+    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "「先开一个新终端」的意思是:把终端窗口全部关掉,重新开一个。从旧窗口里再开出来的不算。",
+    "Already have one of these installed? Click it and the app opens with everything filled in — address, key and models. You type nothing.": "下面这些应用，装了哪个就点哪个。应用会被拉起来，地址、密钥、模型都已经填好 —— 你一个字都不用输。",
+    "Your browser will ask for permission to open the app. Inside it the provider is called \"New API\" — that is the right one.": "浏览器会弹框问你要不要打开这个应用。进去之后，服务商的名字显示为「New API」—— 那就是对的。",
+    "Nothing happened? {{name}} may not be installed.": "没反应？可能是没装 {{name}}。",
+    "Set it up by hand instead": "改用手动配置",
+    "Set up whatever you already use — no settings to find, nothing to type by hand.": "把你已经在用的工具配好 —— 不用找设置，也不用手打任何东西。",
+    "Terminal tools": "终端工具",
+    "AI apps and extensions": "AI 应用与插件",
+    "If nothing opens, this app is probably not installed.": "如果没有反应，可能是还没安装此应用。",
+    "Some other tool?": "用的是别的工具？",
+    "Pick your tool and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.": "选中你的工具，复制下面这段话，发给任意 AI —— ChatGPT、Claude，你手边有哪个用哪个。它会一步步教你在哪里填什么。这段文字里不含你的密钥。",
+    "Your tool": "你的工具"
   }
 }
