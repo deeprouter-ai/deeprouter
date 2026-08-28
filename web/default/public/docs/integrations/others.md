@@ -23,6 +23,45 @@ So the universal rule is simple:
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Which base URL depends on the protocol the tool speaks - there is no single answer.
+protocols:
+  - api_protocol: OpenAI
+    base_url: "https://api.deeprouter.co/v1"
+    endpoint_called: "POST /chat/completions"
+    auth_header: "Authorization: Bearer <your sk- key>"
+  - api_protocol: Anthropic
+    base_url: "https://api.deeprouter.co"
+    endpoint_called: "POST /v1/messages"
+    auth_header: "x-api-key: <your sk- key>"
+  - api_protocol: Gemini
+    base_url: "https://api.deeprouter.co/v1beta"
+    endpoint_called: "POST /v1beta/models/<model>:generateContent"
+    auth_header: "x-goog-api-key: <your sk- key>"
+
+# Tools that append the version segment themselves - give these the HOST ONLY.
+# Adding it yourself doubles the path and the gateway answers 404 Invalid URL.
+host_only_tools:
+  cherry-studio: "https://api.deeprouter.co"   # appends /v1
+  nextchat:      "https://api.deeprouter.co"   # appends /v1
+  gemini-cli:    "https://api.deeprouter.co"   # appends /v1beta
+
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide_index: "https://deeprouter.co/llms.txt"
+```
+
+
 ## Why DeepRouter
 
 One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with automatic routing and a single place to track usage and spend.

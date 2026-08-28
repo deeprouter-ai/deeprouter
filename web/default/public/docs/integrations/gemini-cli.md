@@ -7,11 +7,34 @@ endpoint — so this is just two environment variables, no coding required.
 
 > **TL;DR** — set two environment variables:
 > ```bash
-> export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co/v1beta
+> export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co
 > export GEMINI_API_KEY=sk-...your-deeprouter-key...
 > ```
 
 ---
+
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: gemini-cli
+api_protocol: Gemini
+base_url: "https://api.deeprouter.co"
+base_url_warning: "HOST ONLY - do not add /v1beta. Gemini CLI appends it; writing it yourself gives 404 Invalid URL (POST /v1beta/v1beta/models/...). Goes in GOOGLE_GEMINI_BASE_URL."
+endpoint_called: "POST /v1beta/models/<model>:generateContent"
+auth_header: "x-goog-api-key: <your sk- key>   # or ?key=<your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/gemini-cli"
+```
 
 ## Why route Gemini CLI through DeepRouter
 
@@ -20,6 +43,30 @@ endpoint — so this is just two environment variables, no coding required.
 - **Smart routing.** DeepRouter picks the right model and channel per request and fails over
   automatically when an upstream is down.
 - **Billing in one place.** Your team's usage, spend, and logs all live in the DeepRouter console.
+
+---
+
+## One-click setup (recommended)
+
+You do not have to edit any config file by hand. One line in a terminal does all
+of it — and it configures only the tools you tick, skipping anything you do not
+have installed.
+
+1. Open **API Keys** in the DeepRouter console.
+2. Under **One-click setup → Terminal tools**, tick **Gemini CLI**.
+3. Copy the command for your system and paste it into a terminal:
+   - macOS / Linux (also WSL and Git Bash): `curl -fsSL <the address shown> | sh`
+   - Windows (PowerShell or Terminal, **not** cmd): `irm <the address shown> | iex`
+4. Then run `gemini`. Open a **new** terminal first. If it asks how to sign in, pick **API key** — choosing the Google login bypasses DeepRouter entirely.
+
+> **What travels in that command is a one-time token, not your key.** It dies
+> after one use or fifteen minutes; the key itself is injected server-side when
+> the script is fetched. The page also links the script source so you can read it
+> before running it, and one line puts everything back:
+> `curl -fsSL <base>/uninstall | sh`.
+
+**Prefer to do it yourself?** The manual steps below configure exactly the same
+things, and they are what the script writes.
 
 ---
 
@@ -45,8 +92,8 @@ Gemini CLI reads two settings to redirect its traffic:
 Add both to your shell profile (`~/.zshrc`, `~/.bashrc`, or your fish config):
 
 ```bash
-# Send Gemini CLI to DeepRouter's Gemini-compatible endpoint (no trailing slash)
-export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co/v1beta
+# Send Gemini CLI to DeepRouter. Host only - the CLI appends /v1beta itself.
+export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co
 # Authenticate with your DeepRouter key
 export GEMINI_API_KEY=sk-...your-deeprouter-key...
 ```
@@ -57,8 +104,11 @@ Then reload your shell (or open a new terminal window):
 source ~/.zshrc
 ```
 
-> **Why the `/v1beta` endpoint?** Gemini CLI sends requests in Google's native Gemini format.
-> DeepRouter's `…/v1beta` endpoint understands that exact format, so the CLI works unchanged.
+> **Why the host on its own — no `/v1beta`?** Gemini CLI speaks Google's native Gemini format,
+> and DeepRouter's `…/v1beta` endpoint understands it exactly, so the CLI works unchanged. But
+> **the CLI appends `/v1beta` for you.** Add it yourself and every request goes to
+> `/v1beta/v1beta/models/…`, which the gateway rejects with
+> `404 Invalid URL` — a message that says nothing about the real cause.
 > (DeepRouter also has an OpenAI‑style endpoint, but the Gemini CLI doesn't speak that dialect —
 > see the fallback note below.)
 
@@ -124,7 +174,7 @@ We'd rather tell you this honestly than have you fight a half‑working setup.
 
 | Symptom | Fix |
 |---|---|
-| **Connection or 404 errors** | Make sure `GOOGLE_GEMINI_BASE_URL` is exactly `https://api.deeprouter.co/v1beta` — with `/v1beta`, and **no trailing slash**. |
+| **Connection or 404 errors** | Make sure `GOOGLE_GEMINI_BASE_URL` is exactly `https://api.deeprouter.co` — the **host only**, with no `/v1beta` and no trailing slash. `404 Invalid URL (POST /v1beta/v1beta/models/…)` means you added `/v1beta` yourself; the CLI already does. |
 | **Authentication / 401** | The key is wrong or it picked your Google login. Set `GEMINI_API_KEY` to your DeepRouter `sk-...` key and choose the API‑key sign‑in option. |
 | **Still going to Google** | A stale env var or an old session is winning. Run `echo $GOOGLE_GEMINI_BASE_URL` to check, then open a fresh terminal so the new values take effect. |
 | **Weird parameter errors** | Your Gemini CLI version may be sending fields DeepRouter's endpoint doesn't accept. Use the OpenAI‑compatible fallback above. |
@@ -136,7 +186,8 @@ We'd rather tell you this honestly than have you fight a half‑working setup.
 
 | Item | Value |
 |---|---|
-| Gemini‑compatible base URL | `https://api.deeprouter.co/v1beta` |
+| Value for `GOOGLE_GEMINI_BASE_URL` | `https://api.deeprouter.co` — **host only** |
+| Endpoint the CLI actually calls | `POST /v1beta/models/<model>:generateContent` (the CLI adds `/v1beta`) |
 | Env var (endpoint) | `GOOGLE_GEMINI_BASE_URL` |
 | Env var (key) | `GEMINI_API_KEY` (use your DeepRouter `sk-...` key) |
 | Auth header | `x-goog-api-key: <key>` (sent by the CLI) |

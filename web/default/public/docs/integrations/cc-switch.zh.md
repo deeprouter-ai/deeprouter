@@ -21,6 +21,28 @@
 
 ---
 
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: cc-switch
+api_protocol: Anthropic
+base_url: "https://api.deeprouter.co"
+base_url_warning: "No /v1 - CC Switch configures Claude Code, which speaks the Anthropic protocol."
+endpoint_called: "POST /v1/messages"
+auth_header: "x-api-key: <your sk- key>   # Authorization: Bearer also accepted"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/cc-switch"
+```
+
 ## 为什么用 DeepRouter
 
 一把密钥，畅享所有模型 —— Claude、Qwen、GLM、DeepSeek、Kimi 等等 —— 自动路由，
@@ -38,7 +60,20 @@
 
 ---
 
-## 把 DeepRouter 添加为服务商
+## 一键配置（推荐）
+
+CC Switch 支持直接导入一个 DeepRouter 服务商，地址和密钥都不用你手动搬：
+
+1. 打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页。
+2. 在 **AI 应用与插件** 那一块点 **CC Switch**（密钥那一行末尾的 `⋯` 菜单里也有）。
+3. 会弹出一个带导入链接的对话框。确认之后，CC Switch 打开时服务商已经建好了。
+
+**点了没反应？** 没装 CC Switch、或者版本没注册这个协议时，链接会静悄悄地失败。
+下面的手动步骤任何时候都能用。
+
+---
+
+## 或者手动配置
 
 1. 打开 **CC Switch**。
 2. 点 **Add（添加）**（新建服务商的按钮）。

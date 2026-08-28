@@ -28,6 +28,28 @@ file plus one API key, no coding required.
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: opencode
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co/v1"
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/opencode"
+```
+
 ## Why route OpenCode through DeepRouter
 
 - **One key, every model.** Claude, GPT‑family, and many open models — all reachable through the
@@ -35,6 +57,30 @@ file plus one API key, no coding required.
 - **Smart routing.** DeepRouter picks the right model and channel per request and fails over
   automatically when an upstream is down.
 - **Billing in one place.** Your team's usage, spend, and logs all live in the DeepRouter console.
+
+---
+
+## One-click setup (recommended)
+
+You do not have to edit any config file by hand. One line in a terminal does all
+of it — and it configures only the tools you tick, skipping anything you do not
+have installed.
+
+1. Open **API Keys** in the DeepRouter console.
+2. Under **One-click setup → Terminal tools**, tick **OpenCode**.
+3. Copy the command for your system and paste it into a terminal:
+   - macOS / Linux (also WSL and Git Bash): `curl -fsSL <the address shown> | sh`
+   - Windows (PowerShell or Terminal, **not** cmd): `irm <the address shown> | iex`
+4. Then run `opencode`. Works right away — nothing to reopen.
+
+> **What travels in that command is a one-time token, not your key.** It dies
+> after one use or fifteen minutes; the key itself is injected server-side when
+> the script is fetched. The page also links the script source so you can read it
+> before running it, and one line puts everything back:
+> `curl -fsSL <base>/uninstall | sh`.
+
+**Prefer to do it yourself?** The manual steps below configure exactly the same
+things, and they are what the script writes.
 
 ---
 

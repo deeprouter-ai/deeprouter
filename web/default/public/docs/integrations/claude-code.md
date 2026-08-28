@@ -12,6 +12,29 @@ DeepRouter speaks the **native Anthropic Messages API**, so Claude Code works wi
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: claude-code
+api_protocol: Anthropic
+base_url: "https://api.deeprouter.co"
+base_url_warning: "No /v1 - Claude Code appends /v1/messages. Goes in ANTHROPIC_BASE_URL; the key goes in ANTHROPIC_AUTH_TOKEN."
+endpoint_called: "POST /v1/messages"
+auth_header: "x-api-key: <your sk- key>   # Authorization: Bearer also accepted"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/claude-code"
+```
+
 ## Why route Claude Code through DeepRouter
 
 - **One key, every model.** Claude, plus Qwen / GLM / DeepSeek / Kimi and more — all reachable
@@ -19,6 +42,30 @@ DeepRouter speaks the **native Anthropic Messages API**, so Claude Code works wi
 - **Smart routing.** DeepRouter picks the right model/channel per request (Layer-1 model routing
   + Layer-2 channel routing) and fails over automatically when an upstream is down.
 - **Billing & audit in one place.** Usage, spend, and logs for your whole team in the DeepRouter console.
+
+---
+
+## One-click setup (recommended)
+
+You do not have to edit any config file by hand. One line in a terminal does all
+of it — and it configures only the tools you tick, skipping anything you do not
+have installed.
+
+1. Open **API Keys** in the DeepRouter console.
+2. Under **One-click setup → Terminal tools**, tick **Claude Code**.
+3. Copy the command for your system and paste it into a terminal:
+   - macOS / Linux (also WSL and Git Bash): `curl -fsSL <the address shown> | sh`
+   - Windows (PowerShell or Terminal, **not** cmd): `irm <the address shown> | iex`
+4. Then run `claude`. Open a **new** terminal first — a terminal opened from inside an old one does not count.
+
+> **What travels in that command is a one-time token, not your key.** It dies
+> after one use or fifteen minutes; the key itself is injected server-side when
+> the script is fetched. The page also links the script source so you can read it
+> before running it, and one line puts everything back:
+> `curl -fsSL <base>/uninstall | sh`.
+
+**Prefer to do it yourself?** The manual steps below configure exactly the same
+things, and they are what the script writes.
 
 ---
 
