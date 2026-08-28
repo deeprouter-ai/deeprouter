@@ -5094,7 +5094,6 @@
     "Key to set up": "Key to set up",
     "One-click setup": "One-click setup",
     "Only what you tick AND actually have installed gets configured. Anything missing is skipped and reported.": "Only what you tick AND actually have installed gets configured. Anything missing is skipped and reported.",
-    "Or download it, read it, then run it — same address as above:": "Or download it, read it, then run it — same address as above:",
     "Pick at least one tool above to get your command.": "Pick at least one tool above to get your command.",
     "Preparing…": "Preparing…",
     "Press Win + X and choose Terminal or Windows PowerShell. Do not use Command Prompt (cmd) — neither command works there.": "Press Win + X and choose Terminal or Windows PowerShell. Do not use Command Prompt (cmd) — neither command works there.",
@@ -5105,6 +5104,13 @@
     "Want to read the script first?": "Want to read the script first?",
     "Windows — PowerShell or Terminal": "Windows — PowerShell or Terminal",
     "macOS / Linux — Terminal (also WSL and Git Bash)": "macOS / Linux — Terminal (also WSL and Git Bash)",
-    "(limited to some models)": "(limited to some models)"
+    "(limited to some models)": "(limited to some models)",
+    "Changed your mind later? One line puts everything back:": "Changed your mind later? One line puts everything back:",
+    "After it finishes — how to open each tool": "After it finishes — how to open each tool",
+    "Works right away — nothing to reopen.": "Works right away — nothing to reopen.",
+    "New terminal first.": "New terminal first.",
+    "New terminal first. If it asks how to sign in, pick \"API key\".": "New terminal first. If it asks how to sign in, pick \"API key\".",
+    "New terminal first. If it still asks you to log in to ChatGPT, use this instead:": "New terminal first. If it still asks you to log in to ChatGPT, use this instead:",
+    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count."
   }
 }

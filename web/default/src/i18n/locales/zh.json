@@ -5104,7 +5104,13 @@
     "Press Win + X and choose Terminal or Windows PowerShell. Do not use Command Prompt (cmd) — neither command works there.": "按 Win + X，选「终端」或「Windows PowerShell」。不要用「命令提示符」(cmd) —— 两条命令在那里都跑不了。",
     "Want to read the script first?": "想先看看这个脚本？",
     "See the template on GitHub:": "在 GitHub 上查看模板：",
-    "Or download it, read it, then run it — same address as above:": "或者先下载、读一遍、再运行 —— 和上面是同一个地址：",
-    "(limited to some models)": "（仅限部分模型）"
+    "(limited to some models)": "（仅限部分模型）",
+    "Changed your mind later? One line puts everything back:": "以后想撤销？一行命令把所有改动还原：",
+    "After it finishes — how to open each tool": "装好之后 —— 每个工具怎么打开",
+    "Works right away — nothing to reopen.": "现在就能用,什么都不用重开。",
+    "New terminal first.": "先开一个新终端。",
+    "New terminal first. If it asks how to sign in, pick \"API key\".": "先开一个新终端。第一次启动如果问你怎么登录,选「API key」那一项。",
+    "New terminal first. If it still asks you to log in to ChatGPT, use this instead:": "先开一个新终端。如果它还是让你登录 ChatGPT,就改用这一条:",
+    "\"New terminal first\" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.": "「先开一个新终端」的意思是:把终端窗口全部关掉,重新开一个。从旧窗口里再开出来的不算。"
   }
 }

@@ -36,7 +36,7 @@ import { useApiKeys } from './api-keys-provider'
 
 /** Where the script template lives, for the "read it first" link (PRD §5.3). */
 const SCRIPT_SOURCE_URL =
-  'https://github.com/deeprouter-ai/deeprouter/tree/main/internal/connect'
+  'https://github.com/deeprouter-ai/deeprouter/tree/main/internal/connect/templates'
 
 /**
  * One-click setup block for terminal AI tools.
@@ -80,6 +80,7 @@ export function ApiKeysOneClickCard() {
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [keyId, setKeyId] = useState<number | null>(null)
   const [scriptUrl, setScriptUrl] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
   const [issuing, setIssuing] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
 
@@ -174,7 +175,9 @@ export function ApiKeysOneClickCard() {
           return
         }
         const { base_url, script_path } = res.data
-        setScriptUrl(`${base_url.replace(/\/+$/, '')}${script_path}`)
+        const base = base_url.replace(/\/+$/, '')
+        setBaseUrl(base)
+        setScriptUrl(`${base}${script_path}`)
       } catch {
         if (!cancelled) setScriptUrl('')
       } finally {
@@ -216,19 +219,12 @@ export function ApiKeysOneClickCard() {
   const windowsCommand = `irm ${scriptUrl} | iex`
   const posixCommand = `curl -fsSL ${scriptUrl} | sh`
 
-  // Same address as the one-liner, split so the script can be read before it
-  // runs. Windows has no `less`, so it gets its own pair.
-  const twoStepCommand = isWindows
-    ? [
-        `irm ${scriptUrl} -OutFile dr-setup.ps1`,
-        `notepad dr-setup.ps1`,
-        `.\\dr-setup.ps1`,
-      ].join('\n')
-    : [
-        `curl -fsSL ${scriptUrl} -o dr-setup.sh`,
-        `less dr-setup.sh`,
-        `sh dr-setup.sh`,
-      ].join('\n')
+  // Built from the base URL, not by trimming the token off scriptUrl: undo
+  // needs no token, and deriving it from a token-shaped string would tie the
+  // two together for no reason. Both platforms, detected one first — the
+  // detection describes the browser, not the machine that was set up.
+  const uninstallWindows = `irm ${baseUrl}/uninstall | iex`
+  const uninstallPosix = `curl -fsSL ${baseUrl}/uninstall | sh`
 
   const commandRow = (id: string, label: string, value: string) => (
     <div key={id}>
@@ -265,6 +261,16 @@ export function ApiKeysOneClickCard() {
     'posix',
     t('macOS / Linux — Terminal (also WSL and Git Bash)'),
     posixCommand
+  )
+  const uninstallWindowsRow = commandRow(
+    'un-win',
+    t('Windows — PowerShell or Terminal'),
+    uninstallWindows
+  )
+  const uninstallPosixRow = commandRow(
+    'un-posix',
+    t('macOS / Linux — Terminal (also WSL and Git Bash)'),
+    uninstallPosix
   )
 
   return (
@@ -395,14 +401,94 @@ export function ApiKeysOneClickCard() {
           </p>
         )}
 
+        {/* What to type once the script has finished. The script prints the
+            same table, but terminal output scrolls away and gets closed — a
+            real user typed plain `codex` an hour after installing, met the
+            ChatGPT login screen, and read it as "setup failed" (2026-08-28).
+            The page cannot know whether their machine already had a Codex
+            config (that decides plain `codex` vs `--profile deeprouter`), so
+            the Codex row teaches the check instead of the answer.
+            Collapsed by default like the script block below (@sam
+            2026-08-28): the bold summary is the part that must be
+            unmissable, not the table itself. */}
+        {selected.length > 0 && (
+          <details className='mt-4'>
+            <summary className='cursor-pointer text-xs font-semibold'>
+              {t('After it finishes — how to open each tool')}
+            </summary>
+            <div className='border-border mt-2 divide-y rounded-md border'>
+              {tools
+                .filter((tool) => selected.includes(tool.id))
+                .map((tool) => {
+                  const guide: Record<
+                    string,
+                    { cmd: string; note: string; extraCmd?: string }
+                  > = {
+                    opencode: {
+                      cmd: 'opencode',
+                      note: t('Works right away — nothing to reopen.'),
+                    },
+                    'claude-code': {
+                      cmd: 'claude',
+                      note: t('New terminal first.'),
+                    },
+                    'gemini-cli': {
+                      cmd: 'gemini',
+                      note: t(
+                        'New terminal first. If it asks how to sign in, pick "API key".'
+                      ),
+                    },
+                    codex: {
+                      cmd: 'codex',
+                      note: t(
+                        'New terminal first. If it still asks you to log in to ChatGPT, use this instead:'
+                      ),
+                      extraCmd: 'codex --profile deeprouter',
+                    },
+                  }
+                  const row = guide[tool.id]
+                  if (!row) return null
+                  return (
+                    <div
+                      key={tool.id}
+                      className='flex flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2'
+                    >
+                      <span className='w-24 shrink-0 text-xs font-medium'>
+                        {tool.name}
+                      </span>
+                      <code className='bg-background border-border rounded border px-1.5 py-0.5 font-mono text-[11px]'>
+                        {row.cmd}
+                      </code>
+                      <span className='text-muted-foreground text-[11px]'>
+                        {row.note}
+                      </span>
+                      {row.extraCmd && (
+                        <code className='bg-background border-border rounded border px-1.5 py-0.5 font-mono text-[11px]'>
+                          {row.extraCmd}
+                        </code>
+                      )}
+                    </div>
+                  )
+                })}
+            </div>
+            <p className='text-muted-foreground mt-1.5 text-[11px]'>
+              {t(
+                '"New terminal first" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.'
+              )}
+            </p>
+          </details>
+        )}
+
         {/* Piping a downloaded script into a shell is a fair thing to be wary
             of. rustup, bun and homebrew all offer a way to read it first, and
             not offering one just pushes cautious users away. The review link
-            shows the template; the two-step form shows the exact bytes that
-            will run, key and all — which the template alone cannot. */}
+            shows the template. A download-read-run form used to sit here too;
+            removed 2026-08-28 (@sam: not useful) — PRD §5.4 records it, and
+            the address still serves the script to anyone who saves it by
+            hand. */}
         {selected.length > 0 && scriptUrl && (
           <details className='mt-3'>
-            <summary className='text-muted-foreground hover:text-foreground cursor-pointer text-[11px]'>
+            <summary className='cursor-pointer text-xs font-semibold'>
               {t('Want to read the script first?')}
             </summary>
             <div className='mt-2 space-y-2'>
@@ -414,17 +500,22 @@ export function ApiKeysOneClickCard() {
                   rel='noreferrer noopener'
                   className='underline underline-offset-2'
                 >
-                  internal/connect/
+                  internal/connect/templates/
                 </a>
               </p>
+              {/* Reassurance more than instruction. Most people who read this
+                  have not run anything yet, and "I can undo it" is what makes
+                  a piped-shell command acceptable to a cautious user — rustup,
+                  nvm and homebrew all say it here for the same reason (PRD
+                  §4.6). It needs no token, so it is safe to show always, and
+                  both platforms are shown for the same reason the install
+                  commands are: the browser is not necessarily the machine. */}
               <p className='text-muted-foreground text-[11px]'>
-                {t(
-                  'Or download it, read it, then run it — same address as above:'
-                )}
+                {t('Changed your mind later? One line puts everything back:')}
               </p>
-              <pre className='border-border bg-background overflow-x-auto rounded-md border px-2 py-1.5 font-mono text-[11px]'>
-                {twoStepCommand}
-              </pre>
+              {isWindows
+                ? [uninstallWindowsRow, uninstallPosixRow]
+                : [uninstallPosixRow, uninstallWindowsRow]}
             </div>
           </details>
         )}
