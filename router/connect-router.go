@@ -27,4 +27,9 @@ func SetConnectRouter(router *gin.Engine) {
 	}
 
 	router.GET("/i/:token", middleware.RouteTag("connect"), connect.RedeemScript)
+
+	// Undo sits at a fixed address with no token. It reverses only what the
+	// setup run recorded on that machine, so there is no secret to protect —
+	// and a person removing our configuration must never meet an expiry.
+	router.GET("/uninstall", middleware.RouteTag("connect"), connect.UninstallScript)
 }

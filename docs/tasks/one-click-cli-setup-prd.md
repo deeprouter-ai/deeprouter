@@ -155,6 +155,9 @@ Windows 用户看到的是 `irm https://deeprouter.co/i/A1B2C3 | iex`，**页面
 
 ### 2.2 终端里自己跑完
 
+> ⚠️ **下面是示意,不是逐字规格** —— **脚本的真实输出是英文**(§0.1 F21):用户群里有不读中文的人。
+> 这段用中文写是为了让读 PRD 的人看懂流程与信息层次;**该出现哪些信息、分几步、说什么**才是规格,措辞不是。
+
 ```
 DeepRouter 一键配置
 
@@ -466,13 +469,16 @@ ANTHROPIC_SMALL_FAST_MODEL = <model>
 **OpenCode** — 路径**先问工具**：`opencode debug paths` 解析出 config 路径，失败再回落 `~/.config/opencode/opencode.json`（见 Q2；它尊重 `XDG_CONFIG_HOME`，硬编码会对一部分用户失效。`%APPDATA%\opencode\` 是插件数据目录，**不是**主配置）
 
 ```json
-{ "provider": { "deeprouter": {
+{ "model": "deeprouter/<为 OpenCode 探测选中的模型>",
+  "provider": { "deeprouter": {
     "npm": "@ai-sdk/openai-compatible",
     "name": "DeepRouter",
     "options": { "baseURL": "<base>/v1", "apiKey": "<key>" },
     "models": { "deeprouter-auto": { "name": "DeepRouter Auto" } }
 }}}
 ```
+
+> 🔴 **顶层 `model` 必写**（§0.1 F25）：只加 provider 不设默认，OpenCode 启动时仍用它自家目录挑的模型（实机：Nano Banana Pro，张口要 Google key），用户读作「没配上」。用户自设过的默认会被**有意**覆盖 —— 跑一键配置的本意就是把工具指向 DeepRouter（有备份、可卸载还原）。
 
 **Codex CLI** — **分两种情况，两种都不需要合并 TOML**（见 Q7）· ✅ **机制已实测成立**（v0.149.1，2026-08-26）
 
@@ -628,6 +634,8 @@ irm https://deeprouter.co/uninstall | iex             # Windows
 ```
 
 **不需要令牌** —— 卸载不需要密钥，所以是一个静态地址，任何时候都能跑。
+
+🔴 **但它同样要按 User-Agent 分平台下发**（P1 已建好这套机制，直接复用）。理由与安装那条完全相同：把 POSIX 脚本喂进 `iex` 不是「什么都没发生」，PowerShell 会把每一行读不懂的原样回显到终端。卸载脚本里没有密钥，所以泄露风险不存在，但用户会看到满屏红字然后以为卸载失败 —— 而这恰恰是他最不需要再受一次惊吓的时刻。
 
 **为什么这是 Phase 1 而不是 Phase 2**：本 PRD 存在的全部理由是「用户干不了编辑 shell 配置文件这件事」。如果卸载说明写成「请打开 `~/.zshrc` 删掉那一行」，就等于让他去做我们花二十小时帮他避开的那件事——自相矛盾。而且**装了撤不掉**会直接放大 §5 对 `curl` 管道执行的信任顾虑。rustup / nvm / homebrew 都提供卸载，这是这类脚本的基本礼貌。
 
@@ -860,15 +868,12 @@ if (url.includes('{cherryConfig}')) {
 1. **仅 HTTPS + 自有域名。**
 2. **密钥不进 URL**（§4.1）。
 3. **提供「先看看这个脚本」链接** —— 指向 `deeprouter/internal/connect/` 里的模板源文件（Q4；该仓库公开）。`curl` 管道执行是有争议的模式，rustup / bun / homebrew 都配这个出口，不给等于逼谨慎用户放弃。
-4. **同时给出两步写法**，供想逐字校验的人用 —— 与主命令同一个地址，零额外成本：
-
-   ```bash
-   curl -fsSL https://deeprouter.co/i/A1B2C3 -o dr-setup.sh
-   less dr-setup.sh          # 自己看一遍
-   sh dr-setup.sh
-   ```
-
-   这条同时补上一个真实差异：**审阅链接给的是模板，下发的是模板 + 注入的密钥**，只有两步写法能让用户看到真正会执行的那份内容。
+4. ~~同时给出两步写法~~ **已从页面移除**（2026-08-28，@sam 实机评审：「没有用」）。
+   P1 曾实现并实测跑通（P1 卡有记录）；移除的只是**页面上的教学**，
+   地址本身照旧下发脚本正文，想逐字校验的人 `curl -o` 存下来看仍然可行——
+   只是页面不再把这套流程当作一个功能来展示。
+   原理由里那条「审阅链接给的是模板，下发的是模板 + 注入的密钥」的差异**依然真实**，
+   若日后有用户真的问出这个差异，恢复的成本也就是几行 UI。
 5. **发令牌的接口需已登录会话**，且令牌只能换到**该用户自己的** key。
 6. **`~/.deeprouter/env.sh` 权限设为 `600`** —— 它里面是明文密钥，不能让同机其他用户读到。
 7. **脚本不上报任何东西。** 本期不做遥测——它运行在用户机器上、持有用户密钥，任何回传都需要单独的隐私评审。
@@ -1064,7 +1069,6 @@ if (url.includes('{cherryConfig}')) {
 - [ ] 🔴 **令牌只能换到「该用户自己的」key**（§5.5）：拿 A 用户的登录会话签的令牌，**换不到** B 用户的 key。这是唯一一条越权路径，**必须有单测**。
 - [ ] 🔴 **发令牌的接口要求已登录会话** —— 未登录直接调用被拒。
 - [ ] 「先看看这个脚本」链接可点、指向 `deeprouter/internal/connect/` 的模板源文件（§5.3）。
-- [ ] **两步写法与主命令同一地址**且真的能跑（§5.4）：`curl -o` → `less` → `sh`。
 - [ ] 🔴 **脚本不上报任何东西**（§5.7）：抓一次网络，除了「换令牌」与「验证请求」之外**没有任何出站连接**。
 - [ ] 🔴 **不引入运行时依赖**（§5.8）：在一台**没有 Node、没有 Python** 的干净机器上跑通两个平台。⚠️ 开发机通常都装了，**测不出来** —— 与 U3 同一类问题。
 - [ ] 全程仅 HTTPS，且只连自有域名。
@@ -1237,7 +1241,7 @@ P3 / P4 与 Track A 完全无关，可并行。两者原本 `depends_on` 域名�
 | **V9** | **OpenCode 的 PRD 配置逐字可用** —— 四个工具里唯一一个一字不改就跑通的 | 写入 `~/.config/opencode/opencode.json` 后，`opencode models` 列出 `deeprouter/deeprouter-auto`；`opencode run` 返回网关的 `Invalid token` + request id（假密钥） |
 | **V10** | **Codex 的独立 profile 文件方案（Q7）成立** —— 本卡原本**最大的工程风险**（在 sh 与 PowerShell 里手写 TOML 增删改）确实被消掉 | 造一份「用户原有的」`config.toml`，另写 `deeprouter.config.toml`，`codex exec --profile deeprouter` 输出 `provider: deeprouter`，请求到达网关，**用户原文件逐字未变** |
 
-### 🔴 推翻或补充了本 PRD 原有规格的十六条
+### 🔴 推翻或补充了本 PRD 原有规格的二十条
 
 | # | 实测 | 原规格 | 影响 |
 |---|---|---|---|
@@ -1257,6 +1261,16 @@ P3 / P4 与 Track A 完全无关，可并行。两者原本 `depends_on` 域名�
 | **F12** | **`GEMINI_MODEL` 环境变量无效——它根本没被读**（v0.57 bundle 里 `env.GEMINI_MODEL` 零命中）。真正的键是 `settings.json` 的 **`model.name`**，已实测生效 | §4.3 写 `GEMINI_MODEL=gemini-2.5-flash` | 🔴 **改写 `settings.json` 的 `model.name`** —— F10 的认证键在同一份文件里，零额外成本 |
 | **F9** | **「装没装」不能用配置目录判断** —— 实测装 **ChatGPT 桌面应用**会创建一个内容丰富的 `~/.codex/config.toml`（`[marketplaces.openai-bundled]` / `[plugins…]` / `[mcp_servers.node_repl]`），但 `codex` **在 PowerShell 与 cmd 里都不是命令**。| §4.2 闸 2 写的是「配置目录存在 **或** 可执行文件在 PATH」 | **判据改为可执行文件**。OR 判据下脚本会认定 Codex 已装、写配置、并让用户敲一个**不存在的命令**。ChatGPT 桌面版装机量很大，不是边缘情况 |
 | **F8** | **Windows 的持久化不能照 POSIX 镜像** —— `$PROFILE` + `env.ps1` 在默认的 `Restricted` execution policy 下不加载，且**每次开终端报红**。改用 `[Environment]::SetEnvironmentVariable(…,'User')`（写注册表，与 policy 无关） | D2 的语法表里 Windows 一行是「`. $HOME\.deeprouter\env.ps1`」 | **D2 的 Windows 机制整条改写**，连带 §4.3 清单与 §4.6 卸载；并推翻了「fish 是唯一能弄坏终端的路径」这句 |
+| **F21** | **脚本输出用英文** —— 首要理由是产品的:**有不懂中文的用户**(@sam,2026-08-28)。技术约束刚好同向:PS 5.1 按**系统 ANSI 码页**读 `.ps1`,实测同一行中文 `irm \| iex` ✅ 正常、存成无 BOM 的 `.ps1` ❌ 乱码、带**真** BOM ✅ 正常 —— 而两步写法(§5.4)恰恰要存文件。⚠️ 首轮测量把 BOM 那组做错了(`UTF8Encoding.GetBytes()` **不输出 preamble**,BOM 要单独写),改对后结论才反转;`chcp 936`(中文 Windows 默认)下的**控制台渲染测不准**,输出被工具捕获后重新解码 | §2.2 的样例输出与 §6 的失败态文案都是中文 | **两份脚本输出一律英文**;网关返回的中文错误**翻译后输出、数字原样保留** —— §6 要的本来就是「剩余 $X / 需要 $Y」这两个数字,不是那句中文。§2.2 的中文样例降级为**示意**,不是逐字规格。🔴 **这不是「等编码问题解决就改回中文」的临时妥协** —— 用户群里有人不读中文,所以即使 BOM 那条路走通了,结论也一样 |
+| **F22** | 🔴 **Windows 写环境变量很慢,而且慢得没有提示** —— `[Environment]::SetEnvironmentVariable(…,'User')` 会向桌面上所有顶层窗口广播 `WM_SETTINGCHANGE` 并**阻塞等待回应**,实测**每个变量约 7.1 秒**。四个工具全配 = 7 个变量 ≈ **50 秒**,而这 50 秒正好落在「Writing configuration…」之后、**没有任何输出**。用户会以为卡死并按 Ctrl+C。⚠️ 试过「直接写注册表 + 最后广播一次」把它压到 ~7 秒(实测 7 次写入仅 32ms、REG_SZ 正确、`%` 不展开),但该写法出现**间歇性写不进去且不报错**,原因未查清 —— 已**回退**,V5–V8 验的是 `SetEnvironmentVariable`,不是直接写注册表 | 全文未提安装耗时 | **保留已验证的写法,改为写之前先告知耗时**。压缩到一次广播是一条有价值的优化,但要先解释清楚那个间歇性失败,**不能在「工具能不能用」这一环上用没验透的机制** |
+| **F23** | 🔴 **F7 的修法本身还不够** —— 改用 `Invoke-WebRequest` 后,`$_.Exception.Response.GetResponseStream()` **已经被读完了**:流报告 `CanRead=True` / `CanSeek=True`,然后**读出 0 字节**(因为位置在末尾)。正文其实在 `$_.ErrorDetails.Message` 里。**而这个失败是隐形的** —— message 为空 → 分类落到「未知 4xx」→ 每一次预扣费失败都被静默当成「令牌无权访问该模型」,**§6 里所有基于 message 的规则在 Windows 上全部失效**,用户永远看不到「剩余 $X / 需要 $Y」 | F7 只说了「改用 `Invoke-WebRequest` 手动读响应流」 | **先读 `ErrorDetails.Message`,流只作兜底**(兜底时先 `Position = 0` 并显式用 UTF8 读)。顺带把「网关没声明 charset」也一起防住了 —— 实测两种响应现在都能正确抽出两个数字 |
+| **F24** | 🔴 **Codex 的 profile 文件里,键必须在顶层** —— `codex --help` 原文:`--profile <name>` 是「Layer `$CODEX_HOME/<name>.config.toml` on top of the base user config」。**层进来的是整个文件**,所以 `model` / `model_provider` 要写在顶层;包一层 `[profiles.deeprouter]` 会把它们埋进一个没人激活的嵌套 profile。**失败是静默的**:Codex 正常加载该文件、正常启动,然后 header 显示 `provider: openai`、请求打向 `wss://api.openai.com/v1/responses`。实测 codex-cli 0.149.1(2026-08-28,真机):**只差那一行 header**,`provider` 就从 `deeprouter` 变成 `openai` | §4.3 的内容块本来就是顶层的(没错),V10 也验过 —— **错的是实现**:一层多余的 `[profiles.x]` | 🔴 **两种情况写的内容逐字相同,只有文件名不同**(§4.3 原话「内容都是同一段」)。已加测试钉住:profile 文件里不得出现 `[profiles.`,且两个分支产出必须 `Equal`。📌 **单测看不出来** —— 文件内容在任何单测视角下都是对的,只有真装了 Codex 的机器能发现 |
+| **F25** | 🔴 **OpenCode 只加 provider 不够，还必须设顶层 `model` 默认** —— 没有它，OpenCode 启动仍用自家目录挑的模型（实机 2026-08-28：Nano Banana Pro，张口要 Google key），用户读作「没配上」。DeepRouter 其实已在模型列表里，只是没被选中 | §4.3 的 JSON 块只有 `provider` 一段；V9 验的是 `opencode models` **列出**模型，没验**启动时选中**哪个 | 两份脚本顶层补 `"model": "deeprouter/<选中的模型>"`，用户自设的默认**有意覆盖**（备份 + 可卸载还原）。测试钉住：全新装与已有配置两条路径，顶层 `model` 都必须等于 `deeprouter/<模型>`。📌 与 F24 同款：**文件在单测视角下全对，只有真启动工具才暴露** |
+| **F26** | 🔴 **真网关的钱符是全角＄，且随显示设置可变（¥/¤/自定义）** —— `logger.FormatQuota` 按网关的计价显示设置出符号，默认 USD 分支用全角＄（U+FF04）。两份脚本的金额提取只认半角 `$`，于是「余额不足」分类命中但两个金额永远取不出，§6 的钱数文案在真网关上从不出现；消息尾的 `(request id: …)` 还带数字，取数必须先剪尾 | 假网关当初写的是半角 `$`，测试因此全绿 —— **F23 同族的假上游不忠实** | 两份脚本改为**剪掉 request id 尾后取最后两个数字、不认任何货币符**；假网关消息改成与真网关逐字节同形（含全角＄与 request id 尾）。发现方式：L163 验收在真网关上人为造出预扣费失败 —— 行为测试报不了的那类。⚠️ 已知边界：英文文案里的 `$` 前缀在网关配成 CNY 显示时会错标币种（生产 USD 计价，暂接受） |
+| **F27** | 🔴 **死令牌的应答必须是会说话的脚本 + HTTP 200** —— 旧实现是「全注释正文 + 404」：注释经 `sh` 零输出，而 `curl -f` 遇非 2xx 直接丢弃正文 —— 双重保证用户什么都看不到，实测 exit 0 彻底静默（§6 首行明令禁止） | 当初的注释写法是为了「安全：不执行任何东西」，测试还把它钉成了铁律 | 改为按 UA 分平台的 `echo`/`Write-Host` 脚本 + `exit 1`，状态 200；测试改为**真跑 sh** 断言有声音且非零退出。L210 行 6 实造抛出 |
+| **F28** | 🔴 **最终写入不检查 = 假成功** —— 只读 opencode.json 下：裸 Permission denied 漏出后照样 `[ ok ]` + `Done. 1 tool(s) configured`；验证阶段打的是网关，探不到文件没写进去 | `cat > file` 的返回值没人看；新建路径有检查、覆写路径没有（opencode/gemini 两处），env.sh 与清单同病 | 四处全部改检查：失败即 `[fail] cannot write <file>` + 权限提示，不记清单不报成功；ps1 本就全在 try/catch 里（.NET 异常是终止性）无需改。回归测试用 chmod 0444（Windows 上是只读属性，两平台都真拦写）。L210 行 5 真 Linux 容器抛出 |
+| **F29** | 🔴 **断网时把用户往密钥问题带** —— 文案是「检查你的密钥是否允许…」。双层缺陷：① 探测循环没有 network 分支；② posix 侧 `dr_http` 里 curl 失败时 `-w` 已印 000、`|| printf 000` 又追加一个 → 返回 `000000`，分类器的 `000` 分支**从来就是死代码** | 分类表里有 network 类，但没有任何路径消费它；PS 侧自己的异常路径反而是对的 | 两脚本探测循环加 network 分支（断线即停止探测）+ 专属总结「Cannot reach DeepRouter…check your network」；`dr_http` 归一化不再追加。L210 行 11 `--network none` 容器抛出，新测试打向拒连端口钉住 |
+| **F30** | ⚪ **Codex 与 Claude Code 都不认识 `deeprouter-auto`**，各自打一条警告（Codex：`Model metadata for … not found`；Claude Code 2.1.250：`…is not a model this version recognizes, so auto-compact will keep this session within 200k tokens`）。两者都**不影响对话**（均已实机跑通），影响的是它们对上下文窗口的假设：假设偏大时，长会话会在中途撞上上游拒绝 | 两个工具都靠内置的「模型名 → 窗口」表，而 `deeprouter-auto` 是虚拟名，不在任何人的表里；且它每次请求可能路由到不同模型，**本就不存在单一真值** | 🔴 **已拍板：不做（@sam 2026-08-28，原话「不值当」）**。出路是有的 —— Claude Code 接 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`、Codex 接 `model_context_window`（两个键均已实测存在且被解析），但**没有诚实的数字来源**：实测 `/v1/models` 只有 `id/object/created/owned_by/supported_endpoint_types`，smart-router catalog 有价格与能力标签但**无上下文窗口**。在脚本里硬编一张模型表，正是导致这个问题的那类错误。若将来重提，应作为一个统一议题：让 catalog 暴露 `context_window`，一次解决两个工具 |
 
 > F2/F3 合起来印证了 `key-setup-guide-prd.md` §6.3 早就写下的硬约束：**「Base URL / model 只能来自后端 API 注入，前端不得硬编码」**。那条规则原本是为「显示了 dev 端口 17231」那次事故写的；现在它有了第二个、更严重的理由。
 

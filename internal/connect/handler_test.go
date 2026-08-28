@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"testing"
 
 	"github.com/QuantumNous/new-api/model"
@@ -138,8 +139,12 @@ func TestConnectHandler_RedeemIsScopedToTheGrantsOwner(t *testing.T) {
 	require.NoError(t, err)
 
 	got := redeem(t, token)
-	require.Equal(t, http.StatusNotFound, got.Code)
+	// 200 on purpose: curl -f discards error-status bodies. What matters
+	// is that no key travels and the script only tells the reader to go
+	// get a fresh command.
+	require.Equal(t, http.StatusOK, got.Code)
 	require.NotContains(t, got.Body.String(), "bob-secret-key")
+	require.Contains(t, got.Body.String(), "no longer exists")
 }
 
 func TestConnectHandler_IssueRequiresSession(t *testing.T) {
@@ -164,8 +169,10 @@ func TestConnectHandler_IssueRejectsEmptyToolSelection(t *testing.T) {
 	})
 }
 
-// A spent or unknown token must answer in a way a person reading their terminal
-// can act on — and must not be a stack trace or a JSON blob piped into sh.
+// A spent or unknown token must SPEAK when piped into a shell. Comment-only
+// bodies print nothing, and any non-200 status makes `curl -f` discard the
+// body before sh ever sees it - both measured live as total silence, which
+// is exactly what PRD 6 bans. The stub is safe to execute: echo lines only.
 func TestConnectHandler_RedeemFailureIsReadableShell(t *testing.T) {
 	useMemoryStore(t)
 	withKeysDB(t)
@@ -174,13 +181,27 @@ func TestConnectHandler_RedeemFailureIsReadableShell(t *testing.T) {
 	require.Equal(t, http.StatusOK, redeem(t, token).Code)
 
 	second := redeem(t, token)
-	require.Equal(t, http.StatusNotFound, second.Code)
+	require.Equal(t, http.StatusOK, second.Code, "curl -f drops error-status bodies")
 	body := second.Body.String()
 	require.NotContains(t, body, "alice-secret-key")
-	for _, line := range strings.Split(strings.TrimSpace(body), "\n") {
-		require.True(t, strings.HasPrefix(line, "#"),
-			"every line must be a shell comment so `curl | sh` cannot execute it, got %q", line)
+	require.Contains(t, body, `echo 'This setup command is no longer valid.'`)
+	require.Contains(t, body, "exit 1")
+
+	// The proof that matters: a real sh must say it out loud and fail.
+	if _, err := exec.LookPath("sh"); err == nil {
+		out, runErr := exec.Command("sh", "-c", body).CombinedOutput()
+		require.Contains(t, string(out), "This setup command is no longer valid.")
+		require.Error(t, runErr, "the stub must exit nonzero")
 	}
+
+	// The PowerShell flavor follows the User-Agent, like every script here.
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/i/garbage", nil)
+	c.Request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64) WindowsPowerShell/5.1.19041.6328")
+	c.Params = gin.Params{{Key: "token", Value: "garbage"}}
+	RedeemScript(c)
+	require.Contains(t, w.Body.String(), `Write-Host 'This setup command is no longer valid.'`)
 }
 
 func TestConnectHandler_ListToolsMatchesCatalogue(t *testing.T) {
@@ -201,11 +222,18 @@ func TestConnectHandler_ListToolsMatchesCatalogue(t *testing.T) {
 // independent deployments exist with non-interchangeable keys, and a hardcoded
 // default fails as a run of 401s that never mentions the address (PRD §0.1 F2).
 func TestConnectScript_HasNoHardcodedBaseURL(t *testing.T) {
-	script := RenderScript(PlatformPOSIX, "https://tenant-a.test", "k", []string{ToolCodex})
+	for _, platform := range []Platform{PlatformPOSIX, PlatformPowerShell} {
+		script := RenderScript(platform, "https://tenant-a.test", "k", []string{ToolCodex})
+		require.Contains(t, script, "https://tenant-a.test")
 
-	require.Contains(t, script, "https://tenant-a.test")
-	for _, host := range []string{"deeprouter.co", "deep-router.com", "api.deeprouter"} {
-		require.NotContains(t, script, host, "no deployment may be baked into the template")
+		// Every address in the rendered script has to be the one that was
+		// injected. Listing known deployments instead would both miss a new
+		// one and trip over `deeprouter.config.toml`, the Codex profile
+		// filename that happens to contain a deployment's name.
+		for _, found := range regexp.MustCompile(`https?://[A-Za-z0-9._-]+`).FindAllString(script, -1) {
+			require.Equal(t, "https://tenant-a.test", found,
+				"%s: no deployment may be baked into the template", platform)
+		}
 	}
 }
 
@@ -238,12 +266,29 @@ func TestConnectScript_PowerShellClientGetsPowerShell(t *testing.T) {
 	RedeemScript(c)
 
 	script := w.Body.String()
-	require.Contains(t, script, "$DeepRouterApiKey")
+	require.Contains(t, script, "$DrApiKey")
 	require.Contains(t, script, "alice-secret-key")
 	// The POSIX forms are exactly what PowerShell chokes on.
 	require.NotContains(t, script, "#!/bin/sh")
-	require.NotContains(t, script, "set -eu")
-	require.NotContains(t, script, "DEEPROUTER_API_KEY=")
+	require.NotContains(t, script, "\nset -u")
+	require.NotContains(t, script, "DR_API_KEY='")
+}
+
+// 🔴 PowerShell 5.1 reads a saved .ps1 in the system ANSI codepage, so a single
+// non-ASCII byte can swallow a quote and stop the whole script parsing — and the
+// two-step form offered for review saves it to a file first. Measured 2026-08-28:
+// the same Chinese line renders correctly through `irm | iex` and as mojibake
+// from a BOM-less file, which is why the script says everything in ASCII.
+func TestConnectScript_PowerShellTemplateIsASCII(t *testing.T) {
+	for _, script := range []string{
+		RenderScript(PlatformPowerShell, "https://x.test", "k", []string{ToolCodex}),
+		RenderUninstall(PlatformPowerShell),
+	} {
+		for i, r := range script {
+			require.Less(t, r, rune(128),
+				"byte %d is non-ASCII (%q); PowerShell 5.1 would misread it from a file", i, r)
+		}
+	}
 }
 
 func TestConnectScript_CurlClientGetsPosix(t *testing.T) {
@@ -262,8 +307,8 @@ func TestConnectScript_CurlClientGetsPosix(t *testing.T) {
 
 	script := w.Body.String()
 	require.Contains(t, script, "#!/bin/sh")
-	require.Contains(t, script, "DEEPROUTER_API_KEY=")
-	require.NotContains(t, script, "$DeepRouterApiKey")
+	require.Contains(t, script, "DR_API_KEY='")
+	require.NotContains(t, script, "$DrApiKey")
 }
 
 func TestConnectScript_PlatformFromUserAgent(t *testing.T) {

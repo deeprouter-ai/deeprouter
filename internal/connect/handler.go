@@ -75,18 +75,26 @@ func IssueToken(c *gin.Context) {
 func RedeemScript(c *gin.Context) {
 	grant, err := Redeem(c.Param("token"))
 	if err != nil {
-		// Plain text, not JSON: whatever consumed the URL was `curl | sh`, and
-		// a human reading their terminal is the audience for this message.
-		c.String(http.StatusNotFound, "# This setup command is no longer valid.\n"+
-			"# It works once and expires after 15 minutes.\n"+
-			"# Open your API keys page and copy a fresh command.\n")
+		// A dead token must still SPEAK. The audience is a human terminal, but
+		// the transport is `curl -fsSL | sh` / `irm | iex`: comment lines print
+		// nothing, and any non-2xx status makes curl's -f discard the body
+		// entirely. Both were measured live - the user saw nothing at all.
+		// So: HTTP 200, per-platform echo lines, exit 1 (PRD 6).
+		c.String(http.StatusOK, RenderDeadTokenScript(
+			PlatformFromUserAgent(c.GetHeader("User-Agent")),
+			"This setup command is no longer valid.",
+			"It works once and expires after 15 minutes.",
+			"Open your API keys page and copy a fresh command."))
 		return
 	}
 
 	key, err := model.GetTokenByIds(grant.TokenID, grant.UserID)
 	if err != nil || key == nil {
-		c.String(http.StatusNotFound, "# The key this command was made for no longer exists.\n"+
-			"# Open your API keys page and copy a fresh command.\n")
+		// Same transport constraints as the dead-token stub above.
+		c.String(http.StatusOK, RenderDeadTokenScript(
+			PlatformFromUserAgent(c.GetHeader("User-Agent")),
+			"The key this command was made for no longer exists.",
+			"Open your API keys page and copy a fresh command."))
 		return
 	}
 
@@ -97,6 +105,19 @@ func RedeemScript(c *gin.Context) {
 
 	c.Header("Cache-Control", "no-store")
 	c.String(http.StatusOK, RenderScript(platform, system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
+}
+
+// UninstallScript serves the undo script.
+//
+// No token, no session, no rate limit. Undoing carries no secret — every change
+// it reverses was recorded on the user's own machine — and a fixed address is
+// the point: somebody trying to remove our configuration must never be told
+// their command expired, or the honest answer to "can I take this back" stops
+// being yes (PRD §4.6).
+func UninstallScript(c *gin.Context) {
+	platform := PlatformFromUserAgent(c.Request.UserAgent())
+	c.Header("Cache-Control", "no-store")
+	c.String(http.StatusOK, RenderUninstall(platform))
 }
 
 // ListTools tells the key page which tools this build can configure, so the

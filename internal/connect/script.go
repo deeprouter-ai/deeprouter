@@ -1,9 +1,25 @@
 package connect
 
 import (
+	"embed"
 	"fmt"
 	"strings"
 )
+
+// The scripts live in templates/ as real, runnable files rather than as string
+// literals built up in Go. Three reasons, in order of how much they matter:
+// the key page links a "read this before you run it" URL straight at that
+// directory (PRD §5.3), so what a cautious user reads has to be the same text
+// that runs; `sh -n` and the PowerShell parser can check them; and a reviewer
+// can follow a shell script but not a thousand WriteString calls.
+//
+//go:embed templates/setup.sh templates/setup.ps1 templates/uninstall.sh templates/uninstall.ps1
+var templates embed.FS
+
+// injectMarker is the one line each template reserves for the server. It is a
+// comment in both languages, so the templates stay syntactically valid and can
+// be checked by their own parsers before anything is injected.
+const injectMarker = "# @@DEEPROUTER_INJECT@@"
 
 // Platform is which shell will actually execute the script.
 //
@@ -45,71 +61,89 @@ func PlatformFromUserAgent(ua string) Platform {
 // token is the one the script must point at, so the value comes from that
 // instance's own server_address.
 //
-// ⚠️ The body is a placeholder. P1 delivers the token round-trip and the key
-// page block; detecting and configuring each tool is P2 ("One-Click CLI Setup -
-// P2: The install script for macOS, Linux and Windows"). What is here is a
-// real, runnable script for both shells, so the two-step form in PRD §5.4
-// works today and so users see something honest rather than a broken download.
-//
-// 🔴 It has to be per-shell even while it is a placeholder. A POSIX script
-// piped into `iex` does not merely fail to configure anything — PowerShell
-// reports each unparsable line back to the terminal, and the line holding the
-// key is one of them, so the key lands in red text on screen. Measured on
-// 2026-08-27 before this split existed.
+// 🔴 It has to be per-shell. A POSIX script piped into `iex` does not merely
+// fail to configure anything — PowerShell reports each unparsable line back to
+// the terminal, and the line holding the key is one of them, so the key lands
+// in red text on screen. Measured on 2026-08-27 before this split existed.
 func RenderScript(platform Platform, baseURL, apiKey string, tools []string) string {
+	baseURL = normalizeBaseURL(baseURL)
 	if platform == PlatformPowerShell {
-		return renderPowerShell(baseURL, apiKey, tools)
+		return inject("templates/setup.ps1", powerShellValues(baseURL, apiKey, tools))
 	}
-	return renderPOSIX(baseURL, apiKey, tools)
+	return inject("templates/setup.sh", posixValues(baseURL, apiKey, tools))
 }
 
-func renderPOSIX(baseURL, apiKey string, tools []string) string {
-	var sb strings.Builder
-
-	sb.WriteString("#!/bin/sh\n")
-	sb.WriteString("# DeepRouter one-click setup\n")
-	sb.WriteString("#\n")
-	sb.WriteString("# This script was generated for you and contains your API key.\n")
-	sb.WriteString("# It is fetched over HTTPS and is not stored anywhere after this run.\n")
-	sb.WriteString("set -eu\n\n")
-
-	sb.WriteString(fmt.Sprintf("DEEPROUTER_BASE_URL=%s\n", shellQuote(baseURL)))
-	sb.WriteString(fmt.Sprintf("DEEPROUTER_API_KEY=%s\n", shellQuote(apiKey)))
-	sb.WriteString(fmt.Sprintf("DEEPROUTER_TOOLS=%s\n\n", shellQuote(strings.Join(tools, " "))))
-
-	sb.WriteString("echo \"DeepRouter\"\n")
-	sb.WriteString("echo \"  Server : $DEEPROUTER_BASE_URL\"\n")
-	sb.WriteString("echo \"  Tools  : $DEEPROUTER_TOOLS\"\n")
-	sb.WriteString("echo \"\"\n")
-	sb.WriteString("echo \"Your key was delivered successfully.\"\n")
-	sb.WriteString("echo \"Automatic configuration of these tools is not available yet —\"\n")
-	sb.WriteString("echo \"until it ships, follow the guides at $DEEPROUTER_BASE_URL/resources\"\n")
-
-	return sb.String()
+// RenderUninstall builds the undo script.
+//
+// It carries no key and no base URL — everything it undoes was recorded on the
+// user's own machine by the setup run. That is what lets it live at a fixed
+// address with no token: there is nothing here worth stealing, and somebody
+// who wants to undo their setup should never be told their command expired.
+// RenderDeadTokenScript is what a spent, expired, or orphaned token redeems
+// to. It must be a RUNNING script, not a comment block: the transport is
+// `curl -fsSL | sh` or `irm | iex`, where comments produce no output at all.
+// And it must travel with HTTP 200 - curl's -f discards the body of any
+// error status. Both were measured live: the user saw nothing (PRD 6).
+func RenderDeadTokenScript(platform Platform, lines ...string) string {
+	var b strings.Builder
+	if platform == PlatformPowerShell {
+		for _, l := range lines {
+			b.WriteString("Write-Host '" + l + "'" + "\r\n")
+		}
+		b.WriteString("exit 1" + "\r\n")
+		return b.String()
+	}
+	b.WriteString("#!/bin/sh" + "\n")
+	for _, l := range lines {
+		b.WriteString("echo '" + l + "'" + "\n")
+	}
+	b.WriteString("exit 1" + "\n")
+	return b.String()
+}
+func RenderUninstall(platform Platform) string {
+	if platform == PlatformPowerShell {
+		return inject("templates/uninstall.ps1", "")
+	}
+	return inject("templates/uninstall.sh", "")
 }
 
-func renderPowerShell(baseURL, apiKey string, tools []string) string {
-	var sb strings.Builder
+// normalizeBaseURL drops a trailing slash so the templates can append paths
+// without producing "//v1", which some deployments answer with a redirect that
+// curl does not follow by default.
+func normalizeBaseURL(u string) string {
+	return strings.TrimRight(strings.TrimSpace(u), "/")
+}
 
-	sb.WriteString("# DeepRouter one-click setup\n")
-	sb.WriteString("#\n")
-	sb.WriteString("# This script was generated for you and contains your API key.\n")
-	sb.WriteString("# It is fetched over HTTPS and is not stored anywhere after this run.\n")
-	sb.WriteString("$ErrorActionPreference = 'Stop'\n\n")
+func posixValues(baseURL, apiKey string, tools []string) string {
+	return fmt.Sprintf("DR_BASE_URL=%s\nDR_API_KEY=%s\nDR_TOOLS=%s",
+		shellQuote(baseURL), shellQuote(apiKey), shellQuote(strings.Join(tools, " ")))
+}
 
-	sb.WriteString(fmt.Sprintf("$DeepRouterBaseUrl = %s\n", psQuote(baseURL)))
-	sb.WriteString(fmt.Sprintf("$DeepRouterApiKey  = %s\n", psQuote(apiKey)))
-	sb.WriteString(fmt.Sprintf("$DeepRouterTools   = %s\n\n", psQuote(strings.Join(tools, " "))))
+func powerShellValues(baseURL, apiKey string, tools []string) string {
+	quoted := make([]string, 0, len(tools))
+	for _, t := range tools {
+		quoted = append(quoted, psQuote(t))
+	}
+	return fmt.Sprintf("$DrBaseUrl = %s\n$DrApiKey  = %s\n$DrToolIds = @(%s)",
+		psQuote(baseURL), psQuote(apiKey), strings.Join(quoted, ", "))
+}
 
-	sb.WriteString("Write-Host \"DeepRouter\"\n")
-	sb.WriteString("Write-Host \"  Server : $DeepRouterBaseUrl\"\n")
-	sb.WriteString("Write-Host \"  Tools  : $DeepRouterTools\"\n")
-	sb.WriteString("Write-Host \"\"\n")
-	sb.WriteString("Write-Host \"Your key was delivered successfully.\"\n")
-	sb.WriteString("Write-Host \"Automatic configuration of these tools is not available yet —\"\n")
-	sb.WriteString("Write-Host \"until it ships, follow the guides at $DeepRouterBaseUrl/resources\"\n")
-
-	return sb.String()
+// inject swaps the marker line for the generated assignments. A template that
+// somehow lost its marker would otherwise render as a script with no key and no
+// address, which fails in a confusing way; refusing outright is clearer.
+func inject(name, values string) string {
+	body, err := templates.ReadFile(name)
+	if err != nil {
+		return "# The setup script is unavailable on this server.\n"
+	}
+	text := string(body)
+	if values == "" {
+		return text
+	}
+	if !strings.Contains(text, injectMarker) {
+		return "# The setup script is unavailable on this server.\n"
+	}
+	return strings.Replace(text, injectMarker, values, 1)
 }
 
 // shellQuote wraps a value in single quotes for POSIX sh, escaping any single

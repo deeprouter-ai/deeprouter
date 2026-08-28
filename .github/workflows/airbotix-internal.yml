@@ -89,7 +89,13 @@ jobs:
 
       - name: Run unit tests
         run: |
-          go test ./internal/... -count=1 -race -timeout 60s
+          # 🔴 600s, not 120s: internal/connect runs the real setup and
+          # uninstall scripts in a throwaway HOME against a fake gateway,
+          # and every case pays for spawning a shell plus a handful of curl
+          # processes. That is the point of those tests - the card they come
+          # from is a script that edits the user's machine, and asserting on
+          # the template text would prove nothing about what it does.
+          go test ./internal/... -count=1 -race -timeout 600s
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
           # kids_mode relay layer: all constraints incl. max_tokens cap and model
           # whitelist gate (DR-12). TestKidsModeCoverageMatrix enforces that every
