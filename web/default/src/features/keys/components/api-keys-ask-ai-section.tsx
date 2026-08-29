@@ -133,53 +133,63 @@ export function ApiKeysAskAiSection() {
 
   return (
     <section className='border-border mt-4 border-t pt-4'>
-      <h4 className='text-xs font-semibold'>{t('Some other tool?')}</h4>
-      <p className='text-muted-foreground mt-1 text-xs'>
-        {t(
-          'Pick your tool and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.'
-        )}
-      </p>
-
-      <div className='mt-3 sm:max-w-sm'>
-        <Select
-          items={options}
-          value={slug}
-          onValueChange={(v) => v !== null && setSlug(String(v))}
-        >
-          <SelectTrigger className='w-full text-xs' aria-label={t('Your tool')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            <SelectGroup>
-              {options.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className='border-border bg-background mt-2 flex items-start gap-2 rounded-md border px-2 py-1.5'>
-        <pre className='flex-1 overflow-x-auto text-[11px] whitespace-pre-wrap'>
-          {text}
-        </pre>
-        <Button
-          type='button'
-          size='sm'
-          variant='ghost'
-          className='h-6 shrink-0 px-1.5'
-          onClick={() => void handleCopy()}
-          aria-label={t('Copy')}
-        >
-          {copied ? (
-            <Check className='h-3 w-3' />
-          ) : (
-            <Copy className='h-3 w-3' />
+      {/* Collapsed by default, same shape as "Want to read the script
+          first?": this is the fallback of fallbacks, and expanded it made the
+          card end on a wall of text (@sam, 2026-08-29). */}
+      <details>
+        <summary className='cursor-pointer text-xs font-semibold'>
+          {t('Still stuck? No problem — let your AI assistant help you')}
+        </summary>
+        <p className='text-muted-foreground mt-1 text-xs'>
+          {t(
+            'Pick the app you want to set up and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.'
           )}
-        </Button>
-      </div>
+        </p>
+
+        <div className='mt-3 sm:max-w-sm'>
+          <Select
+            items={options}
+            value={slug}
+            onValueChange={(v) => v !== null && setSlug(String(v))}
+          >
+            <SelectTrigger
+              className='w-full text-xs'
+              aria-label={t('Your tool')}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectGroup>
+                {options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className='border-border bg-background mt-2 flex items-start gap-2 rounded-md border px-2 py-1.5'>
+          <pre className='flex-1 overflow-x-auto text-[11px] whitespace-pre-wrap'>
+            {text}
+          </pre>
+          <Button
+            type='button'
+            size='sm'
+            variant='ghost'
+            className='h-6 shrink-0 px-1.5'
+            onClick={() => void handleCopy()}
+            aria-label={t('Copy')}
+          >
+            {copied ? (
+              <Check className='h-3 w-3' />
+            ) : (
+              <Copy className='h-3 w-3' />
+            )}
+          </Button>
+        </div>
+      </details>
     </section>
   )
 }

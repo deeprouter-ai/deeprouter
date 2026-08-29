@@ -2,6 +2,8 @@
 
 ## 2026-08-29
 
+- 密钥页「发给 AI 求助」区块按实机评审改三处(@sam 2026-08-29):① 整块改为**默认收起**的折叠块,与「想先看看这个脚本?」同一形态 —— 它是兜底的兜底,展开着让整张卡收在一墙文字上;② 标题「用的是别的工具?」→「还是不懂?没关系,让你的AI助手来帮你」—— 旧标题描述的是这块**给谁用**(没有深链/脚本的工具),新标题描述的是用户**此刻的处境**,后者才是人找入口时脑子里的词;③ 说明句「选中你的工具」→「选中你要配置的应用」。英文 key 同步改写,旧键两条删除(`web/default/src/features/keys/components/api-keys-ask-ai-section.tsx`, `web/default/src/i18n/locales/`)
+
 - 🔴 修复 PR 首个 CI 红灯:同一秒内跑两次安装,第二次会毁掉「真原件」的备份(PRD 新增 §0.1 F31,`airbotix-internal / build-and-test` 在 `TestUninstall_RestoresTheStateBeforeTheFirstInstall` 上抓到)。备份名是 `<file>.bak-$DR_STAMP` 而 `DR_STAMP` 精度是**秒**:第二次的 `cp` 同名覆盖,把第一次备份的用户原始配置换成已配置状态 —— manifest 层「保留首次 `original_backup`」的保护(`dr_prior`)工作正常,但它指向的**文件内容**已被冲掉,卸载于是还原出第一次安装后的状态。**本机永远测不出来**:Windows 上单场景 7.4s(进程开销),两次 setup 天然跨秒;CI 的 Linux 0.14s 跑完全场景,同秒必撞 —— 与 F23–F29 同族的「本地绿、真环境红」,这次的「真环境」是 CI 本身。修法:备份名追加进程号(`bak-$DR_STAMP-$$` / ps1 `$PID`),同秒双跑也不可能同名。复现与验证均在 ubuntu 24.04 容器:交叉编译测试二进制、以非 root 用户(=CI 身份)全量重跑通过;Windows 全量回归通过。⚠️ 排查中还发现**以 root 跑该套件会在只读测试上假阳性**(root 无视权限位,chmod 0444 拦不住写),这不是 CI 的问题(runner 非 root)而是「谁在 docker 里以 root 跑测试」的坑,已加守卫:`os.Geteuid()==0` 时 skip 并说明原因,CI 照常执行。另:外部工具(Copilot)对此 CI 红灯的归因是「第二次运行覆盖了 manifest 的 original_backup、需要加检查」—— **该检查一直存在**,真实根因在低一层的文件名碰撞;照它的方案改会在 manifest 层再叠一个不解决问题的守卫(`internal/connect/templates/setup.sh`, `setup.ps1`, `internal/connect/script_behaviour_test.go`, `docs/tasks/one-click-cli-setup-prd.md`)
 
 ## 2026-08-28

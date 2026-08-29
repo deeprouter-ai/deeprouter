@@ -5118,8 +5118,8 @@
     "Terminal tools": "终端工具",
     "AI apps and extensions": "AI 应用与插件",
     "If nothing opens, this app is probably not installed.": "如果没有反应，可能是还没安装此应用。",
-    "Some other tool?": "用的是别的工具？",
-    "Pick your tool and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.": "选中你的工具，复制下面这段话，发给任意 AI —— ChatGPT、Claude，你手边有哪个用哪个。它会一步步教你在哪里填什么。这段文字里不含你的密钥。",
-    "Your tool": "你的工具"
+    "Your tool": "你的工具",
+    "Still stuck? No problem — let your AI assistant help you": "还是不懂？没关系，让你的AI助手来帮你",
+    "Pick the app you want to set up and copy the text below, then paste it to any AI — ChatGPT, Claude, whatever you use. It will walk you through the settings. The text carries no key.": "选中你要配置的应用，复制下面这段话，发给任意 AI —— ChatGPT、Claude，你手边有哪个用哪个。它会一步步教你在哪里填什么。这段文字里不含你的密钥。"
   }
 }
