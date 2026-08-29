@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-08-29
+
+- 🔴 修复 PR 首个 CI 红灯:同一秒内跑两次安装,第二次会毁掉「真原件」的备份(PRD 新增 §0.1 F31,`airbotix-internal / build-and-test` 在 `TestUninstall_RestoresTheStateBeforeTheFirstInstall` 上抓到)。备份名是 `<file>.bak-$DR_STAMP` 而 `DR_STAMP` 精度是**秒**:第二次的 `cp` 同名覆盖,把第一次备份的用户原始配置换成已配置状态 —— manifest 层「保留首次 `original_backup`」的保护(`dr_prior`)工作正常,但它指向的**文件内容**已被冲掉,卸载于是还原出第一次安装后的状态。**本机永远测不出来**:Windows 上单场景 7.4s(进程开销),两次 setup 天然跨秒;CI 的 Linux 0.14s 跑完全场景,同秒必撞 —— 与 F23–F29 同族的「本地绿、真环境红」,这次的「真环境」是 CI 本身。修法:备份名追加进程号(`bak-$DR_STAMP-$$` / ps1 `$PID`),同秒双跑也不可能同名。复现与验证均在 ubuntu 24.04 容器:交叉编译测试二进制、以非 root 用户(=CI 身份)全量重跑通过;Windows 全量回归通过。⚠️ 排查中还发现**以 root 跑该套件会在只读测试上假阳性**(root 无视权限位,chmod 0444 拦不住写),这不是 CI 的问题(runner 非 root)而是「谁在 docker 里以 root 跑测试」的坑,已加守卫:`os.Geteuid()==0` 时 skip 并说明原因,CI 照常执行。另:外部工具(Copilot)对此 CI 红灯的归因是「第二次运行覆盖了 manifest 的 original_backup、需要加检查」—— **该检查一直存在**,真实根因在低一层的文件名碰撞;照它的方案改会在 manifest 层再叠一个不解决问题的守卫(`internal/connect/templates/setup.sh`, `setup.ps1`, `internal/connect/script_behaviour_test.go`, `docs/tasks/one-click-cli-setup-prd.md`)
+
 ## 2026-08-28
 
 - 事实块的导语重写:从对 AI 说话改成对人说话(@sam 在资源页上看到后指出「意义不明,我看不懂」)。原文「下面的值请逐字照抄,每一个都对线上网关验证过」是**写给模型的指令**,而站在页面前的是一个刚付完钱、面对一段 YAML 不知所措的非技术用户 —— 这正是 `CLAUDE.md` §0 反复警告的「滑回开发者视角」。改成两个受众各归各位:**导语只讲人该做什么**(「看不懂?没关系 —— 这段不是写给你的,是写给 AI 的。把它整段复制,连同一句『教我怎么配』发给任意 AI 助手」),**给模型的那句挪进 ```yaml``` 内部**成为首行注释(`# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.`)—— 那里只有模型会读。中英 48 个文件全改,一致性校验仍 24/24(注释两版一致,故不破坏逐字节比对)(`web/default/public/docs/integrations/`)

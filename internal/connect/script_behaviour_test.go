@@ -834,6 +834,13 @@ func TestScript_SaysNetworkWhenItCannotReachTheGateway(t *testing.T) {
 func TestScript_ReadOnlyConfigIsReportedNotFakedOver(t *testing.T) {
 	for _, r := range runnersFor(t) {
 		t.Run(r.name, func(t *testing.T) {
+			// Root ignores mode bits, so chmod 0444 stops nothing and the
+			// write "succeeds" - a false failure of this test, not of the
+			// script. CI runs unprivileged and still covers it; this guard is
+			// for whoever runs the suite in a docker container as root.
+			if os.Geteuid() == 0 {
+				t.Skip("running as root: file modes are not enforced")
+			}
 			g := newFakeGateway(t)
 			s := newSandbox(t, r, g)
 			s.installFakeTool("opencode")

@@ -476,7 +476,11 @@ function Get-DrPrior {
 function New-DrBackup {
   param([string]$File)
   if (-not (Test-Path $File)) { return $null }
-  $bak = "$File.bak-$DrStamp"
+  # $PID as well as the stamp: DrStamp has one-second resolution, so two runs
+  # in the same second named their backups identically and the second copy
+  # destroyed the first run's copy of the user's true original - while the
+  # manifest kept pointing at the now-clobbered path. Same fix as setup.sh.
+  $bak = "$File.bak-$DrStamp-$PID"
   Copy-Item -LiteralPath $File -Destination $bak -Force
   return $bak
 }

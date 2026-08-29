@@ -784,7 +784,12 @@ dr_prior() {
 dr_backup() {
   _dr_file=$1
   [ -f "$_dr_file" ] || return 1
-  _dr_bak="$_dr_file.bak-$DR_STAMP"
+  # $$ as well as the stamp: DR_STAMP has one-second resolution, so two runs
+  # in the same second named their backups identically and the second cp
+  # destroyed the first run's copy of the user's true original - while the
+  # manifest kept pointing at the now-clobbered path. Found by CI, where the
+  # whole install-install-uninstall scenario fits inside one second.
+  _dr_bak="$_dr_file.bak-$DR_STAMP-$$"
   cp "$_dr_file" "$_dr_bak" 2>/dev/null || return 1
   printf '%s' "$_dr_bak"
 }
