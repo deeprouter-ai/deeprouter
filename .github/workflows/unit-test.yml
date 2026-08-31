@@ -1,9 +1,8 @@
 # Unit Tests — required gate on every PR.
 #
-# Unlike airbotix-internal.yml (push/path-filtered) and dr40-skill-integration.yml
-# (scoped to internal/skill/**), this workflow runs on EVERY pull request with no
-# path filter, so it can be marked a **required status check** in branch
-# protection. AGENTS.md Rule 12 ("Unit Tests Required") is the human-facing half
+# Unlike airbotix-internal.yml (push/path-filtered), this workflow runs on EVERY
+# pull request with no path filter, so it can be marked a **required status
+# check** in branch protection. AGENTS.md Rule 12 ("Unit Tests Required") is the human-facing half
 # of this gate; this workflow is the machine-enforced half.
 #
 # Scope rationale (same as airbotix-internal.yml): we run the Airbotix-owned unit
@@ -71,9 +70,9 @@ jobs:
           go test ./internal/... -count=1 -race -timeout 600s
           # Upstream-adjacent fork tests (kept in sync with airbotix-internal.yml).
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
-          go test ./relay/ -run 'TestApplyAirbotixPolicy|TestClampUint|TestCheckAirbotixModelWhitelist|TestKidsModeCoverageMatrix|TestTextHelper_SkillRelay_DR66' -count=1 -race -timeout 60s
+          go test ./relay/ -run 'TestApplyAirbotixPolicy|TestClampUint|TestCheckAirbotixModelWhitelist|TestKidsModeCoverageMatrix' -count=1 -race -timeout 60s
           go test ./controller/ -run 'TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion' -count=1 -race -timeout 60s
-          go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel|TestPrepareSkillRelay_DR66' -count=1 -race -timeout 60s
+          go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance video ModelList (价格未配置 regression guards).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the

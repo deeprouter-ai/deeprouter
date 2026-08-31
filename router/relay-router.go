@@ -1,10 +1,8 @@
 package router
 
 import (
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/controller"
-	"github.com/QuantumNous/new-api/internal/skill/enums"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/relay"
 	"github.com/QuantumNous/new-api/types"
@@ -88,7 +86,6 @@ func SetRelayRouter(router *gin.Engine) {
 		httpRouter := relayV1Router.Group("")
 		httpRouter.POST(
 			"/routing/chat/completions",
-			markSkillPublicRoutingAPI(),
 			middleware.PublicRoutingAbuseControl(),
 			middleware.Distribute(),
 			func(c *gin.Context) {
@@ -234,12 +231,5 @@ func registerMjRouterGroup(relayMjRouter *gin.RouterGroup) {
 		relayMjRouter.POST("/task/list-by-condition", controller.RelayMidjourney)
 		relayMjRouter.POST("/insight-face/swap", controller.RelayMidjourney)
 		relayMjRouter.POST("/submit/upload-discord-images", controller.RelayMidjourney)
-	}
-}
-func markSkillPublicRoutingAPI() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		common.SetContextKey(c, constant.ContextKeySkillPublicRoutingAPI, true)
-		common.SetContextKey(c, constant.ContextKeySkillRelayEntryPoint, string(enums.EntryPointAPIToken))
-		c.Next()
 	}
 }

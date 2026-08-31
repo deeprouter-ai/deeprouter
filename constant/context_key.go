@@ -95,24 +95,6 @@ const (
 	ContextKeySmartRouterReason   ContextKey = "smart_router_reason"
 	ContextKeySmartRouterStrategy ContextKey = "smart_router_strategy"
 
-	// ContextKeySkillRelayCtx stores a *skillrelay.SkillRelayContext established at
-	// relay entry (DR-64) for requests carrying deeprouter.skill_id.
-	// Read by DR-67 (entitlement check) and DR-88 (prompt injection).
-	ContextKeySkillRelayCtx ContextKey = "skill_relay_ctx"
-	// ContextKeySkillPublicRoutingAPI marks the package-facing public routing API.
-	// That surface requires deeprouter.skill_id and forces entry_point=skill_package.
-	ContextKeySkillPublicRoutingAPI ContextKey = "skill_public_routing_api"
-	ContextKeySkillRelayEntryPoint  ContextKey = "skill_relay_entry_point"
-	// ContextKeySkillAuthEntryPoint marks the authenticated principal class for
-	// Skill API handlers that emit analytics outside the relay path.
-	ContextKeySkillAuthEntryPoint ContextKey = "skill_auth_entry_point"
-	// ContextKeySkillBlockedHandled marks that DR-70 blocked-path handling has
-	// already run for the current request, regardless of whether it emitted an
-	// analytics row, skipped due to omission, or observed a writer failure.
-	ContextKeySkillBlockedHandled ContextKey = "skill_blocked_handled"
-	// ContextKeySkillBlockedEmitted marks that a skill_blocked analytics event
-	// was actually emitted for the current request.
-	ContextKeySkillBlockedEmitted ContextKey = "skill_blocked_emitted"
 	// ContextKeyPublicRoutingAbuseFlags stores comma-separated abuse/anomaly flags
 	// produced by the public routing API abuse gate (DR-82).
 	ContextKeyPublicRoutingAbuseFlags ContextKey = "public_routing_abuse_flags"

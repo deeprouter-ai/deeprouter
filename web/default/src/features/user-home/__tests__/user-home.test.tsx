@@ -4,30 +4,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 */
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UserHome } from '../index'
 import type { UserHomeData } from '../types'
 
 const mockGetUserHome = vi.hoisted(() => vi.fn<() => Promise<UserHomeData>>())
-const mockRecordMarketplaceSkillEvent = vi.hoisted(() => vi.fn())
-const mockNavigate = vi.hoisted(() => vi.fn())
 
 vi.mock('../api', () => ({
   getUserHome: mockGetUserHome,
-}))
-
-vi.mock('@/features/marketplace/api', () => ({
-  recordMarketplaceSkillEvent: mockRecordMarketplaceSkillEvent,
-  saveSkill: vi.fn().mockResolvedValue(undefined),
-  unsaveSkill: vi.fn().mockResolvedValue(undefined),
-  downloadSkillPackage: vi.fn().mockResolvedValue(undefined),
-  skillDownloadURL: (id: string, entryPoint: string) =>
-    `/api/v1/marketplace/skills/${id}/download?entry_point=${entryPoint}`,
-}))
-
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => mockNavigate,
 }))
 
 vi.mock('react-i18next', () => ({
@@ -40,10 +25,6 @@ vi.mock('react-i18next', () => ({
       )
     },
   }),
-}))
-
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn() },
 }))
 
 vi.mock('@/components/layout', () => {
@@ -75,145 +56,41 @@ function renderUserHome() {
 const HOME_DATA: UserHomeData = {
   account: {
     balance_quota: 6000000,
-    balance_usd: 12,
-    display_balance: 12,
-    display_unit: 'USD',
     used_quota: 1000,
-    recent_topups_count: 2,
-    recent_topups_total: 20,
+    topups_count: 2,
   },
-  subscriptions: {
-    billing_preference: 'subscription_first',
-    active: [
-      {
-        subscription: {
-          id: 1,
-          user_id: 42,
-          plan_id: 1,
-          amount_total: 100,
-          amount_used: 10,
-          start_time: 1782680000,
-          end_time: 1782766400,
-          status: 'active',
-        },
-        plan: {
-          id: 1,
-          title: 'PLUS',
-          price_amount: 19.9,
-          currency: 'USD',
-          duration_unit: 'month',
-          duration_value: 1,
-        },
-      },
-    ],
-    all: [],
+  active_plan: {
+    title: 'PLUS',
+    status: 'active',
+    end_time: 1782766400,
   },
-  purchases: {
-    entitled_skill_ids: ['owned-skill'],
-    succeeded_count: 1,
-    recent_orders: [
-      {
-        order_id: 'order-1',
-        skill_id: 'owned-skill',
-        skill_slug: 'owned-skill',
-        skill_name: 'Owned Helper',
-        status: 'succeeded',
-        amount_usd: 2,
-        currency: 'USD',
-        quota_charged: 1000000,
-        monetization_type: 'one_time',
-        created_at: '2026-06-29T00:00:00Z',
-        entitled: true,
-      },
-    ],
-  },
-  saved_skills: [
-    {
-      skill_id: 'saved-skill',
-      slug: 'saved-skill',
-      name: 'Saved Helper',
-      category: 'writing',
-      short_description: 'Saved for later',
-      skill_status: 'published',
-      required_plan: 'free',
-      saved_at: '2026-06-29T00:00:00Z',
-      enabled: false,
-    },
-  ],
-  recommended_for_you: [
-    {
-      id: 'locked-skill',
-      slug: 'locked-skill',
-      name: 'Locked Writer',
-      category: 'writing',
-      short_description: 'Needs PLUS',
-      required_plan: 'pro',
-      availability: {
-        enabled: false,
-        locked: true,
-        lock_code: 'SKILL_PLAN_REQUIRED',
-        cta: 'upgrade',
-      },
-      saved: false,
-    },
-  ],
-  new_this_week_for_you: [
-    {
-      id: 'fresh-skill',
-      slug: 'fresh-skill',
-      name: 'Fresh Writer',
-      category: 'writing',
-      short_description: 'New this week',
-      required_plan: 'free',
-      availability: {
-        enabled: false,
-        locked: true,
-        lock_code: 'SKILL_NOT_ENABLED',
-        cta: 'enable',
-      },
-      saved: false,
-    },
-  ],
-  recommended_categories: ['writing'],
-  entry_point: 'user_home',
 }
 
-describe('DR-88 User Home dashboard', () => {
+describe('User Home dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetUserHome.mockResolvedValue(HOME_DATA)
-    mockRecordMarketplaceSkillEvent.mockResolvedValue(undefined)
   })
 
-  it('renders own status, paywall-aware recommendations, new-week matches, saved Skills, and user_home attribution', async () => {
+  it('renders the Balance and Plan cards from user home data', async () => {
     renderUserHome()
 
     expect(
       await screen.findByRole('heading', { name: 'Home' })
     ).toBeInTheDocument()
-    expect(await screen.findByText('PLUS')).toBeInTheDocument()
-    expect(screen.getByText('1 owned Skills')).toBeInTheDocument()
-    expect(screen.getByText('Locked Writer')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Unlock $2' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Get PLUS' })).toBeInTheDocument()
-    expect(screen.getByText('Fresh Writer')).toBeInTheDocument()
-    expect(screen.getByText('Saved Helper')).toBeInTheDocument()
+    expect(await screen.findByText('Balance')).toBeInTheDocument()
+    expect(screen.getByText('Plan')).toBeInTheDocument()
+    expect(screen.getByText('PLUS')).toBeInTheDocument()
+    expect(screen.getByText('2 top-ups total')).toBeInTheDocument()
+  })
 
-    await waitFor(() => {
-      expect(mockRecordMarketplaceSkillEvent).toHaveBeenCalledWith(
-        'locked-skill',
-        {
-          event_type: 'skill_impression',
-          entry_point: 'user_home',
-        }
-      )
-      expect(mockRecordMarketplaceSkillEvent).toHaveBeenCalledWith(
-        'fresh-skill',
-        {
-          event_type: 'skill_impression',
-          entry_point: 'user_home',
-        }
-      )
+  it('shows "No active plan" when the user has no active subscription', async () => {
+    mockGetUserHome.mockResolvedValue({
+      ...HOME_DATA,
+      active_plan: null,
     })
+    renderUserHome()
+
+    expect(await screen.findByText('No active plan')).toBeInTheDocument()
   })
 })

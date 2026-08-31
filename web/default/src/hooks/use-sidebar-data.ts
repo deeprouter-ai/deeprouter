@@ -34,10 +34,6 @@ import {
   ListTodo,
   Settings,
   HelpCircle,
-  Store,
-  Sparkles,
-  LibraryBig,
-  BarChart2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -116,22 +112,6 @@ export function useSidebarData(): SidebarData {
         ],
       },
       {
-        id: 'marketplace',
-        title: t('Marketplace'),
-        items: [
-          {
-            title: t('Skills'),
-            url: '/skills',
-            icon: Store,
-          },
-          {
-            title: t('My Skills'),
-            url: '/skills/my',
-            icon: Sparkles,
-          },
-        ],
-      },
-      {
         id: 'admin',
         title: t('Admin'),
         items: [
@@ -151,11 +131,6 @@ export function useSidebarData(): SidebarData {
             icon: Users,
           },
           {
-            title: t('Admin Skills'),
-            url: '/skills/admin',
-            icon: LibraryBig,
-          },
-          {
             title: t('Redemption Codes'),
             url: '/redemption-codes',
             icon: Ticket,
@@ -170,12 +145,6 @@ export function useSidebarData(): SidebarData {
             url: '/system-settings/site',
             activeUrls: ['/system-settings'],
             icon: Settings,
-          },
-          // DR-76: Ops Overview dashboard — skill health metrics for operators.
-          {
-            title: t('Skill Analytics'),
-            url: '/skill-analytics',
-            icon: BarChart2,
           },
           // DeepRouter cheatsheet — keeps the Channel/Model/Group pricing
           // relationship a click away so the operator never has to re-derive
