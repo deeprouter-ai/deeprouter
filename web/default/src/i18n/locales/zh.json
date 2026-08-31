@@ -4948,7 +4948,7 @@
     "Tier 2 telemetry consent": "Tier 2 遥测授权",
     "Tier 2 telemetry consent disabled": "Tier 2 遥测授权已关闭",
     "Tier 2 telemetry consent enabled": "Tier 2 遥测授权已开启",
-    "Usage timeline": "使用时间线"
+    "Usage timeline": "使用时间线",
     "One-click setup": "一键配置",
     "Key to set up": "要配置的密钥",
     "This key is limited to certain models. Tools configured with it will only work for those — pick an unrestricted key if you want everything to work.": "这把密钥只允许部分模型。用它配好的工具也只能用那些模型 —— 想让所有工具都能用，请选一把不限模型的密钥。",
