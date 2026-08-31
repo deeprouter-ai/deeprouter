@@ -15,13 +15,35 @@ Codex 使用 **OpenAI 协议**，而 DeepRouter 提供了一个 OpenAI 兼容的
 > name = "DeepRouter"
 > base_url = "https://api.deeprouter.co/v1"
 > env_key = "DEEPROUTER_API_KEY"
-> wire_api = "chat"
+> wire_api = "responses"
 > ```
 > ```bash
 > export DEEPROUTER_API_KEY=sk-...your-deeprouter-key...
 > ```
 
 ---
+
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: codex
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co/v1"
+base_url_warning: 'Goes in base_url inside ~/.codex/config.toml, together with wire_api = "responses" - the value "chat" was removed and stops Codex loading the file at all.'
+endpoint_called: "POST /v1/responses"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/codex"
+```
 
 ## 为什么让 Codex 走 DeepRouter
 
@@ -30,6 +52,26 @@ Codex 使用 **OpenAI 协议**，而 DeepRouter 提供了一个 OpenAI 兼容的
 - **智能路由。** DeepRouter 会为每个请求挑选合适的模型和通道，当某个上游出问题时
   自动切换。
 - **账单集中管理。** 你团队的用量、花费和日志都集中在 DeepRouter 控制台里。
+
+---
+
+## 一键配置（推荐）
+
+你不用手动去改任何配置文件。终端里粘一行命令就全配好了 —— 而且它只配你勾选的工具，
+没装的会自动跳过。
+
+1. 打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页。
+2. 在 **一键配置 → 终端工具** 里勾上 **Codex CLI**。
+3. 复制对应你系统的那条命令，粘进终端：
+   - macOS / Linux（WSL 和 Git Bash 也一样）：`curl -fsSL <页面上给的地址> | sh`
+   - Windows（PowerShell 或 Terminal，**不能用 cmd**）：`irm <页面上给的地址> | iex`
+4. 然后运行 `codex`。**先开一个新终端**。如果 Codex 还是让你登录 ChatGPT，说明这台机器本来就有 Codex 配置，改用 `codex --profile deeprouter`。
+
+> **那条命令里带的是一次性令牌，不是你的密钥。** 它用一次就失效、十五分钟过期；真正的
+> 密钥是脚本被下载时由服务端注入的。页面上还给了脚本源码链接，你可以先读再跑；想撤销
+> 也是一行：`curl -fsSL <地址前缀>/uninstall | sh`。
+
+**更想自己动手？** 下面的手动步骤配的是同样的东西 —— 脚本写进去的就是它们。
 
 ---
 
@@ -78,22 +120,23 @@ name = "DeepRouter"
 base_url = "https://api.deeprouter.co/v1"
 # Name of the environment variable that holds your key (set in Step 3)
 env_key = "DEEPROUTER_API_KEY"
-# DeepRouter speaks Chat Completions
-wire_api = "chat"
+# 现在的 Codex 只认 "responses";写 "chat" 会导致整个文件加载失败
+wire_api = "responses"
 ```
 
 每一行是干什么的，说人话：
 
 - **`model`** — Codex 要请求的模型。从控制台 **Model Catalog（模型目录）** 里复制一个完整的 ID。
 - **`model_provider`** — 告诉 Codex 用 `deeprouter` 这一段配置，而不是内置的 OpenAI。
-- **`base_url`** — 请求发往哪里。Codex 会自动在后面拼上 `/chat/completions`。
+- **`base_url`** — 请求发往哪里。端点由 Codex 自己拼；`wire_api = "responses"` 时它调用的是 `POST /v1/responses`。
 - **`env_key`** — Codex 从这个环境变量里读取你的 Key，这样密钥就不会直接写在文件里。
-- **`wire_api`** — API 的“方言”。DeepRouter 的 `/v1` 接口提供的是 **Chat Completions**，所以填 `chat`。
+- **`wire_api`** — API 的“方言”。填 `responses`。DeepRouter 的 `/v1` 接口同时提供 Responses API 和 Chat Completions，而现在的 Codex 只认 `responses`。
 
-> **关于 `wire_api` 的提醒。** 较新版本的 Codex 更倾向于 `wire_api = "responses"`（OpenAI 的
-> Responses API）。但 DeepRouter 的 `/v1` 接口是 **Chat Completions**，所以请用 `wire_api = "chat"`。
-> 如果你的 Codex 版本用 `"chat"` 就拒绝启动，说明你这个版本已经去掉了 Chat 方言——
-> 请更新到仍然支持它的版本，或者去 DeepRouter 控制台查看最新推荐设置。
+> 🔴 **千万不要写 `wire_api = "chat"`。** 这个值在 Codex v0.149.1 里已被移除，而且它不是
+> 「降级处理」—— Codex 会**直接拒绝加载整个 `config.toml`**：
+> `Error loading config.toml: 'wire_api = "chat"' is no longer supported.`
+> 于是文件里所有设置一起失效，表现出来就像 Codex 压根没看到你的 DeepRouter 配置。
+> 请填 `responses` —— DeepRouter 支持这个端点（`POST /v1/responses`，已对线上网关验证）。
 
 ---
 
@@ -148,7 +191,7 @@ curl https://api.deeprouter.co/v1/chat/completions \
 | **认证失败 / 401** | Key 错了或者是空的。检查 `DEEPROUTER_API_KEY` 已设置（`echo $DEEPROUTER_API_KEY`），并且文件里的 `env_key` 和这个名字完全一致。 |
 | **provider 设置被忽略** | 你改的是项目本地的 `config.toml`。provider 配置只在你 home 目录下的 `~/.codex/config.toml` 里才生效。 |
 | **还是发去了 OpenAI** | 旧的 `model_provider` 在起作用，或者别处的配置盖过了它。确认 `model_provider = "deeprouter"`，并在新终端里重启 Codex。 |
-| **用 `wire_api = "chat"` 起不来** | 你的 Codex 版本去掉了 Chat 方言。更新到支持它的版本（见第 2 步的提醒）。 |
+| **`Error loading config.toml: 'wire_api = "chat"' is no longer supported`** | 字面意思，而且 Codex 会连整个文件一起忽略。把那一行改成 `wire_api = "responses"`。**不要降级 Codex。** |
 | **`model not found`** | 这个模型在你的账户里没有开通。从控制台 **Model Catalog（模型目录）** 里挑一个 ID。 |
 
 ---
@@ -160,7 +203,7 @@ curl https://api.deeprouter.co/v1/chat/completions \
 | 配置文件 | `~/.codex/config.toml`（仅用户级） |
 | OpenAI 兼容的 Base URL | `https://api.deeprouter.co/v1` |
 | 接口 | `POST /chat/completions`（由 Codex 自动拼接） |
-| `wire_api` | `chat` |
+| `wire_api` | `responses` |
 | 鉴权 | `Authorization: Bearer <key>`（Codex 发送你 `env_key` 对应的值） |
 | 模型 ID | DeepRouter 控制台 → **Model Catalog（模型目录）** |
 | 获取 Key | DeepRouter 控制台 → **API Keys** |

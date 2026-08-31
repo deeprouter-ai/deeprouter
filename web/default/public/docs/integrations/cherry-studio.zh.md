@@ -15,6 +15,28 @@ Linux）。它允许你添加自己的"模型服务商"，这样你就能直接�
 
 ---
 
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: cherry-studio
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co"
+base_url_warning: "HOST ONLY - do not add /v1. Cherry Studio appends it; writing it yourself gives /v1/v1 and a 404 whose message does not name the cause."
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/cherry-studio"
+```
+
 ## 为什么选 DeepRouter
 
 一把密钥，畅用所有模型——Claude、Qwen、GLM、DeepSeek、Kimi 等等——自动路由，还能在同一个地方查看你的用量和花费。
@@ -30,7 +52,24 @@ Linux）。它允许你添加自己的"模型服务商"，这样你就能直接�
 
 ---
 
-## 操作步骤
+## 一键配置（推荐）
+
+下面这些其实你不用手填。如果这台机器上已经装了 Cherry Studio：
+
+1. 打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页。
+2. 在 **AI 应用与插件** 那一块，点 **Cherry Studio**。
+3. 浏览器会问你要不要打开这个应用 —— 允许。
+4. Cherry Studio 被拉起来，服务商、地址、密钥、模型都已经填好。**你一个字都不用输。**
+
+> **应用里显示的名字是「New API」，不是 DeepRouter。** 这条链接匹配的是它内置的那个预设，
+> 名字来自上游，我们改不了 —— 看到「New API」就说明点对了。
+
+**点了没反应？** 这类链接在以下几种情况下会静悄悄地失败：没装这个应用、版本太老没注册
+协议、或者公司电脑禁用了自定义协议。遇到这种情况，照下面的手动步骤做就行 —— 那条路一定通。
+
+---
+
+## 或者手动配置
 
 1. 打开 Cherry Studio。点击左侧栏的 **设置**（齿轮 ⚙️）图标。
 2. 打开 **模型服务商**（Model Providers）标签页（有时显示为"模型服务"）。

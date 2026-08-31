@@ -16,12 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import useDialogState from '@/hooks/use-dialog'
-import { fetchTokenKey, fetchTokenKeysBatch } from '../api'
-import { ERROR_MESSAGES } from '../constants'
+import { fetchTokenKey, fetchTokenKeysBatch, getApiKeys } from '../api'
+import { API_KEY_STATUS, ERROR_MESSAGES } from '../constants'
 import { type ApiKey, type ApiKeysDialogType } from '../types'
 
 type ApiKeysContextType = {
@@ -31,6 +31,10 @@ type ApiKeysContextType = {
   setCurrentRow: React.Dispatch<React.SetStateAction<ApiKey | null>>
   refreshTrigger: number
   triggerRefresh: () => void
+  setupKeys: ApiKey[]
+  setupKeyId: number | null
+  setSetupKeyId: (id: number) => void
+  setupKey: ApiKey | null
   resolvedKey: string
   setResolvedKey: React.Dispatch<React.SetStateAction<string>>
   resolveRealKey: (id: number) => Promise<string | null>
@@ -70,6 +74,51 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
   const triggerRefresh = useCallback(() => {
     setRefreshTrigger((prev) => prev + 1)
   }, [])
+
+  // Which key the setup card configures. It lives here rather than inside that
+  // card because two surfaces act on it — the terminal commands and the
+  // chat-app buttons — and while each kept its own idea of "the current key"
+  // they could point at different ones: the terminal block took the newest key
+  // and the chat buttons the newest *enabled* one, so a page whose newest key
+  // was disabled configured two different keys without saying so (2026-08-28).
+  const [setupKeys, setSetupKeys] = useState<ApiKey[]>([])
+  const [setupKeyId, setSetupKeyId] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        // The list comes back newest-first, which is also the default pick:
+        // creating a key and then setting it up is the common path. Disabled
+        // keys are skipped — configuring a tool with one buys a 401 inside the
+        // tool days later, with nothing on this page to explain it.
+        const res = await getApiKeys({ p: 1, size: 50 })
+        if (cancelled) return
+        const items = res.data?.items ?? []
+        setSetupKeys(items)
+        setSetupKeyId((prev) =>
+          prev !== null && items.some((k) => k.id === prev)
+            ? prev
+            : (items.find((k) => k.status === API_KEY_STATUS.ENABLED)?.id ??
+              items[0]?.id ??
+              null)
+        )
+      } catch {
+        if (!cancelled) {
+          setSetupKeys([])
+          setSetupKeyId(null)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [refreshTrigger])
+
+  const setupKey = useMemo(
+    () => setupKeys.find((k) => k.id === setupKeyId) ?? null,
+    [setupKeys, setupKeyId]
+  )
 
   const resolveRealKey = useCallback(
     async (id: number): Promise<string | null> => {
@@ -161,6 +210,10 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
         setCurrentRow,
         refreshTrigger,
         triggerRefresh,
+        setupKeys,
+        setupKeyId,
+        setSetupKeyId,
+        setupKey,
         resolvedKey,
         setResolvedKey,
         resolveRealKey,

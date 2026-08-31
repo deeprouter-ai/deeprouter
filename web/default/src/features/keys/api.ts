@@ -21,6 +21,8 @@ import type {
   ApiKey,
   ApiKeyPurposesResponse,
   ApiResponse,
+  ConnectTool,
+  ConnectTokenResponse,
   GetApiKeysParams,
   GetApiKeysResponse,
   SearchApiKeysParams,
@@ -137,4 +139,28 @@ export async function getApiKeyPurposes(): Promise<
     './lib/api-key-purposes-fallback'
   )
   return { success: true, data: FALLBACK_API_KEY_PURPOSES }
+}
+
+// ============================================================================
+// One-Click CLI Setup
+// ============================================================================
+
+// Which terminal tools this server can configure. Asked rather than assumed so
+// the page never offers one the backend would silently drop.
+export async function getConnectTools(): Promise<ApiResponse<ConnectTool[]>> {
+  const res = await api.get('/api/connect/tools')
+  return res.data
+}
+
+// Mint a one-time token for one of the caller's own keys. Requires a session;
+// the token is what travels in the copied command, never the key itself.
+export async function issueConnectToken(
+  keyId: number,
+  tools: string[]
+): Promise<ApiResponse<ConnectTokenResponse>> {
+  const res = await api.post('/api/connect/token', {
+    key_id: keyId,
+    tools,
+  })
+  return res.data
 }

@@ -17,6 +17,27 @@
 
 ---
 
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: opencat
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co/v1"
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/opencat"
+```
+
 ## 为什么选 DeepRouter
 
 一把密钥就能让 OpenCat 用上我们目录里的每一个模型（Claude、Qwen、GLM、DeepSeek、Kimi 等等），还附带智能路由，并在一个地方就能看清你的花费。
@@ -31,7 +52,18 @@
 
 ---
 
-## 操作步骤
+## 一键配置（推荐）
+
+打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页，如果 **AI 应用与插件** 那一块里有
+**OpenCat**，点它就行：OpenCat 会被拉起来，地址和密钥都已填好，你一个字都不用输。
+
+> 那一项在不在，取决于运营在后台配了什么。**没看到就走下面的手动步骤** —— 步骤很短。
+
+**点了没反应？** 没装 OpenCat、或者版本没注册这个协议时，链接会静悄悄地失败。照下面的手动步骤做。
+
+---
+
+## 或者手动配置
 
 1. 打开 OpenCat，进入 **设置（Settings）**（齿轮图标）。
 2. 点 **API 服务商（API Providers）**，再点 **添加服务商（Add Provider）**（在某些版本里

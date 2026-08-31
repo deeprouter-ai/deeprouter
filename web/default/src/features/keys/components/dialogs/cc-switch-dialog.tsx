@@ -146,8 +146,19 @@ export function CCSwitchDialog(props: Props) {
       ? props.tokenKey
       : `sk-${props.tokenKey}`
     const url = buildCCSwitchURL(app, name, models, key)
-    window.open(url, '_blank')
+    // 🔴 Not `window.open`: with CC Switch not installed the browser opens the
+    // tab anyway and leaves it blank and untitled — and this URL carries the
+    // plaintext key in its query string, so that dead tab parks the key in the
+    // address bar and in browser history (@sam hit exactly this, 2026-08-28).
+    // Assigning to `location` hands the URL to the OS with no tab involved:
+    // the app comes up if it is installed, and nothing moves if it is not.
+    try {
+      window.location.href = url
+    } catch {
+      window.open(url, '_blank')
+    }
     props.onOpenChange(false)
+    toast.info(t('If nothing opens, this app is probably not installed.'))
   }
 
   return (

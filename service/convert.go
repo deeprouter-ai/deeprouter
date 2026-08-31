@@ -752,9 +752,14 @@ func GeminiToOpenAIRequest(geminiRequest *dto.GeminiChatRequest, info *relaycomm
 	if geminiRequest.GenerationConfig.MaxOutputTokens != nil && *geminiRequest.GenerationConfig.MaxOutputTokens > 0 {
 		openaiRequest.MaxTokens = lo.ToPtr(*geminiRequest.GenerationConfig.MaxOutputTokens)
 	}
-	// gemini stop sequences 最多 5 个，openai stop 最多 4 个
-	if len(geminiRequest.GenerationConfig.StopSequences) > 0 {
-		openaiRequest.Stop = geminiRequest.GenerationConfig.StopSequences[:4]
+	// gemini stop sequences 最多 5 个，openai stop 最多 4 个。
+	// 必须先判长度再切：切片的上界受 cap 限制，而 JSON 解出来的切片 cap == len，
+	// 所以 stopSequences 不满 4 个时 [:4] 会 panic，不是补空。
+	if stop := geminiRequest.GenerationConfig.StopSequences; len(stop) > 0 {
+		if len(stop) > 4 {
+			stop = stop[:4]
+		}
+		openaiRequest.Stop = stop
 	}
 	if geminiRequest.GenerationConfig.CandidateCount != nil && *geminiRequest.GenerationConfig.CandidateCount > 0 {
 		openaiRequest.N = lo.ToPtr(*geminiRequest.GenerationConfig.CandidateCount)

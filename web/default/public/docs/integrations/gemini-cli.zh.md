@@ -7,11 +7,33 @@ Gemini CLI 使用的是**原生 Gemini API**，而 DeepRouter 正好提供了一
 
 > **一句话版** — 设置两个环境变量：
 > ```bash
-> export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co/v1beta
+> export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co
 > export GEMINI_API_KEY=sk-...your-deeprouter-key...
 > ```
 
 ---
+
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: gemini-cli
+api_protocol: Gemini
+base_url: "https://api.deeprouter.co"
+base_url_warning: "HOST ONLY - do not add /v1beta. Gemini CLI appends it; writing it yourself gives 404 Invalid URL (POST /v1beta/v1beta/models/...). Goes in GOOGLE_GEMINI_BASE_URL."
+endpoint_called: "POST /v1beta/models/<model>:generateContent"
+auth_header: "x-goog-api-key: <your sk- key>   # or ?key=<your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/gemini-cli"
+```
 
 ## 为什么让 Gemini CLI 走 DeepRouter
 
@@ -19,6 +41,26 @@ Gemini CLI 使用的是**原生 Gemini API**，而 DeepRouter 正好提供了一
   自动选择模型并在失败时自动切换。
 - **智能路由。** DeepRouter 会为每个请求挑选合适的模型和通道，上游出问题时自动切换到备用。
 - **账单集中管理。** 团队的用量、花费和日志都汇总在 DeepRouter 控制台里。
+
+---
+
+## 一键配置（推荐）
+
+你不用手动去改任何配置文件。终端里粘一行命令就全配好了 —— 而且它只配你勾选的工具，
+没装的会自动跳过。
+
+1. 打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页。
+2. 在 **一键配置 → 终端工具** 里勾上 **Gemini CLI**。
+3. 复制对应你系统的那条命令，粘进终端：
+   - macOS / Linux（WSL 和 Git Bash 也一样）：`curl -fsSL <页面上给的地址> | sh`
+   - Windows（PowerShell 或 Terminal，**不能用 cmd**）：`irm <页面上给的地址> | iex`
+4. 然后运行 `gemini`。**先开一个新终端**。如果它问你怎么登录，选 **API key** 那一项 —— 选 Google 登录会完全绕开 DeepRouter。
+
+> **那条命令里带的是一次性令牌，不是你的密钥。** 它用一次就失效、十五分钟过期；真正的
+> 密钥是脚本被下载时由服务端注入的。页面上还给了脚本源码链接，你可以先读再跑；想撤销
+> 也是一行：`curl -fsSL <地址前缀>/uninstall | sh`。
+
+**更想自己动手？** 下面的手动步骤配的是同样的东西 —— 脚本写进去的就是它们。
 
 ---
 
@@ -44,8 +86,8 @@ Gemini CLI 靠两个设置来改变请求的去向：
 把这两行都加到你的 shell 配置文件里（`~/.zshrc`、`~/.bashrc`，或你的 fish 配置）：
 
 ```bash
-# Send Gemini CLI to DeepRouter's Gemini-compatible endpoint (no trailing slash)
-export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co/v1beta
+# Send Gemini CLI to DeepRouter. Host only - the CLI appends /v1beta itself.
+export GOOGLE_GEMINI_BASE_URL=https://api.deeprouter.co
 # Authenticate with your DeepRouter key
 export GEMINI_API_KEY=sk-...your-deeprouter-key...
 ```
@@ -56,8 +98,11 @@ export GEMINI_API_KEY=sk-...your-deeprouter-key...
 source ~/.zshrc
 ```
 
-> **为什么用 `/v1beta` 接口？** Gemini CLI 是按照 Google 原生的 Gemini 格式发请求的。
-> DeepRouter 的 `…/v1beta` 接口正好认得这个格式，所以 CLI 不用改任何东西就能用。
+> **为什么只写域名、不写 `/v1beta`？** Gemini CLI 按 Google 原生的 Gemini 格式发请求，
+> DeepRouter 的 `…/v1beta` 接口正好认得这个格式，所以 CLI 不用改任何东西就能用。但
+> **`/v1beta` 是 CLI 自己拼上去的**。你自己再写一遍，请求就变成
+> `/v1beta/v1beta/models/…`，网关会返回 `404 Invalid URL` —— 而这句报错
+> 完全看不出真正的原因。
 > （DeepRouter 也有一个 OpenAI 风格的接口，但 Gemini CLI 不会说那种"方言"——
 > 见下面的备用方案说明。）
 
@@ -121,7 +166,7 @@ Gemini CLI 是针对 Google 自家服务器开发和测试的，而 Google **并
 
 | 现象 | 解决办法 |
 |---|---|
-| **连接失败或 404 错误** | 确认 `GOOGLE_GEMINI_BASE_URL` 恰好是 `https://api.deeprouter.co/v1beta`——要带上 `/v1beta`，并且**结尾不要有斜杠**。 |
+| **连接失败或 404 错误** | 确认 `GOOGLE_GEMINI_BASE_URL` 恰好是 `https://api.deeprouter.co`——**只要域名**，不要写 `/v1beta`，结尾也不要有斜杠。看到 `404 Invalid URL (POST /v1beta/v1beta/models/…)` 就说明你自己多写了一次 `/v1beta`，CLI 已经帮你拼过了。 |
 | **认证失败 / 401** | 钥匙不对，或者它用了你的 Google 登录。把 `GEMINI_API_KEY` 设成你的 DeepRouter `sk-...` 密钥，并选择 API key 登录方式。 |
 | **请求还是发去了 Google** | 有一个旧的环境变量或旧会话还在生效。运行 `echo $GOOGLE_GEMINI_BASE_URL` 检查一下，然后开一个新终端让新值生效。 |
 | **奇怪的参数错误** | 你的 Gemini CLI 版本可能发送了 DeepRouter 接口不接受的字段。改用上面的 OpenAI 兼容备用方案。 |
@@ -133,7 +178,8 @@ Gemini CLI 是针对 Google 自家服务器开发和测试的，而 Google **并
 
 | 项目 | 值 |
 |---|---|
-| 兼容 Gemini 的接入地址（Base URL） | `https://api.deeprouter.co/v1beta` |
+| `GOOGLE_GEMINI_BASE_URL` 该填什么 | `https://api.deeprouter.co` —— **只要域名** |
+| CLI 实际请求的地址 | `POST /v1beta/models/<模型>:generateContent`（`/v1beta` 由 CLI 自己拼） |
 | 环境变量（接入地址） | `GOOGLE_GEMINI_BASE_URL` |
 | 环境变量（密钥） | `GEMINI_API_KEY`（填你的 DeepRouter `sk-...` 密钥） |
 | 认证请求头 | `x-goog-api-key: <key>`（由 CLI 自动发送） |

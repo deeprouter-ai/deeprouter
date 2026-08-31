@@ -16,6 +16,28 @@
 
 ---
 
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: immersive-translate
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co/v1/chat/completions"
+base_url_warning: "This tool wants the FULL endpoint, not just the base."
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/immersive-translate"
+```
+
 ## 为什么用 DeepRouter
 
 一把密钥，畅用所有模型 —— Claude、Qwen、GLM、DeepSeek、Kimi 等等 —— 自动路由，并且在同一个地方查看用量和消费。

@@ -1,0 +1,68 @@
+# DeepRouter
+
+> One API key for many models (Claude, Qwen, GLM, DeepSeek, Kimi and more) behind one
+> OpenAI-, Anthropic- and Gemini-compatible gateway. Point the tool you already use at
+> DeepRouter by changing two things: a base URL and an API key.
+
+## Read this first
+
+The base URL is NOT the same for every tool. Pick by the protocol the tool speaks, and
+watch the three tools that append the version segment themselves:
+
+- OpenAI protocol: `https://api.deeprouter.co/v1`  (POST /chat/completions, `Authorization: Bearer sk-...`)
+- Anthropic protocol: `https://api.deeprouter.co`  (POST /v1/messages, `x-api-key: sk-...`)
+- Gemini protocol: `https://api.deeprouter.co/v1beta`  (POST /v1beta/models/<model>:generateContent, `x-goog-api-key: sk-...`)
+- HOST ONLY (the tool adds the version segment): Cherry Studio, NextChat, Gemini CLI -> `https://api.deeprouter.co`
+
+Adding the version segment when the tool already does gives a doubled path and a
+`404 Invalid URL` whose message does not name the cause.
+
+Every guide below starts with a machine-readable `Facts for AI assistants` block
+holding the exact base URL, endpoint, auth header and model for that tool.
+Append `.zh.md` instead of `.md` for the Chinese version of any guide.
+
+## Guides
+
+### AI coding assistants (terminal)
+
+- [Claude Code](https://deeprouter.co/docs/integrations/claude-code.md): Two env vars and Claude Code routes through DeepRouter.
+- [Codex CLI](https://deeprouter.co/docs/integrations/codex.md): Add a DeepRouter model provider in config.toml.
+- [Gemini CLI](https://deeprouter.co/docs/integrations/gemini-cli.md): Point Google’s CLI at the DeepRouter Gemini endpoint.
+- [OpenCode](https://deeprouter.co/docs/integrations/opencode.md): A custom OpenAI-compatible provider in opencode.json.
+
+### Code editors & extensions
+
+- [Cursor](https://deeprouter.co/docs/integrations/cursor.md): Override the OpenAI base URL in Cursor settings.
+- [GitHub Copilot](https://deeprouter.co/docs/integrations/copilot.md): Bring your own key via an OpenAI-compatible provider.
+- [Cline (VS Code)](https://deeprouter.co/docs/integrations/cline.md): OpenAI-compatible or Anthropic provider in Cline.
+- [Zed](https://deeprouter.co/docs/integrations/zed.md): A custom OpenAI-compatible model in settings.json.
+
+### Desktop & chat apps
+
+- [Claude Cowork](https://deeprouter.co/docs/integrations/claude-coworks.md): Set the gateway in developer mode.
+- [OpenClaw](https://deeprouter.co/docs/integrations/openclaw.md): A provider block in openclaw.json.
+- [Cherry Studio](https://deeprouter.co/docs/integrations/cherry-studio.md): Add an OpenAI provider with the DeepRouter host.
+- [BotGem](https://deeprouter.co/docs/integrations/botgem.md): An OpenAI-compatible service provider.
+- [Chatbox](https://deeprouter.co/docs/integrations/chatbox.md): OpenAI API Compatible provider with the DeepRouter host.
+- [LobeChat](https://deeprouter.co/docs/integrations/lobehub.md): Set the OpenAI API proxy address to DeepRouter.
+- [OpenCat](https://deeprouter.co/docs/integrations/opencat.md): Add a custom API provider with the DeepRouter host.
+- [NextChat](https://deeprouter.co/docs/integrations/nextchat.md): Custom endpoint + key, or self-host env vars.
+- [WorkBuddy](https://deeprouter.co/docs/integrations/workbuddy.md): A custom model entry pointing at DeepRouter.
+
+### Helpers, SDKs & frameworks
+
+- [CC Switch](https://deeprouter.co/docs/integrations/cc-switch.md): A point-and-click provider switcher for Claude Code.
+- [OpenAI SDK](https://deeprouter.co/docs/integrations/openai-sdk.md): Set base_url to DeepRouter in Python or Node.
+- [LangChain](https://deeprouter.co/docs/integrations/langchain.md): ChatOpenAI / ChatAnthropic pointed at DeepRouter.
+- [LlamaIndex](https://deeprouter.co/docs/integrations/llamaindex.md): OpenAILike with the DeepRouter base URL.
+
+### Browser & other
+
+- [Immersive Translate](https://deeprouter.co/docs/integrations/immersive-translate.md): A custom OpenAI-compatible translation service.
+- [Any other tool](https://deeprouter.co/docs/integrations/others.md): The universal rule for any tool with a base URL field.
+
+## Optional
+
+- [The complete guide](https://deeprouter.co/docs/integrations/GUIDE.md): the whole idea explained once - key, base URL, verify.
+- [Any other tool](https://deeprouter.co/docs/integrations/others.md): what to do when a tool has no base-URL setting.
+- [Console](https://deeprouter.co): sign in, get a key, browse the Model Catalog.
