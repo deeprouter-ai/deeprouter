@@ -6,10 +6,9 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-// Unified config: DR-76 (skill-analytics) coverage + globals/setup, plus the
-// @vitejs/plugin-react needed by DR-58's marketplace RTL component tests.
-// jsdom is required (download-utils reads window.location; component tests render
-// React). `@` alias mirrors tsconfig paths via resolve.alias.
+// Unified config: globals/setup + jsdom for RTL component tests, plus the
+// @vitejs/plugin-react needed to render them. `@` alias mirrors tsconfig
+// paths via resolve.alias.
 export default defineConfig({
   plugins: [react()],
   test: {
@@ -18,14 +17,9 @@ export default defineConfig({
     setupFiles: ['./src/test-utils/setup.ts'],
     coverage: {
       provider: 'v8',
-      include: [
-        'src/features/skill-analytics/**',
-        'src/features/admin-skills/**',
-        'src/features/user-home/**',
-        'src/routes/_authenticated/skills/admin/index.tsx',
-      ],
+      include: ['src/features/user-home/**'],
       reporter: ['text', 'json-summary'],
-      reportsDirectory: './coverage/skill-analytics',
+      reportsDirectory: './coverage',
     },
   },
   resolve: {

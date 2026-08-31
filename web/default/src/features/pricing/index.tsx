@@ -161,16 +161,6 @@ export function Pricing() {
       points: [t('All 6 Skills'), t('Best for weekly use'), t('Upgrade PLUS')],
       featured: true,
     },
-    {
-      name: t('Per-Skill unlock'),
-      price: t('$2'),
-      description: t('永久解锁单个 Skill，几乎免费试，一辈子 ROI。'),
-      points: [
-        t('One Skill forever'),
-        t('No monthly commitment'),
-        t('Wallet checkout'),
-      ],
-    },
   ]
 
   const renderPricingContent = () => {

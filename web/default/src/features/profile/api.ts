@@ -22,8 +22,6 @@ import type {
   UserProfile,
   UpdateUserRequest,
   UpdateUserSettingsRequest,
-  UpdateTelemetryConsentRequest,
-  TelemetryConsentStatus,
   DeleteAccountRequest,
   CheckinStatusResponse,
   CheckinResponse,
@@ -74,23 +72,6 @@ export async function updateUserLanguage(
 /**
  * Get current user's Tier 2 telemetry consent status.
  */
-export async function getTelemetryConsent(): Promise<
-  ApiResponse<TelemetryConsentStatus>
-> {
-  const res = await api.get('/api/user/telemetry-consent')
-  return res.data
-}
-
-/**
- * Update current user's Tier 2 telemetry consent status.
- */
-export async function updateTelemetryConsent(
-  data: UpdateTelemetryConsentRequest
-): Promise<ApiResponse<TelemetryConsentStatus>> {
-  const res = await api.put('/api/user/telemetry-consent', data)
-  return res.data
-}
-
 /**
  * Delete user account
  */

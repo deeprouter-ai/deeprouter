@@ -18,13 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  downloadSkillPackage,
-  getMarketplaceSkillsWithParams,
-  recordMarketplaceSkillEvent,
-  skillDownloadURL,
-} from '@/features/marketplace/api'
-import { useSkillTelemetryConsentPrompt } from '@/features/marketplace/hooks/use-skill-telemetry-consent-prompt'
 import { getUserModels, getUserGroups } from './api'
 import { PlaygroundChat } from './components/playground-chat'
 import { PlaygroundEmptyState } from './components/playground-empty-state'
@@ -35,8 +28,6 @@ import { createUserMessage, createLoadingAssistantMessage } from './lib'
 import type { Message as MessageType } from './types'
 
 export function Playground() {
-  const { prompt: telemetryConsentPrompt, runWithConsentPrompt } =
-    useSkillTelemetryConsentPrompt()
   const {
     config,
     parameterEnabled,
@@ -72,13 +63,6 @@ export function Playground() {
     queryFn: getUserGroups,
   })
 
-  const { data: recommendedSkillsData } = useQuery({
-    queryKey: ['playground-recommended-skill'],
-    queryFn: () => getMarketplaceSkillsWithParams({ limit: 1, page: 1 }),
-    staleTime: 5 * 60 * 1000,
-  })
-  const recommendedSkill = recommendedSkillsData?.data?.[0] ?? null
-
   // Update models when data changes
   useEffect(() => {
     if (!modelsData) return
@@ -112,17 +96,6 @@ export function Playground() {
 
     setGroups(processedGroups)
   }, [groupsData, setGroups])
-
-  useEffect(() => {
-    if (!recommendedSkill) return
-    void recordMarketplaceSkillEvent(
-      recommendedSkill.slug || recommendedSkill.id,
-      {
-        event_type: 'skill_impression',
-        entry_point: 'recommended',
-      }
-    ).catch(() => undefined)
-  }, [recommendedSkill])
 
   const handleSendMessage = (text: string) => {
     const userMessage = createUserMessage(text)
@@ -203,18 +176,7 @@ export function Playground() {
       {/* Full-width scroll container: scrolling works even over side whitespace */}
       <div className='flex flex-1 flex-col overflow-hidden'>
         {messages.length === 0 ? (
-          <PlaygroundEmptyState
-            recommendedSkill={recommendedSkill}
-            onDownloadRecommendation={(skill) => {
-              void runWithConsentPrompt(() =>
-                downloadSkillPackage(
-                  skillDownloadURL(skill.slug || skill.id, 'recommended'),
-                  skill.slug || skill.id
-                )
-              )
-            }}
-            onSubmitPrompt={handleSendMessage}
-          />
+          <PlaygroundEmptyState onSubmitPrompt={handleSendMessage} />
         ) : (
           <PlaygroundChat
             messages={messages}
@@ -230,7 +192,6 @@ export function Playground() {
           />
         )}
       </div>
-      {telemetryConsentPrompt}
 
       {/* Input area: center content and constrain to the same container width */}
       <div className='mx-auto w-full max-w-4xl'>

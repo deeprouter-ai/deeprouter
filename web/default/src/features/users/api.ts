@@ -26,8 +26,6 @@ import type {
   ManageUserAction,
   ManageUserQuotaPayload,
   ApiResponse,
-  SkillApiEnvelope,
-  UserSkillUsageResponse,
 } from './types'
 
 // ============================================================================
@@ -136,19 +134,6 @@ export async function resetUserTwoFA(id: number): Promise<ApiResponse> {
  */
 export async function getGroups(): Promise<ApiResponse<string[]>> {
   const res = await api.get('/api/group/')
-  return res.data
-}
-
-/**
- * Get Super Admin per-user Skill usage drill-down.
- */
-export async function getUserSkillUsage(
-  userId: number
-): Promise<SkillApiEnvelope<UserSkillUsageResponse>> {
-  const res = await api.get(
-    `/api/v1/admin/users/${userId}/skill-usage`,
-    { skipErrorHandler: true } as Record<string, unknown>
-  )
   return res.data
 }
 
