@@ -167,7 +167,7 @@ export type ApiKeysDialogType =
   | 'integration'
 
 // ============================================================================
-// One-Click CLI Setup (docs/tasks/one-click-cli-setup-prd.md)
+// One-Click CLI Setup (meta-repo docs/one-click-cli-setup-prd.md)
 // ============================================================================
 
 /** A terminal AI tool the install script knows how to configure. */
