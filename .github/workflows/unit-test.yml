@@ -61,7 +61,13 @@ jobs:
       - name: Run unit tests
         run: |
           # Airbotix-internal packages — full suite, race-enabled.
-          go test ./internal/... -count=1 -race -timeout 120s
+          # 🔴 600s, not 120s: internal/connect runs the real setup and
+          # uninstall scripts in a throwaway HOME against a fake gateway,
+          # and every case pays for spawning a shell plus a handful of curl
+          # processes. That is the point of those tests - the card they come
+          # from is a script that edits the user's machine, and asserting on
+          # the template text would prove nothing about what it does.
+          go test ./internal/... -count=1 -race -timeout 600s
           # Upstream-adjacent fork tests (kept in sync with airbotix-internal.yml).
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
           go test ./relay/ -run 'TestApplyAirbotixPolicy|TestClampUint|TestCheckAirbotixModelWhitelist|TestKidsModeCoverageMatrix' -count=1 -race -timeout 60s
@@ -69,6 +75,11 @@ jobs:
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance video ModelList (价格未配置 regression guards).
+          # Gemini protocol conversion: top_k must not reach OpenAI, and the
+          # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
+          go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
+          go test ./relay/channel/openai/ -run 'TestConvertOpenAIRequest' -count=1 -timeout 60s
+          go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
           go test ./relay/channel/task/doubao/ -count=1 -timeout 60s
 

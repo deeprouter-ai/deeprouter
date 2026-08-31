@@ -920,6 +920,34 @@ func HandleStreamResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		if err != nil {
 			logger.LogError(c, "send_stream_response_failed: "+err.Error())
 		}
+	} else if info.RelayFormat == types.RelayFormatGemini {
+		response := StreamResponseClaude2OpenAI(&claudeResponse)
+
+		if !FormatClaudeResponseInfo(&claudeResponse, response, claudeInfo) {
+			return nil
+		}
+
+		// Claude reports token counts only on message_delta and the per-chunk
+		// conversion drops them, so attach them to the finishing chunk — that is
+		// where a real Gemini stream carries usageMetadata.
+		if claudeResponse.Type == "message_delta" && claudeInfo.Usage != nil {
+			usage := buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
+			response.Usage = &usage
+		}
+
+		// nil means this chunk carried neither content nor a finish reason —
+		// Gemini has no equivalent of OpenAI's empty opening delta.
+		geminiResponse := service.StreamResponseOpenAI2Gemini(response, info)
+		if geminiResponse == nil {
+			return nil
+		}
+		geminiResponseStr, marshalErr := common.Marshal(geminiResponse)
+		if marshalErr != nil {
+			logger.LogError(c, "failed to marshal gemini response: "+marshalErr.Error())
+			return nil
+		}
+		c.Render(-1, common.CustomEvent{Data: "data: " + string(geminiResponseStr)})
+		_ = helper.FlushWriter(c)
 	}
 	return nil
 }
@@ -949,6 +977,12 @@ func HandleStreamFinalResponse(c *gin.Context, info *relaycommon.RelayInfo, clau
 
 	if info.RelayFormat == types.RelayFormatClaude {
 		//
+	} else if info.RelayFormat == types.RelayFormatGemini {
+		// Nothing to send. Gemini's SSE stream has no [DONE] sentinel — it just
+		// ends — and the finishing chunk already carried finishReason and
+		// usageMetadata. Spelled out rather than left to fall through: "handled
+		// by doing nothing" and "nobody wrote this branch" look identical, which
+		// is how the missing Gemini case in HandleClaudeResponseData survived.
 	} else if info.RelayFormat == types.RelayFormatOpenAI {
 		if info.ShouldIncludeUsage {
 			openAIUsage := buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
@@ -1019,6 +1053,16 @@ func HandleClaudeResponseData(c *gin.Context, info *relaycommon.RelayInfo, claud
 		}
 	case types.RelayFormatClaude:
 		responseData = data
+	case types.RelayFormatGemini:
+		// Claude → OpenAI → Gemini: same hub composition as the request side
+		// (see Adaptor.ConvertGeminiRequest). Without this case responseData
+		// stays nil and the caller gets an empty 200.
+		openaiResponse := ResponseClaude2OpenAI(&claudeResponse)
+		openaiResponse.Usage = buildOpenAIStyleUsageFromClaudeUsage(claudeInfo.Usage)
+		responseData, err = json.Marshal(service.ResponseOpenAI2Gemini(openaiResponse, info))
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeBadResponseBody)
+		}
 	}
 
 	if claudeResponse.Usage != nil && claudeResponse.Usage.ServerToolUse != nil && claudeResponse.Usage.ServerToolUse.WebSearchRequests > 0 {

@@ -28,6 +28,27 @@ DeepRouter 账户，而不是直接发给某一家模型厂商。OpenCode 允许
 
 ---
 
+## 给 AI 助手看的事实块
+
+**看不懂？没关系** —— 这段不是写给你的，是写给 AI 的。
+把下面整段复制下来，连同一句「教我怎么配」发给任意 AI 助手（ChatGPT、Claude、
+你手边用哪个都行），它就会一步步告诉你每个值该填在哪里。这一段之外的内容，
+就是同一件事写给人看的版本。
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: opencode
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co/v1"
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/opencode"
+```
+
 ## 为什么让 OpenCode 走 DeepRouter
 
 - **一个 Key，所有模型。** Claude、GPT 系列，以及众多开源模型——全都能通过同一个
@@ -35,6 +56,26 @@ DeepRouter 账户，而不是直接发给某一家模型厂商。OpenCode 允许
 - **智能路由。** DeepRouter 会为每个请求挑选合适的模型和通道，当某个上游出故障时
   自动切换。
 - **账单集中管理。** 你团队的用量、花费和日志都集中在 DeepRouter 控制台里。
+
+---
+
+## 一键配置（推荐）
+
+你不用手动去改任何配置文件。终端里粘一行命令就全配好了 —— 而且它只配你勾选的工具，
+没装的会自动跳过。
+
+1. 打开 DeepRouter 控制台的 **API Keys（调用密钥）** 页。
+2. 在 **一键配置 → 终端工具** 里勾上 **OpenCode**。
+3. 复制对应你系统的那条命令，粘进终端：
+   - macOS / Linux（WSL 和 Git Bash 也一样）：`curl -fsSL <页面上给的地址> | sh`
+   - Windows（PowerShell 或 Terminal，**不能用 cmd**）：`irm <页面上给的地址> | iex`
+4. 然后运行 `opencode`。马上就能用，什么都不用重开。
+
+> **那条命令里带的是一次性令牌，不是你的密钥。** 它用一次就失效、十五分钟过期；真正的
+> 密钥是脚本被下载时由服务端注入的。页面上还给了脚本源码链接，你可以先读再跑；想撤销
+> 也是一行：`curl -fsSL <地址前缀>/uninstall | sh`。
+
+**更想自己动手？** 下面的手动步骤配的是同样的东西 —— 脚本写进去的就是它们。
 
 ---
 

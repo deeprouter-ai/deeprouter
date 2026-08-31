@@ -233,6 +233,18 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 	if info.ChannelType != constant.ChannelTypeOpenAI && info.ChannelType != constant.ChannelTypeAzure {
 		request.StreamOptions = nil
 	}
+	if info.ChannelType == constant.ChannelTypeOpenAI || info.ChannelType == constant.ChannelTypeAzure {
+		// OpenAI's Chat Completions API has no top_k, and it rejects an unknown
+		// argument outright rather than ignoring it:
+		//   400 Unrecognized request argument supplied: top_k
+		// Gemini and Claude both have the parameter, so GeminiToOpenAIRequest
+		// and ClaudeToOpenAIRequest carry it into the neutral request and a
+		// request in either of those formats dies on a field the caller never
+		// typed. There is no OpenAI equivalent to map it onto, so drop it.
+		// Scoped to OpenAI/Azure on purpose: the other channels this adaptor
+		// serves (OpenRouter, Xinference) do accept top_k.
+		request.TopK = nil
+	}
 	if info.ChannelType == constant.ChannelTypeOpenRouter {
 		if len(request.Usage) == 0 {
 			request.Usage = json.RawMessage(`{"include":true}`)

@@ -52,7 +52,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
-import { resolveChatUrl, type ChatPreset } from '@/features/chat/lib/chat-links'
+import {
+  chatPresetAction,
+  resolveChatUrl,
+  type ChatPreset,
+} from '@/features/chat/lib/chat-links'
 import { sendToFluent } from '@/features/chat/lib/send-to-fluent'
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
@@ -100,23 +104,34 @@ export function DataTableRowActions<TData>({
   const { chatPresets, serverAddress } = useChatPresets()
   const [isTogglingStatus, setIsTogglingStatus] = useState(false)
 
-  const hasChatPresets = chatPresets.length > 0
+  // A preset whose value is neither a link nor a marker we know cannot be
+  // acted on at all - showing it only produces a dead click.
+  const chatPresetsToShow = chatPresets.filter(
+    (preset) => chatPresetAction(preset.url) !== 'unsupported'
+  )
+  const hasChatPresets = chatPresetsToShow.length > 0
 
   const handleOpenChatPreset = useCallback(
     async (preset: ChatPreset) => {
       const realKey = await resolveRealKey(apiKey.id)
       if (!realKey) return
 
+      // `ccswitch` is a marker, not a URL. Opening it navigated the console
+      // to /ccswitch; the import dialog is where it was always meant to go —
+      // and it reads the key off `resolvedKey`, so that has to be filled in
+      // first or the import URL carries a bare `sk-`.
+      if (chatPresetAction(preset.url) === 'cc-switch-dialog') {
+        setResolvedKey(realKey)
+        setOpen('cc-switch')
+        return
+      }
+
       if (preset.type === 'fluent') {
         const success = sendToFluent(realKey, serverAddress)
         if (success) {
           toast.success(t('Sent the API key to FluentRead.'))
         } else {
-          toast.info(
-            t(
-              'FluentRead extension not detected. Please ensure it is installed and active.'
-            )
-          )
+          toast.info(t('If nothing opens, this app is probably not installed.'))
         }
         return
       }
@@ -134,13 +149,21 @@ export function DataTableRowActions<TData>({
 
       if (typeof window === 'undefined') return
 
-      try {
+      if (preset.type === 'web') {
         window.open(resolvedUrl, '_blank', 'noopener')
-      } catch {
-        window.location.href = resolvedUrl
+        return
       }
+      // Custom protocol: see the note in `api-keys-quick-apps-card.tsx` —
+      // `window.open` leaves a blank untitled tab when no app is registered,
+      // and these URLs carry the plaintext key in their query string.
+      try {
+        window.location.href = resolvedUrl
+      } catch {
+        window.open(resolvedUrl, '_blank', 'noopener')
+      }
+      toast.info(t('If nothing opens, this app is probably not installed.'))
     },
-    [resolveRealKey, apiKey.id, serverAddress, t]
+    [resolveRealKey, apiKey.id, serverAddress, setOpen, setResolvedKey, t]
   )
 
   const handleToggleStatus = async (
@@ -287,9 +310,15 @@ export function DataTableRowActions<TData>({
           </DropdownMenuItem>
           {hasChatPresets && (
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>{t('Chat')}</DropdownMenuSubTrigger>
+              {/* Same label as the setup card's section: this submenu lists
+                  the same presets, and "Chat" was the wrong category for a
+                  list that carries a translation extension and workspace
+                  tools (@sam, 2026-08-28). */}
+              <DropdownMenuSubTrigger>
+                {t('AI apps and extensions')}
+              </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {chatPresets.map((preset) => (
+                {chatPresetsToShow.map((preset) => (
                   <DropdownMenuItem
                     key={preset.id}
                     onClick={() => handleOpenChatPreset(preset)}

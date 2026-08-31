@@ -16,6 +16,29 @@ instead of Anthropic's cloud. DeepRouter can be that gateway, because it speaks 
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: claude-coworks
+api_protocol: Anthropic
+base_url: "https://api.deeprouter.co"
+base_url_warning: "No /v1 - the Anthropic protocol path already contains it."
+endpoint_called: "POST /v1/messages"
+auth_header: "x-api-key: <your sk- key>   # Authorization: Bearer also accepted"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/claude-coworks"
+```
+
 ## Why DeepRouter
 
 One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with automatic routing and a single place to see your usage and spend.

@@ -15,6 +15,29 @@ DeepRouter and chat with our models. No code, no terminal — just a few clicks 
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: cherry-studio
+api_protocol: OpenAI
+base_url: "https://api.deeprouter.co"
+base_url_warning: "HOST ONLY - do not add /v1. Cherry Studio appends it; writing it yourself gives /v1/v1 and a 404 whose message does not name the cause."
+endpoint_called: "POST /chat/completions"
+auth_header: "Authorization: Bearer <your sk- key>"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/cherry-studio"
+```
+
 ## Why DeepRouter
 
 One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with automatic routing and a single place to see your usage and spend.
@@ -30,7 +53,29 @@ One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with aut
 
 ---
 
-## Steps
+## One-click setup (recommended)
+
+You do not have to fill any of this in by hand. If Cherry Studio is already
+installed on this machine:
+
+1. Open **API Keys** in the DeepRouter console.
+2. In **AI apps and extensions**, click **Cherry Studio**.
+3. Your browser asks for permission to open the app — allow it.
+4. Cherry Studio opens with the provider, address, key and models already
+   filled in. You type nothing.
+
+> **The provider will be called "New API", not DeepRouter.** That is the
+> built-in preset the link matches, and the name comes from upstream. It is
+> the right one.
+
+**Nothing happened?** A link like this fails silently when the app is not
+installed, when the version is too old to register the handler, or when a
+managed machine blocks custom protocols. In that case use the manual steps
+below — they always work.
+
+---
+
+## Or set it up by hand
 
 1. Open Cherry Studio. Click the **Settings** (gear ⚙️) icon in the left sidebar.
 2. Open the **Model Providers** tab (sometimes shown as "Model Services").

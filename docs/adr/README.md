@@ -17,6 +17,7 @@ Read an ADR when:
 | [0004](./0004-channel-key-plaintext.md) | Channel API keys stored plaintext | Accepted (with future trigger) | deeprouter |
 | [0005](./0005-triple-db-compatibility.md) | SQLite + MySQL + PostgreSQL compatibility is a hard constraint | Accepted (inherited) | deeprouter |
 | [0006](./0006-internal-isolation.md) | Fork-specific code lives in `internal/` | Accepted | deeprouter |
+| [0007](./0007-auto-model-token-whitelist.md) | `deeprouter-auto` re-picks inside the token's model whitelist | Accepted | deeprouter |
 
 ## Template
 

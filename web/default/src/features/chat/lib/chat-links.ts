@@ -84,6 +84,28 @@ export function detectChatLinkType(url: string): ChatLinkType {
   return 'custom-protocol'
 }
 
+/**
+ * What a preset's stored value actually is.
+ *
+ * The admin console stores one string per app, and not all of them are links.
+ * `fluentread` has always been recognised as its own type, but `ccswitch` is a
+ * marker naming the CC Switch import dialog and nothing ever resolved it: it
+ * reached `window.open` unchanged, where a browser reads a string with no
+ * scheme as a relative path and navigates the console to /ccswitch.
+ *
+ * Callers that render a list of presets should drop `unsupported` ones rather
+ * than offer a button that cannot work, and send `cc-switch-dialog` to that
+ * dialog instead of trying to open it.
+ */
+export type ChatPresetAction = 'link' | 'cc-switch-dialog' | 'unsupported'
+
+export function chatPresetAction(url: string): ChatPresetAction {
+  const lower = url.trim().toLowerCase()
+  if (HTTP_REGEX.test(url) || lower.includes('://')) return 'link'
+  if (lower.startsWith('fluent')) return 'link'
+  return lower === 'ccswitch' ? 'cc-switch-dialog' : 'unsupported'
+}
+
 export function chatLinkRequiresApiKey(url: string): boolean {
   return (
     url.includes('{key}') ||

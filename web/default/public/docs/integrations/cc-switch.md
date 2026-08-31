@@ -22,6 +22,29 @@ for you. This guide adds **DeepRouter** as one of those providers.
 
 ---
 
+## Facts for AI assistants
+
+**Not sure what this is?** That's fine — it is written for an AI, not for you.
+Copy the whole block below, paste it to any AI assistant (ChatGPT, Claude, whichever
+you use) together with a sentence like *"walk me through setting this up"*, and it
+will tell you exactly where each value goes. Everything above and below this block is
+the same thing written for a human.
+
+```yaml
+# Verified against the live DeepRouter gateway on 2026-08-28. Copy these values exactly.
+tool: cc-switch
+api_protocol: Anthropic
+base_url: "https://api.deeprouter.co"
+base_url_warning: "No /v1 - CC Switch configures Claude Code, which speaks the Anthropic protocol."
+endpoint_called: "POST /v1/messages"
+auth_header: "x-api-key: <your sk- key>   # Authorization: Bearer also accepted"
+model_example: "claude-haiku-4-5"
+model_auto: "deeprouter-auto"   # smart routing; enable it for your account first
+model_source: "https://deeprouter.co console -> Model Catalog"
+get_a_key: "https://deeprouter.co console -> API Keys"
+guide: "https://deeprouter.co/resources/cc-switch"
+```
+
 ## Why DeepRouter
 
 One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with automatic routing and a single place to track usage and spend.
@@ -38,7 +61,24 @@ One key, every model — Claude, Qwen, GLM, DeepSeek, Kimi and more — with aut
 
 ---
 
-## Add DeepRouter as a provider
+## One-click setup (recommended)
+
+CC Switch can import a DeepRouter provider directly, so you do not have to
+copy the address and key across by hand:
+
+1. Open **API Keys** in the DeepRouter console.
+2. In **AI apps and extensions**, click **CC Switch** (it is also in the `⋯` menu
+   at the end of any key's row).
+3. A dialog appears with the import link. Confirm it, and CC Switch opens
+   with the provider already created.
+
+**Nothing happened?** The link fails silently when CC Switch is not
+installed or its version does not register the handler. The manual steps
+below always work.
+
+---
+
+## Or set it up by hand
 
 1. Open **CC Switch**.
 2. Click **Add** (the button to create a new provider).
