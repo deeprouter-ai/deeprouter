@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	skillapi "github.com/QuantumNous/new-api/internal/skill/api"
-	"github.com/QuantumNous/new-api/internal/skill/errcodes"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,20 +22,6 @@ type rateLimitRejector func(c *gin.Context, retryAfter int)
 
 func statusOnlyRateLimitRejector(c *gin.Context, retryAfter int) {
 	c.Status(http.StatusTooManyRequests)
-	c.Abort()
-}
-
-func skillRateLimitRejector(c *gin.Context, retryAfter int) {
-	if retryAfter < 1 {
-		retryAfter = 1
-	}
-	skillapi.ErrorWithRetryAfter(
-		c,
-		errcodes.ErrSkillRateLimited,
-		"Too many Skill API requests.",
-		"Please retry after the cooldown window.",
-		&retryAfter,
-	)
 	c.Abort()
 }
 
@@ -109,39 +93,6 @@ func rateLimitFactoryWithRejector(maxRequestNum int, duration int64, mark string
 		inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
 		return func(c *gin.Context) {
 			memoryRateLimiter(c, maxRequestNum, duration, mark, reject)
-		}
-	}
-}
-
-func SkillRateLimit(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
-	return rateLimitFactoryWithRejector(maxRequestNum, duration, mark, skillRateLimitRejector)
-}
-
-func SkillUserRateLimit(maxRequestNum int, duration int64, mark string) func(c *gin.Context) {
-	if common.RedisEnabled {
-		return func(c *gin.Context) {
-			userId := c.GetInt("id")
-			if userId == 0 {
-				skillapi.Error(c, errcodes.ErrAuthRequired, "Authentication required.", nil)
-				c.Abort()
-				return
-			}
-			key := fmt.Sprintf("rateLimit:%s:user:%d", mark, userId)
-			userRedisRateLimiterWithRejector(c, maxRequestNum, duration, key, skillRateLimitRejector)
-		}
-	}
-	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
-	return func(c *gin.Context) {
-		userId := c.GetInt("id")
-		if userId == 0 {
-			skillapi.Error(c, errcodes.ErrAuthRequired, "Authentication required.", nil)
-			c.Abort()
-			return
-		}
-		key := fmt.Sprintf("%s:user:%d", mark, userId)
-		if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
-			skillRateLimitRejector(c, int(duration))
-			return
 		}
 	}
 }
