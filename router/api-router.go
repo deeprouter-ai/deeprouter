@@ -392,5 +392,19 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
+
+		// Skill Marketplace V2 — admin endpoints
+		skillsRoute := apiRouter.Group("/skills")
+		skillsRoute.Use(middleware.AdminAuth())
+		{
+			skillsRoute.GET("/", controller.AdminListSkills)
+			skillsRoute.POST("/", controller.AdminCreateSkill)
+			skillsRoute.PUT("/:id", controller.AdminUpdateSkill)
+			skillsRoute.POST("/:id/publish", controller.AdminPublishSkill)
+			skillsRoute.POST("/:id/deprecate", controller.AdminDeprecateSkill)
+			skillsRoute.DELETE("/:id", controller.AdminDeleteSkill)
+			skillsRoute.PUT("/:id/featured", controller.AdminUpdateSkillFeatured)
+			skillsRoute.GET("/:id/logs", controller.AdminGetSkillLogs)
+		}
 	}
 }
