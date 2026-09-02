@@ -405,6 +405,11 @@ func SetApiRouter(router *gin.Engine) {
 			skillsRoute.DELETE("/:id", controller.AdminDeleteSkill)
 			skillsRoute.PUT("/:id/featured", controller.AdminUpdateSkillFeatured)
 			skillsRoute.GET("/:id/logs", controller.AdminGetSkillLogs)
+			// P2: version management
+			skillsRoute.POST("/:id/versions", controller.AdminUploadVersion)
+			skillsRoute.PUT("/:id/versions/:vid", controller.AdminUpdateVersion)
+			skillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
+			skillsRoute.DELETE("/:id/versions/:vid", controller.AdminDeleteVersion)
 		}
 	}
 }
