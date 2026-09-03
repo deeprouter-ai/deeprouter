@@ -117,3 +117,27 @@ func TestGrantForConversionBlocksFraudCap(t *testing.T) {
 	assert.Equal(t, 700, quotaForUser(t, db, 10))
 	assert.Equal(t, 0, quotaForUser(t, db, 12))
 }
+
+// TestApplyRewardTx_SkillCreditGrantsQuotaLikeQuotaKind guards the
+// ReferralRewardKindSkill branch of applyRewardTx's switch. common.ReferralRewardKind
+// is an unvalidated, admin-settable global (default "quota", settable via
+// PUT /api/option) that the skill-marketplace V1 removal touched directly —
+// without this test, deleting the shared case for ReferralRewardKindSkill would
+// silently fall through to the switch's default error branch and only surface
+// in production if an admin had the option set to "skill_credit".
+func TestApplyRewardTx_SkillCreditGrantsQuotaLikeQuotaKind(t *testing.T) {
+	db := referralTestDB(t)
+	createReferralUser(t, db, 1, "inviter", 1000, "ABCD")
+	createReferralUser(t, db, 2, "invitee", 100, "EFGH")
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		return applyRewardTx(tx, 1, 2, RewardConfig{
+			Kind:          referralmodel.ReferralRewardKindSkill,
+			InviterAmount: 700,
+			InviteeAmount: 300,
+		})
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1700, quotaForUser(t, db, 1))
+	assert.Equal(t, 400, quotaForUser(t, db, 2))
+}
