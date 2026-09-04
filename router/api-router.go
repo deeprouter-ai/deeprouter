@@ -394,7 +394,7 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		// Skill Marketplace V2 — admin endpoints
-		skillsRoute := apiRouter.Group("/skills")
+		skillsRoute := apiRouter.Group("/admin/skills")
 		skillsRoute.Use(middleware.AdminAuth())
 		{
 			skillsRoute.GET("/", controller.AdminListSkills)

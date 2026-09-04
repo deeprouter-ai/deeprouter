@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-04
+
+- 🔴 修复 Skill Marketplace V2 admin 端点路径与 PRD 不符：`router/api-router.go` 里 P1/P2 落地时把 12 个 admin 端点挂在 `apiRouter.Group("/skills")`（即 `/api/skills/...`），权限完全靠 `AdminAuth()` 中间件区分，路径本身跟公开浏览端点撞同一个前缀；PRD §6.3 写的是独立命名空间 `/api/admin/skills/...`。全仓库搜索确认这两个路径字符串此前只出现在这一处路由注册（无文档、无测试、无其他调用方引用），P5（首个真实调用方）尚未开发，故此时改动零风险。一行改动：`Group("/skills")` → `Group("/admin/skills")`；同时也消除了未来 P3 公开列表/详情端点（同样计划挂 `/api/skills`）与本组的路径冲突。先于 P5 落地，独立 commit，不计入 P5 范围（`router/api-router.go`）
+
 ## 2026-09-02
 
 - 新增 Skill Marketplace V2 P2：版本管理 + ZIP 打包 + 内置 Python runner。版本 CRUD（上传/编辑/删除，PRD §9 stage-1 校验：manifest 必填字段 + slug/version 一致性，`UploadVersion`/`UpdateVersion` 共用同一套校验，避免草稿编辑绕过检查）；8 步激活事务（`SELECT ... FOR UPDATE` 同时锁 skill 行与 version 行防并发——只锁一边堵不住 `DeleteVersion`/`ActivateVersion` 的竞态；内存打包前先跑两道安全 guard——扫厂商 API key 模式、确认 runner 调用的是 DeepRouter 自己的路由端点——guard 失败整个事务回滚，不留半成品状态）；纯 Python 3 标准库 runner 脚本（`//go:embed` 注入进每个包，5 道启动校验，`AUTH_REQUIRED`/`PACKAGE_INVALID`/`EXECUTION_FAILED`/`CONFIG_INVALID` 四类错误码）。测试：47 个 Go 单测 + 9 组 runner 子进程黑盒测试（真实起 python3 进程验证 CLI 契约）+ 10 个 Python `unittest`（覆盖黑盒测不到的响应解析 fallback 逻辑）；CI 两个 workflow 新增 Python 测试步骤（`internal/skill-marketplace/service/{admin_version,packaging}.go`, `internal/skill-marketplace/packageassets/`, `controller/admin_marketplace.go`, `router/api-router.go`, `.github/workflows/{unit-test,airbotix-internal}.yml`）
