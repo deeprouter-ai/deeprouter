@@ -119,7 +119,7 @@ func AdminPublishSkill(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill not found"})
 			return
 		}
-		if errors.Is(err, mktsvc.ErrInvalidTransition) {
+		if errors.Is(err, mktsvc.ErrInvalidTransition) || errors.Is(err, mktsvc.ErrNoActiveVersion) {
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
 			return
 		}
