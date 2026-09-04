@@ -414,6 +414,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			adminSkillsRoute.GET("/", controller.AdminListSkills)
 			adminSkillsRoute.POST("/", controller.AdminCreateSkill)
+			adminSkillsRoute.GET("/:id", controller.AdminGetSkill)
 			adminSkillsRoute.PUT("/:id", controller.AdminUpdateSkill)
 			adminSkillsRoute.POST("/:id/publish", controller.AdminPublishSkill)
 			adminSkillsRoute.POST("/:id/deprecate", controller.AdminDeprecateSkill)
@@ -421,6 +422,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminSkillsRoute.PUT("/:id/featured", controller.AdminUpdateSkillFeatured)
 			adminSkillsRoute.GET("/:id/logs", controller.AdminGetSkillLogs)
 			// P2: version management
+			adminSkillsRoute.GET("/:id/versions", controller.AdminListVersions)
 			adminSkillsRoute.POST("/:id/versions", controller.AdminUploadVersion)
 			adminSkillsRoute.PUT("/:id/versions/:vid", controller.AdminUpdateVersion)
 			adminSkillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
