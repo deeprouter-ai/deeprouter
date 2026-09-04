@@ -51,6 +51,23 @@ func AdminListSkills(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": resp})
 }
 
+func AdminGetSkill(c *gin.Context) {
+	id, ok := skillIDParam(c)
+	if !ok {
+		return
+	}
+	skill, err := adminSkillSvc().GetSkill(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": skill})
+}
+
 func AdminCreateSkill(c *gin.Context) {
 	var req mktsvc.CreateSkillRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -186,6 +203,19 @@ func AdminGetSkillLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": logs})
+}
+
+func AdminListVersions(c *gin.Context) {
+	skillID, ok := skillIDParam(c)
+	if !ok {
+		return
+	}
+	versions, err := adminVersionSvc().ListVersions(skillID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": versions})
 }
 
 func AdminUploadVersion(c *gin.Context) {

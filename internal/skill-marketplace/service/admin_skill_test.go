@@ -94,6 +94,47 @@ func logCount(t *testing.T, db *gorm.DB, skillID int64, action string) int64 {
 	return n
 }
 
+// ── GetSkill ──────────────────────────────────────────────────────────────────
+
+func TestGetSkill_ReturnsSkillWithActiveVersion(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skillID := insertSkill(t, db, "get-skill", "published")
+	versionID := insertVersion(t, db, skillID, "1.2.0", "active")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET active_version_id = ? WHERE id = ?`, versionID, skillID,
+	).Error)
+
+	skill, err := svc.GetSkill(skillID)
+	require.NoError(t, err)
+	assert.Equal(t, "get-skill", skill.Slug)
+	assert.Equal(t, "published", skill.Status)
+	assert.Equal(t, "1.2.0", skill.ActiveVersion)
+	require.NotNil(t, skill.ActiveVersionID)
+	assert.Equal(t, versionID, *skill.ActiveVersionID)
+}
+
+func TestGetSkill_NoActiveVersion_ReturnsEmptyActiveVersion(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skillID := insertSkill(t, db, "no-active-version", "draft")
+
+	skill, err := svc.GetSkill(skillID)
+	require.NoError(t, err)
+	assert.Equal(t, "", skill.ActiveVersion)
+	assert.Nil(t, skill.ActiveVersionID)
+}
+
+func TestGetSkill_NotFound(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.GetSkill(9999)
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
 // ── Publish ───────────────────────────────────────────────────────────────────
 
 func TestPublishSkill_FromDraft(t *testing.T) {

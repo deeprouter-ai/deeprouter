@@ -105,6 +105,30 @@ func (s *AdminSkillService) ListSkills(req ListSkillsRequest) (*ListSkillsRespon
 	return &ListSkillsResponse{Skills: summaries, Total: total}, nil
 }
 
+// GetSkill returns one skill by id, joined with its active version's semver
+// string — same shape as the rows ListSkills returns, so the admin edit page
+// can render metadata + "currently active: X.Y.Z" from a single call.
+func (s *AdminSkillService) GetSkill(id int64) (*SkillSummary, error) {
+	type row struct {
+		model.Skill
+		ActiveVersion string
+	}
+
+	var r row
+	err := s.db.Table("skills sk").
+		Select("sk.*, sv.version AS active_version").
+		Joins("LEFT JOIN skill_versions sv ON sv.id = sk.active_version_id").
+		Where("sk.id = ?", id).
+		Scan(&r).Error
+	if err != nil {
+		return nil, err
+	}
+	if r.Skill.ID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &SkillSummary{Skill: r.Skill, ActiveVersion: r.ActiveVersion}, nil
+}
+
 func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*model.Skill, error) {
 	tags := req.Tags
 	if tags == nil {
