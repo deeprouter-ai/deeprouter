@@ -85,3 +85,10 @@ jobs:
 
       - name: Verify kids coverage matrix
         run: bash scripts/check-kids-coverage-matrix.sh
+
+      - name: Skill Marketplace runner unit tests (Python stdlib)
+        # deeprouter_skill_runner.py is a zero-dependency script bundled into
+        # every skill package (see internal/skill-marketplace/packageassets);
+        # these test its pure functions (request building, response parsing)
+        # with the stdlib unittest module — no pip install needed.
+        run: python3 -m unittest discover -s internal/skill-marketplace/packageassets -p '*_test.py' -v

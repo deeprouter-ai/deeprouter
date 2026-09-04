@@ -8,13 +8,15 @@ import (
 )
 
 const (
-	LogActionCreate         = "create"
-	LogActionPublish        = "publish"
-	LogActionRepublish      = "republish"
-	LogActionDeprecate      = "deprecate"
-	LogActionDelete         = "delete"
-	LogActionFeaturedUpdate = "featured_update"
-	// version_upload / version_activate / version_delete added in P2
+	LogActionCreate          = "create"
+	LogActionPublish         = "publish"
+	LogActionRepublish       = "republish"
+	LogActionDeprecate       = "deprecate"
+	LogActionDelete          = "delete"
+	LogActionFeaturedUpdate  = "featured_update"
+	LogActionVersionUpload   = "version_upload"
+	LogActionVersionActivate = "version_activate"
+	LogActionVersionDelete   = "version_delete"
 )
 
 type SkillAdminLog struct {

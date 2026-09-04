@@ -45,9 +45,14 @@ func setupDB(t *testing.T) *gorm.DB {
 			version          TEXT NOT NULL,
 			status           TEXT NOT NULL DEFAULT 'draft',
 			skill_md_content TEXT NOT NULL DEFAULT '',
-			manifest_json    TEXT NOT NULL DEFAULT '{}',
+			manifest_json    BLOB NOT NULL DEFAULT '{}',
+			package_zip      BLOB,
+			package_sha256   TEXT,
+			package_built_at DATETIME,
+			changelog        TEXT NOT NULL DEFAULT '',
 			created_by       INTEGER NOT NULL,
-			created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (skill_id, version)
 		)`,
 		`CREATE TABLE IF NOT EXISTS skill_admin_logs (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
