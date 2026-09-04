@@ -237,9 +237,14 @@ func (s *AdminSkillService) PublishSkill(id int64, adminID int) (*model.Skill, e
 		return nil, fmt.Errorf("%w: %s → published", ErrInvalidTransition, skill.Status)
 	}
 
-	// P1: no versions yet, so active_version_id is always NULL.
-	// Allow publish without version so admin UI can be tested end-to-end.
-	// P2 will enforce active_version_id != NULL before publish.
+	// PRD §7.1: draft/deprecated -> published requires active_version_id
+	// to be set. This check was deferred at P1 ("P2 will enforce") and P2
+	// never came back to add it — ErrNoActiveVersion existed but was never
+	// returned anywhere, so the API would happily publish a versionless
+	// skill. Found auditing controller-layer test coverage.
+	if skill.ActiveVersionID == nil {
+		return nil, ErrNoActiveVersion
+	}
 
 	fromStatus := skill.Status
 	action := model.LogActionPublish

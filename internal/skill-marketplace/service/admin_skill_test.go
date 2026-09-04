@@ -289,11 +289,23 @@ func TestGetSkill_NotFound(t *testing.T) {
 
 // ── Publish ───────────────────────────────────────────────────────────────────
 
+// setActiveVersion inserts an active version for skillID and points
+// skills.active_version_id at it — the precondition PublishSkill now enforces.
+func setActiveVersion(t *testing.T, db *gorm.DB, skillID int64) int64 {
+	t.Helper()
+	versionID := insertVersion(t, db, skillID, "1.0.0", "active")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET active_version_id = ? WHERE id = ?`, versionID, skillID,
+	).Error)
+	return versionID
+}
+
 func TestPublishSkill_FromDraft(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)
 
 	id := insertSkill(t, db, "test-slug", "draft")
+	setActiveVersion(t, db, id)
 	skill, err := svc.PublishSkill(id, 1)
 	require.NoError(t, err)
 	assert.Equal(t, "published", skill.Status)
@@ -305,11 +317,36 @@ func TestPublishSkill_FromDeprecated_WritesRepublish(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	id := insertSkill(t, db, "dep-slug", "deprecated")
+	setActiveVersion(t, db, id)
 	skill, err := svc.PublishSkill(id, 1)
 	require.NoError(t, err)
 	assert.Equal(t, "published", skill.Status)
 	assert.Equal(t, int64(0), logCount(t, db, id, "publish"))
 	assert.Equal(t, int64(1), logCount(t, db, id, "republish"))
+}
+
+// Regression: ErrNoActiveVersion existed since P1 but was never actually
+// returned — PublishSkill would happily publish a skill with no active
+// version. PRD §7.1 requires active_version_id to be set before either
+// draft or deprecated can transition to published.
+func TestPublishSkill_NoActiveVersion_FromDraft_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "no-version-draft", "draft")
+	_, err := svc.PublishSkill(id, 1)
+	require.ErrorIs(t, err, mktsvc.ErrNoActiveVersion)
+	assert.Equal(t, int64(0), logCount(t, db, id, "publish"))
+}
+
+func TestPublishSkill_NoActiveVersion_FromDeprecated_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "no-version-deprecated", "deprecated")
+	_, err := svc.PublishSkill(id, 1)
+	require.ErrorIs(t, err, mktsvc.ErrNoActiveVersion)
+	assert.Equal(t, int64(0), logCount(t, db, id, "republish"))
 }
 
 func TestPublishSkill_AlreadyPublished_IsIdempotent(t *testing.T) {
@@ -424,6 +461,7 @@ func TestGetLogs_ReturnsLogsForSkill(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	id := insertSkill(t, db, "log-slug", "draft")
+	setActiveVersion(t, db, id)
 	// Trigger two state transitions to produce log entries
 	_, err := svc.PublishSkill(id, 1)
 	require.NoError(t, err)
