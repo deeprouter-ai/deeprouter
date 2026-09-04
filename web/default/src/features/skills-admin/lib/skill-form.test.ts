@@ -49,6 +49,15 @@ describe('formatTagsInput', () => {
     expect(formatTagsInput(tags)).toBe('code, review')
     expect(parseTagsInput(formatTagsInput(tags))).toEqual(tags)
   })
+
+  // Regression: a backend bug once sent `tags: null` for any untagged
+  // skill (a plain []string has no driver.Valuer for Postgres text[]) and
+  // this crashed SkillMetadataForm outright — `tags` is typed string[] but
+  // must not be trusted at the API boundary.
+  it('treats null/undefined as no tags instead of throwing', () => {
+    expect(formatTagsInput(null)).toBe('')
+    expect(formatTagsInput(undefined)).toBe('')
+  })
 })
 
 describe('getUploadVersionFormSchema manifest_json validation', () => {

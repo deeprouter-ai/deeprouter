@@ -71,8 +71,11 @@ export function parseTagsInput(value?: string): string[] {
     .filter(Boolean)
 }
 
-export function formatTagsInput(tags: string[]): string {
-  return tags.join(', ')
+// tags is typed string[] but the API boundary can still hand back null
+// (a prior backend bug did exactly that for untagged skills, and crashed
+// this form outright) — guard it here rather than trust the wire.
+export function formatTagsInput(tags: string[] | null | undefined): string {
+  return (tags ?? []).join(', ')
 }
 
 // The edit page's metadata form. UpdateSkillRequest (Go) has no slug field —
