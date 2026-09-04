@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/internal/skill-marketplace/model"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -120,7 +121,7 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		Name:             req.Name,
 		Description:      req.Description,
 		Category:         req.Category,
-		Tags:             tags,
+		Tags:             pq.StringArray(tags),
 		Status:           model.SkillStatusDraft,
 		MonetizationType: monetization,
 		PriceUSD:         req.PriceUSD,
@@ -161,7 +162,8 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 		updates["category"] = req.Category
 	}
 	if req.Tags != nil {
-		updates["tags"] = req.Tags
+		// Same pq.StringArray requirement as on the model — see model.Skill.Tags.
+		updates["tags"] = pq.StringArray(req.Tags)
 	}
 	if req.MonetizationType != "" {
 		updates["monetization_type"] = req.MonetizationType
