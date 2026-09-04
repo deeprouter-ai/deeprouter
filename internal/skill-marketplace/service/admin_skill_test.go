@@ -3,8 +3,10 @@ package service_test
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/internal/skill-marketplace/model"
 	mktsvc "github.com/QuantumNous/new-api/internal/skill-marketplace/service"
 	"github.com/glebarez/sqlite"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -29,6 +31,7 @@ func setupDB(t *testing.T) *gorm.DB {
 			name              TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
 			category          TEXT NOT NULL DEFAULT '',
+			tags              TEXT NOT NULL DEFAULT '{}',
 			status            TEXT NOT NULL DEFAULT 'draft',
 			monetization_type TEXT NOT NULL DEFAULT 'free',
 			price_usd         REAL NOT NULL DEFAULT 0,
@@ -92,6 +95,155 @@ func logCount(t *testing.T, db *gorm.DB, skillID int64, action string) int64 {
 		skillID, action,
 	).Scan(&n).Error)
 	return n
+}
+
+// ── CreateSkill ───────────────────────────────────────────────────────────────
+//
+// Never tested before this: db.Create() for a Skill needs a `tags` column in
+// the SQLite fixture (see the historical note atop unique_violation_test.go),
+// and nobody added one — so CreateSkill's happy path, its defaulting, and its
+// duplicate-slug handling all went untested since P1 shipped.
+
+func TestCreateSkill_Success(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug:             "new-skill",
+		Name:             "New Skill",
+		Description:      "Does things",
+		Category:         "code",
+		Tags:             []string{"code", "review"},
+		MonetizationType: "paid",
+		PriceUSD:         4.99,
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "draft", skill.Status)
+	assert.Equal(t, pq.StringArray{"code", "review"}, skill.Tags)
+	assert.Equal(t, 4.99, skill.PriceUSD)
+	assert.Equal(t, int64(1), logCount(t, db, skill.ID, "create"))
+}
+
+func TestCreateSkill_NilTags_StoresAsEmptyNotNil(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "no-tags-skill", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+	// This is the exact shape of the bug the P5 walkthrough hit: a nil
+	// Tags here must not round-trip as SQL NULL / come back nil.
+	require.NotNil(t, skill.Tags)
+	assert.Empty(t, skill.Tags)
+
+	var reloaded model.Skill
+	require.NoError(t, db.First(&reloaded, skill.ID).Error)
+	require.NotNil(t, reloaded.Tags)
+	assert.Empty(t, reloaded.Tags)
+}
+
+func TestCreateSkill_EmptyMonetizationType_DefaultsToFree(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "default-monetization", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "free", skill.MonetizationType)
+}
+
+func TestCreateSkill_DuplicateSlug_ReturnsErrSlugTaken(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	req := mktsvc.CreateSkillRequest{Slug: "dup-slug", Name: "n", Description: "d", Category: "c"}
+	_, err := svc.CreateSkill(req, 1)
+	require.NoError(t, err)
+
+	_, err = svc.CreateSkill(req, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSlugTaken)
+}
+
+// ── UpdateSkill ───────────────────────────────────────────────────────────────
+
+func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "partial-update", Name: "Old Name", Description: "Old Description", Category: "old-cat",
+	}, 1)
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Name: "New Name"})
+	require.NoError(t, err)
+	assert.Equal(t, "New Name", updated.Name)
+	assert.Equal(t, "Old Description", updated.Description)
+	assert.Equal(t, "old-cat", updated.Category)
+}
+
+func TestUpdateSkill_TagsReplaced(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "tags-update", Name: "n", Description: "d", Category: "c", Tags: []string{"old"},
+	}, 1)
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{
+		Tags: []string{"new", "tags"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, pq.StringArray{"new", "tags"}, updated.Tags)
+}
+
+func TestUpdateSkill_PriceUSDPointer_NilLeavesPriceUnchanged(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "price-unchanged", Name: "n", Description: "d", Category: "c",
+		MonetizationType: "paid", PriceUSD: 9.99,
+	}, 1)
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Name: "renamed"})
+	require.NoError(t, err)
+	assert.Equal(t, 9.99, updated.PriceUSD)
+}
+
+func TestUpdateSkill_NotFound(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.UpdateSkill(9999, mktsvc.UpdateSkillRequest{Name: "x"})
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+// PRD §11 AC-6 lists exactly which actions are logged, and plain metadata
+// edits are not among them — only publish/deprecate/republish/delete/
+// version_*/featured_update are. Pin that down explicitly so a future
+// "let's log everything" change doesn't silently drift from the PRD.
+func TestUpdateSkill_DoesNotWriteAuditLog(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "no-log-on-update", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+
+	_, err = svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Name: "renamed"})
+	require.NoError(t, err)
+
+	var total int64
+	require.NoError(t, db.Raw(
+		`SELECT COUNT(*) FROM skill_admin_logs WHERE skill_id = ?`, created.ID,
+	).Scan(&total).Error)
+	assert.Equal(t, int64(1), total, "only the create log should exist")
 }
 
 // ── GetSkill ──────────────────────────────────────────────────────────────────
