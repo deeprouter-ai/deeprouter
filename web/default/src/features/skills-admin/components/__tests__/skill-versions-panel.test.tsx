@@ -162,6 +162,40 @@ describe('SkillVersionsPanel', () => {
     ).toBeInTheDocument()
   })
 
+  // Regression: the real backend never resolves activation guard failures as
+  // {success:false} — AdminActivateVersion returns a real HTTP 400
+  // (controller/admin_marketplace.go), so activateVersion() rejects. The
+  // component had no catch, so this alert never actually rendered in
+  // production even though the test above (a resolved success:false mock)
+  // passed — the mock shape didn't match the real API contract.
+  it('shows the persistent alert when activateVersion rejects with a real HTTP error', async () => {
+    const onChanged = vi.fn()
+    mockActivateVersion.mockRejectedValue({
+      response: {
+        data: {
+          message: 'package contains an OpenAI API key pattern (sk-...)',
+        },
+      },
+    })
+
+    render(
+      <SkillVersionsPanel
+        skill={makeSkill()}
+        versions={[makeVersion({ id: 10, version: '1.0.0', status: 'draft' })]}
+        onChanged={onChanged}
+      />
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    expect(
+      await screen.findByText(
+        'package contains an OpenAI API key pattern (sk-...)'
+      )
+    ).toBeInTheDocument()
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
   it('labels a draft-status activate button "Activate" and an archived one "Reactivate"', () => {
     render(
       <SkillVersionsPanel

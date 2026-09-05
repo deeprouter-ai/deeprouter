@@ -48,6 +48,8 @@ export function SkillsDeleteDialog() {
         setOpen(null)
         triggerRefresh()
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsDeleting(false)
     }

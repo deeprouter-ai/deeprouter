@@ -113,6 +113,8 @@ export function SkillMetadataForm({
         form.reset(values)
         onSaved()
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsSubmitting(false)
     }

@@ -42,24 +42,32 @@ export function SkillPublishActions({
     !!skill.active_version_id
 
   const handlePublish = async () => {
-    const result = await publishSkill(skill.id)
-    if (result.success) {
-      toast.success(
-        skill.status === 'deprecated'
-          ? t('Skill republished')
-          : t('Skill published')
-      )
-      onChanged()
-    } else {
-      toast.error(result.message ?? t('Publish failed'))
+    try {
+      const result = await publishSkill(skill.id)
+      if (result.success) {
+        toast.success(
+          skill.status === 'deprecated'
+            ? t('Skill republished')
+            : t('Skill published')
+        )
+        onChanged()
+      } else {
+        toast.error(result.message ?? t('Publish failed'))
+      }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     }
   }
 
   const handleDeprecate = async () => {
-    const result = await deprecateSkill(skill.id)
-    if (result.success) {
-      toast.success(t('Skill deprecated'))
-      onChanged()
+    try {
+      const result = await deprecateSkill(skill.id)
+      if (result.success) {
+        toast.success(t('Skill deprecated'))
+        onChanged()
+      }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     }
   }
 

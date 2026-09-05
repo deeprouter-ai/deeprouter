@@ -41,6 +41,8 @@ export function FeaturedCell({ skill }: { skill: SkillSummary }) {
       if (result.success) {
         triggerRefresh()
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsSaving(false)
     }
@@ -59,6 +61,8 @@ export function FeaturedCell({ skill }: { skill: SkillSummary }) {
         toast.success(t('Featured rank updated'))
         triggerRefresh()
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsSaving(false)
     }

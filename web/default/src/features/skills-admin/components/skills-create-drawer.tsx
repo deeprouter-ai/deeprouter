@@ -98,6 +98,8 @@ export function SkillsCreateDrawer({
           params: { id: String(result.data.id) },
         })
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsSubmitting(false)
     }
