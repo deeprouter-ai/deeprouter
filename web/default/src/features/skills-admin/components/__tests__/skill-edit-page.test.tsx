@@ -22,6 +22,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillSummary } from '../../types'
 import { SkillEditPage } from '../skill-edit-page'
@@ -49,7 +50,11 @@ vi.mock('../skill-metadata-form', () => ({
   ),
 }))
 vi.mock('../skill-versions-panel', () => ({
-  SkillVersionsPanel: () => <div data-testid='versions-panel' />,
+  SkillVersionsPanel: ({ onChanged }: { onChanged: () => void }) => (
+    <button data-testid='versions-panel' onClick={onChanged}>
+      versions-panel
+    </button>
+  ),
 }))
 vi.mock('../skill-publish-actions', () => ({
   SkillPublishActions: () => <div data-testid='publish-actions' />,
@@ -62,7 +67,8 @@ function renderWithQuery(ui: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  const view = render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  return { ...view, client }
 }
 
 describe('SkillEditPage', () => {
@@ -115,5 +121,39 @@ describe('SkillEditPage', () => {
     expect(screen.getByTestId('versions-panel')).toBeInTheDocument()
     expect(screen.getByTestId('publish-actions')).toBeInTheDocument()
     expect(screen.getByTestId('activity-log')).toBeInTheDocument()
+  })
+
+  // Regression: refresh() forgot to invalidate the activity log's own query
+  // key, so uploading/activating a version never refreshed an already-open
+  // Activity Log panel even though the backend logged the action correctly.
+  it('invalidates the activity log query when a child reports a change', async () => {
+    mockGetSkill.mockResolvedValue({
+      success: true,
+      data: {
+        id: 1,
+        slug: 'code-review-expert',
+        name: 'Code Review Expert',
+        description: '',
+        category: 'code',
+        tags: [],
+        status: 'draft',
+        monetization_type: 'free',
+        price_usd: 0,
+        featured_flag: false,
+        featured_rank: 0,
+        created_by: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      } satisfies SkillSummary,
+    })
+    const { client } = renderWithQuery(<SkillEditPage skillId={1} />)
+    await screen.findByTestId('versions-panel')
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    await userEvent.click(screen.getByTestId('versions-panel'))
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['admin-skill-logs', 1],
+    })
   })
 })

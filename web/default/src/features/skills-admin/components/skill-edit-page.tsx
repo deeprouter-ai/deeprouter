@@ -45,6 +45,7 @@ export function SkillEditPage({ skillId }: { skillId: number }) {
     queryClient.invalidateQueries({
       queryKey: ['admin-skill-versions', skillId],
     })
+    queryClient.invalidateQueries({ queryKey: ['admin-skill-logs', skillId] })
   }
 
   if (skillQuery.isLoading) {
