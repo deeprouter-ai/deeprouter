@@ -57,11 +57,26 @@ func migrateSkills(db *gorm.DB) error {
 	`).Error; err != nil {
 		return err
 	}
-	return db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_skills_status   ON skills(status);
-		CREATE INDEX IF NOT EXISTS idx_skills_featured ON skills(featured_flag, featured_rank) WHERE status = 'published';
-		CREATE INDEX IF NOT EXISTS idx_skills_created  ON skills(created_at DESC)              WHERE status = 'published';
-	`).Error
+	// One statement per Exec: gorm's pgx connection sends Exec through the
+	// extended protocol, and PG rejects multiple commands in one prepared
+	// statement (SQLSTATE 42601) — batching these crashed the gateway on
+	// boot (found 2026-09-04, took production down with it).
+	return execEach(db,
+		`CREATE INDEX IF NOT EXISTS idx_skills_status   ON skills(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_skills_featured ON skills(featured_flag, featured_rank) WHERE status = 'published'`,
+		`CREATE INDEX IF NOT EXISTS idx_skills_created  ON skills(created_at DESC)              WHERE status = 'published'`,
+	)
+}
+
+// execEach runs each DDL statement as its own Exec — see the SQLSTATE 42601
+// note above.
+func execEach(db *gorm.DB, stmts ...string) error {
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func migrateSkillVersions(db *gorm.DB) error {
@@ -138,10 +153,10 @@ func migrateSkillPurchases(db *gorm.DB) error {
 	`).Error; err != nil {
 		return err
 	}
-	return db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_sp_user  ON skill_purchases(user_id);
-		CREATE INDEX IF NOT EXISTS idx_sp_skill ON skill_purchases(skill_id);
-	`).Error
+	return execEach(db,
+		`CREATE INDEX IF NOT EXISTS idx_sp_user  ON skill_purchases(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sp_skill ON skill_purchases(skill_id)`,
+	)
 }
 
 func migrateSkillAdminLogs(db *gorm.DB) error {
@@ -157,8 +172,8 @@ func migrateSkillAdminLogs(db *gorm.DB) error {
 	`).Error; err != nil {
 		return err
 	}
-	return db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_sal_skill  ON skill_admin_logs(skill_id);
-		CREATE INDEX IF NOT EXISTS idx_sal_admin  ON skill_admin_logs(admin_id);
-	`).Error
+	return execEach(db,
+		`CREATE INDEX IF NOT EXISTS idx_sal_skill  ON skill_admin_logs(skill_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sal_admin  ON skill_admin_logs(admin_id)`,
+	)
 }

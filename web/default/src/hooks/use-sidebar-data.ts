@@ -34,13 +34,31 @@ import {
   ListTodo,
   Settings,
   HelpCircle,
+  Sparkles,
+  Receipt,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import {
+  fetchMyPurchases,
+  marketplaceQueryKeys,
+} from '@/features/marketplace/api'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
 import { type SidebarData } from '@/components/layout/types'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+
+  // PRD §8.4: the Purchase History entry only exists for users who have at
+  // least one paid purchase. One cached probe per session-ish window; a
+  // purchase invalidates the marketplace key prefix so the entry appears
+  // right away.
+  const { data: purchasesProbe } = useQuery({
+    queryKey: marketplaceQueryKeys.myPurchases(),
+    queryFn: () => fetchMyPurchases({ limit: 100 }),
+    staleTime: 5 * 60 * 1000,
+  })
+  const hasPurchases = (purchasesProbe?.total ?? 0) > 0
 
   return {
     workspaces: [
@@ -104,6 +122,20 @@ export function useSidebarData(): SidebarData {
             url: '/wallet',
             icon: Wallet,
           },
+          {
+            title: t('My Skills'),
+            url: '/user/skills',
+            icon: Sparkles,
+          },
+          ...(hasPurchases
+            ? [
+                {
+                  title: t('Purchase History'),
+                  url: '/user/purchases',
+                  icon: Receipt,
+                },
+              ]
+            : []),
           {
             title: t('Profile'),
             url: '/profile',

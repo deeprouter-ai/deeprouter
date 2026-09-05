@@ -21,11 +21,13 @@ func setupDB(t *testing.T) *gorm.DB {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS users (
 			id      INTEGER PRIMARY KEY,
-			status  INTEGER NOT NULL DEFAULT 1
+			status  INTEGER NOT NULL DEFAULT 1,
+			quota   INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS skills (
 			id                INTEGER PRIMARY KEY AUTOINCREMENT,
 			slug              TEXT UNIQUE NOT NULL,
+			tags              TEXT NOT NULL DEFAULT '{}',
 			name              TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
 			category          TEXT NOT NULL DEFAULT '',
@@ -53,6 +55,23 @@ func setupDB(t *testing.T) *gorm.DB {
 			created_by       INTEGER NOT NULL,
 			created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE (skill_id, version)
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_enabled_skills (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id    INTEGER NOT NULL,
+			skill_id   INTEGER NOT NULL,
+			version_id INTEGER NOT NULL,
+			enabled_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (user_id, skill_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS skill_purchases (
+			id             INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id        INTEGER NOT NULL,
+			skill_id       INTEGER NOT NULL,
+			price_usd      REAL NOT NULL,
+			quota_deducted INTEGER NOT NULL,
+			purchased_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (user_id, skill_id)
 		)`,
 		`CREATE TABLE IF NOT EXISTS skill_admin_logs (
 			id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,6 +111,27 @@ func logCount(t *testing.T, db *gorm.DB, skillID int64, action string) int64 {
 		skillID, action,
 	).Scan(&n).Error)
 	return n
+}
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+// Regression for the tags mapping: a bare []string reached PG as a "record"
+// (SQLSTATE 42804), so CreateSkill failed on every real PG database. With
+// pq.StringArray the value round-trips through GORM's Create and read-back.
+func TestCreateSkill_TagsRoundTrip(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "tagged", Name: "Tagged", Description: "d", Category: "code",
+		Tags: []string{"code", "review"},
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"code", "review"}, []string(skill.Tags))
+
+	got, err := svc.UpdateSkill(skill.ID, mktsvc.UpdateSkillRequest{Tags: []string{"solo"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"solo"}, []string(got.Tags))
 }
 
 // ── Publish ───────────────────────────────────────────────────────────────────

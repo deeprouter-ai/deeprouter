@@ -125,6 +125,10 @@ func SetApiRouter(router *gin.Engine) {
 				// Custom OAuth bindings
 				selfRoute.GET("/oauth/bindings", controller.GetUserOAuthBindings)
 				selfRoute.DELETE("/oauth/bindings/:provider_id", controller.UnbindCustomOAuth)
+
+				// Skill Marketplace V2 — personal lists (PRD §6.2)
+				selfRoute.GET("/skills", controller.GetUserMarketplaceSkills)
+				selfRoute.GET("/purchases", controller.GetUserMarketplacePurchases)
 			}
 
 			adminRoute := userRoute.Group("/")
@@ -393,23 +397,34 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
 
-		// Skill Marketplace V2 — admin endpoints
+		// Skill Marketplace V2 — public endpoints (PRD §6.1/§6.2). /api/skills
+		// belongs to the anonymous listing per the PRD; the admin surface
+		// lives under /api/admin/skills (also PRD), which is why the two
+		// groups can't share a prefix — gin would reject :slug next to :id.
 		skillsRoute := apiRouter.Group("/skills")
-		skillsRoute.Use(middleware.AdminAuth())
 		{
-			skillsRoute.GET("/", controller.AdminListSkills)
-			skillsRoute.POST("/", controller.AdminCreateSkill)
-			skillsRoute.PUT("/:id", controller.AdminUpdateSkill)
-			skillsRoute.POST("/:id/publish", controller.AdminPublishSkill)
-			skillsRoute.POST("/:id/deprecate", controller.AdminDeprecateSkill)
-			skillsRoute.DELETE("/:id", controller.AdminDeleteSkill)
-			skillsRoute.PUT("/:id/featured", controller.AdminUpdateSkillFeatured)
-			skillsRoute.GET("/:id/logs", controller.AdminGetSkillLogs)
+			skillsRoute.GET("", controller.ListMarketplaceSkills)
+			skillsRoute.GET("/:slug", controller.GetMarketplaceSkill)
+			skillsRoute.POST("/:slug/download", middleware.UserAuth(), controller.DownloadMarketplaceSkill)
+		}
+
+		// Skill Marketplace V2 — admin endpoints (PRD §6.3)
+		adminSkillsRoute := apiRouter.Group("/admin/skills")
+		adminSkillsRoute.Use(middleware.AdminAuth())
+		{
+			adminSkillsRoute.GET("/", controller.AdminListSkills)
+			adminSkillsRoute.POST("/", controller.AdminCreateSkill)
+			adminSkillsRoute.PUT("/:id", controller.AdminUpdateSkill)
+			adminSkillsRoute.POST("/:id/publish", controller.AdminPublishSkill)
+			adminSkillsRoute.POST("/:id/deprecate", controller.AdminDeprecateSkill)
+			adminSkillsRoute.DELETE("/:id", controller.AdminDeleteSkill)
+			adminSkillsRoute.PUT("/:id/featured", controller.AdminUpdateSkillFeatured)
+			adminSkillsRoute.GET("/:id/logs", controller.AdminGetSkillLogs)
 			// P2: version management
-			skillsRoute.POST("/:id/versions", controller.AdminUploadVersion)
-			skillsRoute.PUT("/:id/versions/:vid", controller.AdminUpdateVersion)
-			skillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
-			skillsRoute.DELETE("/:id/versions/:vid", controller.AdminDeleteVersion)
+			adminSkillsRoute.POST("/:id/versions", controller.AdminUploadVersion)
+			adminSkillsRoute.PUT("/:id/versions/:vid", controller.AdminUpdateVersion)
+			adminSkillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
+			adminSkillsRoute.DELETE("/:id/versions/:vid", controller.AdminDeleteVersion)
 		}
 	}
 }
