@@ -157,3 +157,52 @@ describe('SkillMetadataForm — monetization change confirmation', () => {
     )
   })
 })
+
+// Coverage: AC-9 — "Skill 处于 draft 时可修改 slug；published 后修改 slug 返回
+// 409". The slug field previously showed the same "locked — cannot be
+// changed here" text unconditionally, in every status; UpdateSkillRequest
+// (Go) had no slug field at all, so there was no draft-editable path.
+describe('SkillMetadataForm — slug editability (AC-9)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the slug as an editable input while draft, and submits changes', async () => {
+    mockUpdateSkill.mockResolvedValue({ success: true })
+    render(
+      <SkillMetadataForm
+        skill={makeSkill({ status: 'draft', slug: 'old-slug' })}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const slugInput = screen.getByLabelText('Slug') as HTMLInputElement
+    expect(slugInput.value).toBe('old-slug')
+    await userEvent.clear(slugInput)
+    await userEvent.type(slugInput, 'new-slug')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(mockUpdateSkill).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ slug: 'new-slug' })
+    )
+  })
+
+  it.each(['published', 'deprecated'] as const)(
+    'shows the slug as locked text, not an input, once %s',
+    (status) => {
+      render(
+        <SkillMetadataForm
+          skill={makeSkill({ status, slug: 'locked-slug' })}
+          onSaved={vi.fn()}
+        />
+      )
+
+      expect(screen.getByText(/locked-slug/)).toBeInTheDocument()
+      expect(
+        screen.getByText('(locked — cannot be changed here)')
+      ).toBeInTheDocument()
+      expect(screen.queryByLabelText('Slug')).not.toBeInTheDocument()
+    }
+  )
+})

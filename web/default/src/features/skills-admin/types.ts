@@ -92,6 +92,7 @@ export interface CreateSkillRequest {
 }
 
 export interface UpdateSkillRequest {
+  slug?: string
   name?: string
   description?: string
   category?: string

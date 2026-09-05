@@ -287,6 +287,16 @@ func TestAdminCreateSkill_Success_Returns200(t *testing.T) {
 	assert.True(t, decodeMarketplaceResponse(t, recorder).Success)
 }
 
+func TestAdminCreateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{Slug: "Not Valid", Name: "n", Description: "d", Category: "c"}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
 // ── AdminUpdateSkill ─────────────────────────────────────────────────────────
 
 func TestAdminUpdateSkill_NotFound_Returns404(t *testing.T) {
@@ -309,6 +319,40 @@ func TestAdminUpdateSkill_Success_Returns200(t *testing.T) {
 	AdminUpdateSkill(ctx)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
+}
+
+func TestAdminUpdateSkill_SlugLockedOncePublished_Returns409(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestSkill(t, db, "pub-slug", "published")
+	req := mktsvc.UpdateSkillRequest{Slug: "renamed-slug"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusConflict, recorder.Code)
+}
+
+func TestAdminUpdateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestSkill(t, db, "draft-slug", "draft")
+	req := mktsvc.UpdateSkillRequest{Slug: "Not Valid"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+func TestAdminUpdateSkill_DuplicateSlug_Returns409(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	insertTestSkill(t, db, "already-taken", "draft")
+	id := insertTestSkill(t, db, "renaming-me", "draft")
+	req := mktsvc.UpdateSkillRequest{Slug: "already-taken"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusConflict, recorder.Code)
 }
 
 // ── AdminPublishSkill ────────────────────────────────────────────────────────
@@ -441,6 +485,17 @@ func TestAdminUpdateSkillFeatured_Success_Returns200(t *testing.T) {
 	AdminUpdateSkillFeatured(ctx)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
+}
+
+func TestAdminUpdateSkillFeatured_NotPublished_Returns409(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestSkill(t, db, "feature-draft", "draft")
+	req := mktsvc.FeaturedRequest{FeaturedFlag: true, FeaturedRank: 1}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkillFeatured(ctx)
+
+	assert.Equal(t, http.StatusConflict, recorder.Code)
 }
 
 // ── AdminGetSkillLogs ────────────────────────────────────────────────────────
