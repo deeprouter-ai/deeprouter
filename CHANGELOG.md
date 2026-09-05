@@ -2,6 +2,15 @@
 
 ## 2026-09-05
 
+- 对 P1/P2/P5 做完整测试覆盖审计,逐个方法、逐个组件核对有没有测试,补齐发现的所有缺口:
+  - **`ListSkills`**(列表页真正在跑的查询方法)之前一个专门测试都没有——controller 测试只验证过 `Total==1`,status/category 筛选、`page`/`page_size` 边界(≤0、>100 的钳制)、`active_version` join 全部没测过。新增 8 个测试。
+  - 前端 `skill-edit-page.tsx` 之前被判定"太薄不用测",重新看发现它有 loading/not-found/success 三个真实渲染分支,补了 3 个测试(子组件全部 mock 掉,只测这层自己的分支逻辑)。
+  - 前端 `skills-columns.tsx` 的单元格渲染逻辑(状态徽章文案、免费/付费价格格式、active_version 空状态)之前完全没测,用 `useReactTable` + `flexRender` 搭一个最小测试台补了 8 个测试,不牵扯 `skills-table.tsx` 自己的 react-query/URL 状态那部分。
+  - `skills-provider.tsx`(`useSkills` 脱离 Provider 时的报错防护)、`skills-dialogs.tsx`(`open==='create'` 到抽屉 `open` prop 的映射)、`skills-primary-buttons.tsx` 三个之前判定"太简单"的文件各补了 1-4 个测试。
+  - `api.ts` 12 个纯包装函数补了 URL/method 校验——`deleteSkill`/`deleteVersion` 这两个在真机走查里也从没被点过("Delete"一次没点过),之前完全没有任何安全网。
+  - `skills-table.tsx` 自身的 react-query + `useTableUrlState` 那部分**仍然刻意不测**——需要真实注册的 TanStack Router 路由树,成本明显不成比例,已经被真机走查(建→列表→分页跑过一遍)覆盖过。
+  - 后端最终 124 个测试(`model` 2、`packageassets` 8、`service` 73、`controller` 41),前端最终 90 个测试(19 个文件),全部跑绿(`internal/skill-marketplace/service/admin_skill_test.go`, `web/default/src/features/skills-admin/**`)
+
 - 补 P1/P2 controller 层测试——`controller/admin_marketplace.go` 的 12 个 admin 端点自上线以来一直是空白,service 层测得很扎实,但 controller 自己翻译状态码的那一层（`errors.Is` 分支怎么映射到 404/409/400/500)从没被测过。新增 `admin_marketplace_test.go`,39 个测试,直调 handler 函数（不走完整 router+中间件,跟 `user_create_test.go` 同一个先例;鉴权本身是 `AdminAuth()` 自己的职责,不在这次范围内),覆盖每个 handler 的状态码分支 + `skillIDParam`/`versionIDParam` 的非法输入处理。写这批测试、逐个过 `PublishSkill` 分支时顺带抓到了 `active_version_id` 从未被真正检查的那个业务规则缺口(见前一天日志的 `PublishSkill` 修复条目)（`controller/admin_marketplace_test.go`)
 
 ## 2026-09-04
