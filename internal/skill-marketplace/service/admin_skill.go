@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -10,6 +11,13 @@ import (
 	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
+
+// slugPattern mirrors web/default/src/features/skills-admin/constants.ts's
+// SKILL_SLUG_PATTERN — the frontend zod schema was the only place enforcing
+// this; a direct API call could create/rename a skill to a slug containing
+// spaces, uppercase letters or other characters P3's public URLs won't
+// tolerate later.
+var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 type AdminSkillService struct {
 	db *gorm.DB
@@ -50,6 +58,7 @@ type CreateSkillRequest struct {
 }
 
 type UpdateSkillRequest struct {
+	Slug             string   `json:"slug"`
 	Name             string   `json:"name"`
 	Description      string   `json:"description"`
 	Category         string   `json:"category"`
@@ -138,6 +147,10 @@ func (s *AdminSkillService) GetSkill(id int64) (*SkillSummary, error) {
 }
 
 func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*model.Skill, error) {
+	if !slugPattern.MatchString(req.Slug) {
+		return nil, ErrInvalidSlugFormat
+	}
+
 	tags := req.Tags
 	if tags == nil {
 		tags = []string{}
@@ -183,6 +196,19 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	}
 
 	updates := map[string]any{"updated_at": time.Now()}
+	if req.Slug != "" && req.Slug != skill.Slug {
+		// PRD §5.1 / AC-9: slug is editable while draft, locked (409) once
+		// published — a published skill's slug is baked into its download
+		// URL and the ZIP's manifest, so changing it later would strand
+		// those references.
+		if skill.Status != model.SkillStatusDraft {
+			return nil, ErrSlugLocked
+		}
+		if !slugPattern.MatchString(req.Slug) {
+			return nil, ErrInvalidSlugFormat
+		}
+		updates["slug"] = req.Slug
+	}
 	if req.Name != "" {
 		updates["name"] = req.Name
 	}
@@ -203,6 +229,9 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	}
 
 	if err := s.db.Model(&skill).Updates(updates).Error; err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrSlugTaken
+		}
 		return nil, err
 	}
 	// Re-fetch to get the updated record
@@ -217,6 +246,9 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 var ErrNoActiveVersion = errors.New("cannot publish: skill has no active version")
 var ErrInvalidTransition = errors.New("invalid state transition")
 var ErrSlugTaken = errors.New("slug already taken")
+var ErrSlugLocked = errors.New("slug cannot be changed once the skill has been published")
+var ErrInvalidSlugFormat = errors.New("slug must be lowercase letters, numbers and hyphens only")
+var ErrSkillNotPublished = errors.New("only published skills can be featured")
 
 // isUniqueViolation detects unique constraint errors from both PostgreSQL
 // ("duplicate key value violates unique constraint") and SQLite
@@ -288,20 +320,30 @@ func (s *AdminSkillService) DeprecateSkill(id int64, adminID int) (*model.Skill,
 		return nil, fmt.Errorf("%w: %s → deprecated (only published skills can be deprecated)", ErrInvalidTransition, skill.Status)
 	}
 
+	// Deprecated skills are no longer eligible to be featured (UpdateFeatured
+	// now rejects non-published skills too) — reset here so a stale
+	// featured_flag=true doesn't silently resurface if the skill is later
+	// republished without the Admin re-checking it.
+	wasFeatured := skill.FeaturedFlag
 	if err := s.db.Model(&skill).Updates(map[string]any{
-		"status":     model.SkillStatusDeprecated,
-		"updated_at": time.Now(),
+		"status":        model.SkillStatusDeprecated,
+		"featured_flag": false,
+		"featured_rank": 0,
+		"updated_at":    time.Now(),
 	}).Error; err != nil {
 		return nil, err
 	}
 
 	skillID := skill.ID
 	_ = model.WriteLog(s.db, int64(adminID), &skillID, model.LogActionDeprecate, map[string]any{
-		"from_status": model.SkillStatusPublished,
-		"to_status":   model.SkillStatusDeprecated,
+		"from_status":         model.SkillStatusPublished,
+		"to_status":           model.SkillStatusDeprecated,
+		"featured_flag_reset": wasFeatured,
 	})
 
 	skill.Status = model.SkillStatusDeprecated
+	skill.FeaturedFlag = false
+	skill.FeaturedRank = 0
 	return &skill, nil
 }
 
@@ -331,6 +373,13 @@ func (s *AdminSkillService) UpdateFeatured(id int64, req FeaturedRequest, adminI
 	var skill model.Skill
 	if err := s.db.First(&skill, id).Error; err != nil {
 		return nil, err
+	}
+
+	// AC-8: "Admin can toggle featured on a *published* skill" — the frontend
+	// disables the control for draft/deprecated rows, but nothing stopped a
+	// direct API call from featuring a skill nobody can even see yet.
+	if skill.Status != model.SkillStatusPublished {
+		return nil, ErrSkillNotPublished
 	}
 
 	if err := s.db.Model(&skill).Updates(map[string]any{

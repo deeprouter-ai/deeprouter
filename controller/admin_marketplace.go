@@ -76,11 +76,14 @@ func AdminCreateSkill(c *gin.Context) {
 	}
 	skill, err := adminSkillSvc().CreateSkill(req, c.GetInt("id"))
 	if err != nil {
-		if errors.Is(err, mktsvc.ErrSlugTaken) {
+		switch {
+		case errors.Is(err, mktsvc.ErrSlugTaken):
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "slug already exists"})
-			return
+		case errors.Is(err, mktsvc.ErrInvalidSlugFormat):
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": skill})
@@ -98,11 +101,18 @@ func AdminUpdateSkill(c *gin.Context) {
 	}
 	skill, err := adminSkillSvc().UpdateSkill(id, req)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill not found"})
-			return
+		case errors.Is(err, mktsvc.ErrSlugTaken):
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "slug already exists"})
+		case errors.Is(err, mktsvc.ErrSlugLocked):
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+		case errors.Is(err, mktsvc.ErrInvalidSlugFormat):
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": skill})
@@ -182,11 +192,14 @@ func AdminUpdateSkillFeatured(c *gin.Context) {
 	}
 	skill, err := adminSkillSvc().UpdateFeatured(id, req, c.GetInt("id"))
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill not found"})
-			return
+		case errors.Is(err, mktsvc.ErrSkillNotPublished):
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": skill})

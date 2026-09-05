@@ -369,6 +369,22 @@ func TestCreateSkill_DuplicateSlug_ReturnsErrSlugTaken(t *testing.T) {
 	require.ErrorIs(t, err, mktsvc.ErrSlugTaken)
 }
 
+// The slug format regex previously lived only in the frontend zod schema
+// (SKILL_SLUG_PATTERN) — a direct API call could create a skill with a slug
+// containing spaces or uppercase letters, which P3's public URLs won't
+// tolerate. This pins the backend-side mirror of that same pattern.
+func TestCreateSkill_InvalidSlugFormat_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	for _, bad := range []string{"Has Spaces", "UPPERCASE", "trailing-", "-leading", "double--hyphen", ""} {
+		_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+			Slug: bad, Name: "n", Description: "d", Category: "c",
+		}, 1)
+		require.ErrorIsf(t, err, mktsvc.ErrInvalidSlugFormat, "slug %q should have been rejected", bad)
+	}
+}
+
 // ── UpdateSkill ───────────────────────────────────────────────────────────────
 
 func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
@@ -416,6 +432,86 @@ func TestUpdateSkill_PriceUSDPointer_NilLeavesPriceUnchanged(t *testing.T) {
 	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Name: "renamed"})
 	require.NoError(t, err)
 	assert.Equal(t, 9.99, updated.PriceUSD)
+}
+
+// AC-9: "Skill 处于 draft 时可修改 slug；published 后修改 slug 返回 409".
+// UpdateSkillRequest previously had no Slug field at all — this path did
+// not exist in either direction. These four tests pin the fix.
+func TestUpdateSkill_SlugChangesWhileDraft(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "old-slug", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Slug: "new-slug"})
+	require.NoError(t, err)
+	assert.Equal(t, "new-slug", updated.Slug)
+}
+
+func TestUpdateSkill_SlugLockedOncePublished(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "pub-slug", "published")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{Slug: "renamed-slug"})
+	require.ErrorIs(t, err, mktsvc.ErrSlugLocked)
+
+	var reloaded model.Skill
+	require.NoError(t, db.First(&reloaded, id).Error)
+	assert.Equal(t, "pub-slug", reloaded.Slug, "slug must not have changed")
+}
+
+func TestUpdateSkill_SlugLockedOnceDeprecated(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "dep-slug", "deprecated")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{Slug: "renamed-slug"})
+	require.ErrorIs(t, err, mktsvc.ErrSlugLocked)
+}
+
+func TestUpdateSkill_SlugInvalidFormat_RejectedEvenInDraft(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "valid-slug", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+
+	_, err = svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Slug: "Not Valid"})
+	require.ErrorIs(t, err, mktsvc.ErrInvalidSlugFormat)
+}
+
+func TestUpdateSkill_SlugDuplicate_ReturnsErrSlugTaken(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "taken-slug", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "other-slug", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+
+	_, err = svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{Slug: "taken-slug"})
+	require.ErrorIs(t, err, mktsvc.ErrSlugTaken)
+}
+
+func TestUpdateSkill_SameSlugResubmitted_NoOp(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	// Resubmitting the skill's own current slug (e.g. a form that always
+	// includes it) must not trip the draft-only lock on a published skill.
+	id := insertSkill(t, db, "same-slug", "published")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{Slug: "same-slug", Name: "renamed"})
+	require.NoError(t, err)
 }
 
 func TestUpdateSkill_NotFound(t *testing.T) {
@@ -585,6 +681,28 @@ func TestDeprecateSkill_FromPublished(t *testing.T) {
 	assert.Equal(t, int64(1), logCount(t, db, id, "deprecate"))
 }
 
+// UpdateFeatured now rejects non-published skills (see TestUpdateFeatured_
+// Rejects* below) — a stale featured_flag=true left over from before a
+// skill was deprecated could otherwise silently resurface on republish
+// without the Admin ever having re-checked it. Deprecate resets it instead.
+func TestDeprecateSkill_ResetsFeaturedFlag(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "dep-featured", "published")
+	_, err := svc.UpdateFeatured(id, mktsvc.FeaturedRequest{FeaturedFlag: true, FeaturedRank: 1}, 1)
+	require.NoError(t, err)
+
+	skill, err := svc.DeprecateSkill(id, 1)
+	require.NoError(t, err)
+	assert.False(t, skill.FeaturedFlag)
+	assert.Equal(t, 0, skill.FeaturedRank)
+
+	var reloaded model.Skill
+	require.NoError(t, db.First(&reloaded, id).Error)
+	assert.False(t, reloaded.FeaturedFlag)
+}
+
 func TestDeprecateSkill_FromDraft_ReturnsInvalidTransition(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)
@@ -655,6 +773,29 @@ func TestUpdateFeatured_SetsFieldsAndLogs(t *testing.T) {
 	assert.True(t, skill.FeaturedFlag)
 	assert.Equal(t, 3, skill.FeaturedRank)
 	assert.Equal(t, int64(1), logCount(t, db, id, "featured_update"))
+}
+
+// AC-8 reads "Admin can toggle featured on a *published* skill" — the
+// frontend disables the control for draft/deprecated rows, but nothing on
+// the backend stopped a direct API call from featuring a skill nobody can
+// even see yet. These two pin the fix; nothing gets written on rejection.
+func TestUpdateFeatured_RejectsDraftSkill(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "feat-draft", "draft")
+	_, err := svc.UpdateFeatured(id, mktsvc.FeaturedRequest{FeaturedFlag: true, FeaturedRank: 1}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSkillNotPublished)
+	assert.Equal(t, int64(0), logCount(t, db, id, "featured_update"))
+}
+
+func TestUpdateFeatured_RejectsDeprecatedSkill(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "feat-dep", "deprecated")
+	_, err := svc.UpdateFeatured(id, mktsvc.FeaturedRequest{FeaturedFlag: true, FeaturedRank: 1}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSkillNotPublished)
 }
 
 // ── GetLogs ───────────────────────────────────────────────────────────────────

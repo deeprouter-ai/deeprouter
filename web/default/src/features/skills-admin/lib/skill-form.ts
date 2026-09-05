@@ -78,11 +78,21 @@ export function formatTagsInput(tags: string[] | null | undefined): string {
   return (tags ?? []).join(', ')
 }
 
-// The edit page's metadata form. UpdateSkillRequest (Go) has no slug field —
-// slug is immutable via this endpoint, draft or published — so it isn't here.
+// The edit page's metadata form. `slug` is only ever submitted while the
+// skill is still draft (AC-9) — the form disables/hides the field once the
+// skill has been published, but the schema validates it unconditionally so
+// a draft-state edit gets the same format check CreateSkill uses.
 export function getUpdateSkillFormSchema(t: TFunction) {
   return z
     .object({
+      slug: z
+        .string()
+        .min(1, t('Slug is required'))
+        .max(100, t('Slug must be 100 characters or fewer'))
+        .regex(
+          SKILL_SLUG_PATTERN,
+          t('Slug must be lowercase letters, numbers and hyphens only')
+        ),
       name: z.string().min(1, t('Name is required')).max(200),
       description: z.string().min(1, t('Description is required')),
       category: z.string().min(1, t('Category is required')),

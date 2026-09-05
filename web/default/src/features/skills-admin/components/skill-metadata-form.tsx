@@ -58,6 +58,7 @@ import type { SkillSummary } from '../types'
 
 function toFormValues(skill: SkillSummary): UpdateSkillFormValues {
   return {
+    slug: skill.slug,
     name: skill.name,
     description: skill.description,
     category: skill.category,
@@ -101,6 +102,7 @@ export function SkillMetadataForm({
     setIsSubmitting(true)
     try {
       const result = await updateSkill(skill.id, {
+        slug: values.slug,
         name: values.name,
         description: values.description,
         category: values.category,
@@ -143,12 +145,33 @@ export function SkillMetadataForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
-            <div className='text-muted-foreground font-mono text-sm'>
-              {t('Slug')}: {skill.slug}
-              <span className='ms-2 text-xs'>
-                {t('(locked — cannot be changed here)')}
-              </span>
-            </div>
+            {hasEverBeenPublished ? (
+              <div className='text-muted-foreground font-mono text-sm'>
+                {t('Slug')}: {skill.slug}
+                <span className='ms-2 text-xs'>
+                  {t('(locked — cannot be changed here)')}
+                </span>
+              </div>
+            ) : (
+              <FormField
+                control={form.control}
+                name='slug'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Slug')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} className='font-mono' />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Locked once the skill is published — used in the download URL and package.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
