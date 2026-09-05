@@ -385,6 +385,32 @@ func TestCreateSkill_InvalidSlugFormat_Rejected(t *testing.T) {
 	}
 }
 
+// monetization_type/price_usd were previously only checked by the DB's
+// skills_monetization_check/skills_price_check constraints — a bypass of
+// the frontend's zod schema got a raw Postgres error wrapped in a 500
+// instead of a clean 400. These pin the Go-level mirror of that same rule.
+func TestCreateSkill_InvalidMonetizationType_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "bad-monetization", Name: "n", Description: "d", Category: "c",
+		MonetizationType: "subscription",
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrInvalidMonetizationType)
+}
+
+func TestCreateSkill_PaidWithZeroPrice_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "paid-zero-price", Name: "n", Description: "d", Category: "c",
+		MonetizationType: "paid", PriceUSD: 0,
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrPriceRequiredForPaid)
+}
+
 // ── UpdateSkill ───────────────────────────────────────────────────────────────
 
 func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
@@ -512,6 +538,55 @@ func TestUpdateSkill_SameSlugResubmitted_NoOp(t *testing.T) {
 	id := insertSkill(t, db, "same-slug", "published")
 	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{Slug: "same-slug", Name: "renamed"})
 	require.NoError(t, err)
+}
+
+func TestUpdateSkill_InvalidMonetizationType_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "bad-monetization-update", "draft")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{MonetizationType: "subscription"})
+	require.ErrorIs(t, err, mktsvc.ErrInvalidMonetizationType)
+}
+
+// Validation must check the *effective* post-update state (existing DB
+// value + whatever this partial request changes), not just whichever field
+// this particular request happens to touch.
+func TestUpdateSkill_SwitchToPaid_RejectedWhenExistingPriceIsStillZero(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	// insertSkill leaves monetization_type/price_usd at their DB defaults:
+	// 'free' / 0.
+	id := insertSkill(t, db, "switch-paid-no-price", "draft")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{MonetizationType: "paid"})
+	require.ErrorIs(t, err, mktsvc.ErrPriceRequiredForPaid)
+}
+
+func TestUpdateSkill_SwitchToPaid_AllowedWhenExistingPriceIsAlreadyPositive(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "switch-paid-has-price", "draft")
+	require.NoError(t, db.Exec(`UPDATE skills SET price_usd = 4.99 WHERE id = ?`, id).Error)
+
+	updated, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{MonetizationType: "paid"})
+	require.NoError(t, err)
+	assert.Equal(t, "paid", updated.MonetizationType)
+}
+
+func TestUpdateSkill_SetPriceZero_RejectedWhileAlreadyPaid(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "already-paid-zero-out", "draft")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET monetization_type = 'paid', price_usd = 4.99 WHERE id = ?`, id,
+	).Error)
+
+	zero := 0.0
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{PriceUSD: &zero})
+	require.ErrorIs(t, err, mktsvc.ErrPriceRequiredForPaid)
 }
 
 func TestUpdateSkill_NotFound(t *testing.T) {

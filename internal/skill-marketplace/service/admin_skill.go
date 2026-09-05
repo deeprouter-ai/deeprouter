@@ -159,6 +159,16 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 	if monetization == "" {
 		monetization = "free"
 	}
+	// The `skills_monetization_check`/`skills_price_check` DB constraints
+	// already stop bad data from being written, but a violation surfaces as
+	// a raw Postgres error wrapped in a 500 — validate here so a bypass of
+	// the frontend's zod schema gets the same clean 400 a normal client sees.
+	if monetization != "free" && monetization != "paid" {
+		return nil, ErrInvalidMonetizationType
+	}
+	if monetization == "paid" && req.PriceUSD <= 0 {
+		return nil, ErrPriceRequiredForPaid
+	}
 
 	skill := &model.Skill{
 		Slug:             req.Slug,
@@ -221,11 +231,26 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	if req.Tags != nil {
 		updates["tags"] = pq.StringArray(req.Tags)
 	}
+	// Validate against the *effective* post-update state, not just whatever
+	// field this particular request happens to touch — a partial update that
+	// only sends monetization_type:"paid" must still be checked against the
+	// skill's existing price_usd (and vice versa), the same way the
+	// frontend's zod .refine() checks the form's combined final values.
+	effectiveMonetization := skill.MonetizationType
 	if req.MonetizationType != "" {
+		if req.MonetizationType != "free" && req.MonetizationType != "paid" {
+			return nil, ErrInvalidMonetizationType
+		}
 		updates["monetization_type"] = req.MonetizationType
+		effectiveMonetization = req.MonetizationType
 	}
+	effectivePrice := skill.PriceUSD
 	if req.PriceUSD != nil {
 		updates["price_usd"] = *req.PriceUSD
+		effectivePrice = *req.PriceUSD
+	}
+	if effectiveMonetization == "paid" && effectivePrice <= 0 {
+		return nil, ErrPriceRequiredForPaid
 	}
 
 	if err := s.db.Model(&skill).Updates(updates).Error; err != nil {
@@ -249,6 +274,8 @@ var ErrSlugTaken = errors.New("slug already taken")
 var ErrSlugLocked = errors.New("slug cannot be changed once the skill has been published")
 var ErrInvalidSlugFormat = errors.New("slug must be lowercase letters, numbers and hyphens only")
 var ErrSkillNotPublished = errors.New("only published skills can be featured")
+var ErrInvalidMonetizationType = errors.New("monetization_type must be 'free' or 'paid'")
+var ErrPriceRequiredForPaid = errors.New("price_usd must be greater than 0 for a paid skill")
 
 // isUniqueViolation detects unique constraint errors from both PostgreSQL
 // ("duplicate key value violates unique constraint") and SQLite

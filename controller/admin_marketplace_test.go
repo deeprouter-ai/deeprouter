@@ -297,6 +297,19 @@ func TestAdminCreateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
+func TestAdminCreateSkill_PaidWithZeroPrice_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "paid-zero", Name: "n", Description: "d", Category: "c",
+		MonetizationType: "paid", PriceUSD: 0,
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
 // ── AdminUpdateSkill ─────────────────────────────────────────────────────────
 
 func TestAdminUpdateSkill_NotFound_Returns404(t *testing.T) {
@@ -336,6 +349,17 @@ func TestAdminUpdateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
 	db := setupMarketplaceControllerTestDB(t)
 	id := insertTestSkill(t, db, "draft-slug", "draft")
 	req := mktsvc.UpdateSkillRequest{Slug: "Not Valid"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+}
+
+func TestAdminUpdateSkill_PaidWithZeroPrice_Returns400(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestSkill(t, db, "update-paid-zero", "draft")
+	req := mktsvc.UpdateSkillRequest{MonetizationType: "paid"}
 	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
 
 	AdminUpdateSkill(ctx)
