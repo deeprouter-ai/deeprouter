@@ -22,16 +22,34 @@ import { ChevronDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatDateTimeStr } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { getSkillLogs } from '../api'
+import type { SkillAdminLog } from '../types'
 
 export function SkillActivityLog({ skillId }: { skillId: number }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<SkillAdminLog | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-skill-logs', skillId],
@@ -70,31 +88,65 @@ export function SkillActivityLog({ skillId }: { skillId: number }) {
             {t('No activity yet')}
           </p>
         ) : (
-          <ul className='divide-y rounded-xl border'>
-            {logs.map((log) => (
-              <li
-                key={log.id}
-                className='flex flex-col gap-1 px-4 py-3 text-sm'
-              >
-                <div className='flex items-center justify-between'>
-                  <span className='font-medium'>{log.action}</span>
-                  <span className='text-muted-foreground text-xs'>
-                    {formatDateTimeStr(new Date(log.created_at))}
-                  </span>
-                </div>
-                <div className='text-muted-foreground text-xs'>
-                  {t('Admin')} #{log.admin_id}
-                </div>
-                {Object.keys(log.details ?? {}).length > 0 && (
-                  <pre className='bg-muted/50 mt-1 overflow-x-auto rounded p-2 font-mono text-xs'>
-                    {JSON.stringify(log.details, null, 2)}
-                  </pre>
-                )}
-              </li>
-            ))}
-          </ul>
+          <div className='rounded-xl border'>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('Time')}</TableHead>
+                  <TableHead>{t('Admin')}</TableHead>
+                  <TableHead>{t('Action')}</TableHead>
+                  <TableHead className='text-right'>{t('Details')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => {
+                  const hasDetails = Object.keys(log.details ?? {}).length > 0
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className='text-muted-foreground text-xs'>
+                        {formatDateTimeStr(new Date(log.created_at))}
+                      </TableCell>
+                      <TableCell className='text-xs'>#{log.admin_id}</TableCell>
+                      <TableCell className='text-xs font-medium'>
+                        {log.action}
+                      </TableCell>
+                      <TableCell className='text-right'>
+                        <Button
+                          variant='ghost'
+                          size='sm'
+                          disabled={!hasDetails}
+                          onClick={() => setSelectedLog(log)}
+                        >
+                          {t('View')}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CollapsibleContent>
+
+      <Dialog
+        open={selectedLog !== null}
+        onOpenChange={(v) => !v && setSelectedLog(null)}
+      >
+        <DialogContent className='sm:max-w-md'>
+          <DialogHeader>
+            <DialogTitle>{t('Log Details')}</DialogTitle>
+            <DialogDescription className='sr-only'>
+              {t('View the complete details for this log entry')}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLog && (
+            <pre className='bg-muted/50 max-h-96 overflow-auto rounded p-3 font-mono text-xs'>
+              {JSON.stringify(selectedLog.details, null, 2)}
+            </pre>
+          )}
+        </DialogContent>
+      </Dialog>
     </Collapsible>
   )
 }
