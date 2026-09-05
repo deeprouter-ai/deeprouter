@@ -97,6 +97,137 @@ func logCount(t *testing.T, db *gorm.DB, skillID int64, action string) int64 {
 	return n
 }
 
+// ── ListSkills ────────────────────────────────────────────────────────────────
+//
+// Never tested before this: it's the query the list page actually runs on
+// every load — status filter, category filter, pagination and the
+// active_version join — and none of it had a single dedicated test. The
+// controller test only checks Total==1 on an unfiltered call.
+
+func insertSkillWithCategory(t *testing.T, db *gorm.DB, slug, status, category string) int64 {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
+		slug, "Test Skill", "d", category, status, 1,
+	).Error)
+	var id int64
+	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
+	return id
+}
+
+func TestListSkills_FiltersByStatus(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkill(t, db, "draft-one", "draft")
+	insertSkill(t, db, "published-one", "published")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Status: "published", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "published-one", resp.Skills[0].Slug)
+}
+
+func TestListSkills_FiltersByCategory(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillWithCategory(t, db, "writing-skill", "draft", "writing")
+	insertSkillWithCategory(t, db, "code-skill", "draft", "code")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Category: "code", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "code-skill", resp.Skills[0].Slug)
+}
+
+func TestListSkills_StatusAndCategoryCombine(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillWithCategory(t, db, "match", "published", "code")
+	insertSkillWithCategory(t, db, "wrong-status", "draft", "code")
+	insertSkillWithCategory(t, db, "wrong-category", "published", "writing")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Status: "published", Category: "code", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "match", resp.Skills[0].Slug)
+}
+
+func TestListSkills_PaginationRespectsPageSize(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkill(t, db, "skill-a", "draft")
+	insertSkill(t, db, "skill-b", "draft")
+	insertSkill(t, db, "skill-c", "draft")
+
+	page1, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 1, PageSize: 2})
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), page1.Total, "Total reflects the full match count, not the page size")
+	assert.Len(t, page1.Skills, 2)
+
+	page2, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 2, PageSize: 2})
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), page2.Total)
+	assert.Len(t, page2.Skills, 1, "3 rows, page size 2 -> page 2 holds the remaining 1")
+}
+
+func TestListSkills_ZeroOrNegativePage_DefaultsToPageOne(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkill(t, db, "only-skill", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 0, PageSize: 20})
+	require.NoError(t, err)
+	require.Len(t, resp.Skills, 1, "page 0 must not compute a negative offset and return nothing")
+}
+
+func TestListSkills_PageSizeOutOfRange_ClampsToDefault20(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	for i := 0; i < 3; i++ {
+		insertSkill(t, db, "skill-"+string(rune('a'+i)), "draft")
+	}
+
+	tooSmall, err := svc.ListSkills(mktsvc.ListSkillsRequest{PageSize: 0})
+	require.NoError(t, err)
+	assert.Len(t, tooSmall.Skills, 3, "page_size 0 should clamp to the 20 default, not return 0 rows")
+
+	tooBig, err := svc.ListSkills(mktsvc.ListSkillsRequest{PageSize: 500})
+	require.NoError(t, err)
+	assert.Len(t, tooBig.Skills, 3, "page_size above 100 should also clamp to 20, not try to return 500")
+}
+
+func TestListSkills_IncludesActiveVersionPerRow(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	withVersion := insertSkill(t, db, "has-version", "published")
+	setActiveVersion(t, db, withVersion)
+	insertSkill(t, db, "no-version", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	require.Len(t, resp.Skills, 2)
+
+	byslug := map[string]mktsvc.SkillSummary{}
+	for _, s := range resp.Skills {
+		byslug[s.Slug] = s
+	}
+	assert.Equal(t, "1.0.0", byslug["has-version"].ActiveVersion)
+	assert.Empty(t, byslug["no-version"].ActiveVersion)
+}
+
+func TestListSkills_EmptyWhenNoSkills(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), resp.Total)
+	assert.Empty(t, resp.Skills)
+}
+
 // ── CreateSkill ───────────────────────────────────────────────────────────────
 //
 // Never tested before this: db.Create() for a Skill needs a `tags` column in
