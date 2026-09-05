@@ -11,6 +11,8 @@
   - `skills-table.tsx` 自身的 react-query + `useTableUrlState` 那部分**仍然刻意不测**——需要真实注册的 TanStack Router 路由树,成本明显不成比例,已经被真机走查(建→列表→分页跑过一遍)覆盖过。
   - 后端最终 124 个测试(`model` 2、`packageassets` 8、`service` 73、`controller` 41),前端最终 90 个测试(19 个文件),全部跑绿(`internal/skill-marketplace/service/admin_skill_test.go`, `web/default/src/features/skills-admin/**`)
 
+- 🔴 修复 P5 编辑页 Activity Log 面板不会自动刷新——真机走查时手动操作(上传两个版本、切换 activate)后发现面板一直停在旧数据。查库确认后端`skill_admin_logs`每一步都老实写进去了,问题在前端:`skill-edit-page.tsx`的`refresh()`只对`admin-skill`和`admin-skill-versions`两个 query key 调用`invalidateQueries`,唯独漏了 Activity Log 自己的`['admin-skill-logs', skillId]`——面板一旦被打开过一次并保持展开,后续 upload/activate/publish 等动作都不会让它重新拉取,直到用户手动收起再展开(`enabled`从 false 变回 true 才会触发重新请求)。修法:`refresh()`里补上对`admin-skill-logs`的`invalidateQueries`。新增回归测试(mock 版本面板的`onChanged`点击,断言三个 query key 都被失效),验证过 red→green;并在真实浏览器里复现原始场景(创建技能→打开日志面板→不关闭→连续 upload/activate)确认日志从 1→2→3 条实时增长(`web/default/src/features/skills-admin/components/{skill-edit-page,__tests__/skill-edit-page.test}.tsx`)
+
 - 补 P1/P2 controller 层测试——`controller/admin_marketplace.go` 的 12 个 admin 端点自上线以来一直是空白,service 层测得很扎实,但 controller 自己翻译状态码的那一层（`errors.Is` 分支怎么映射到 404/409/400/500)从没被测过。新增 `admin_marketplace_test.go`,39 个测试,直调 handler 函数（不走完整 router+中间件,跟 `user_create_test.go` 同一个先例;鉴权本身是 `AdminAuth()` 自己的职责,不在这次范围内),覆盖每个 handler 的状态码分支 + `skillIDParam`/`versionIDParam` 的非法输入处理。写这批测试、逐个过 `PublishSkill` 分支时顺带抓到了 `active_version_id` 从未被真正检查的那个业务规则缺口(见前一天日志的 `PublishSkill` 修复条目)（`controller/admin_marketplace_test.go`)
 
 ## 2026-09-04
