@@ -77,11 +77,13 @@ export function SkillsTable() {
       pagination.pageIndex + 1,
       pagination.pageSize,
       singleStatus,
+      globalFilter,
       refreshTrigger,
     ],
     queryFn: async () => {
       const result = await listSkills({
         status: singleStatus,
+        q: globalFilter || undefined,
         page: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       })
@@ -110,12 +112,10 @@ export function SkillsTable() {
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
-    globalFilterFn: (row, _columnId, filterValue) => {
-      const name = String(row.getValue('name')).toLowerCase()
-      const slug = String(row.getValue('slug')).toLowerCase()
-      const searchValue = String(filterValue).toLowerCase()
-      return name.includes(searchValue) || slug.includes(searchValue)
-    },
+    // Search is server-side (the `q` param above already scoped `skills` to
+    // matching rows) — without this, react-table's default globalFilterFn
+    // would re-filter the already-narrow result a second time client-side.
+    globalFilterFn: () => true,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
@@ -127,7 +127,11 @@ export function SkillsTable() {
     onColumnFiltersChange,
     // status filtering happens server-side (single value) — client-side
     // filterFn on the status column still applies when multiple are chosen.
-    manualPagination: !globalFilter,
+    // Search (globalFilter) is also server-side (see the `q` param above) —
+    // manualPagination must stay true regardless, or react-table's own
+    // getFilteredRowModel would re-filter+re-paginate the single already-
+    // narrow page of rows we fetched instead of trusting the server's result.
+    manualPagination: true,
     pageCount: Math.ceil((data?.total || 0) / pagination.pageSize),
   })
 

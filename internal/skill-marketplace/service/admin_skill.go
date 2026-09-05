@@ -24,6 +24,7 @@ func NewAdminSkillService(db *gorm.DB) *AdminSkillService {
 type ListSkillsRequest struct {
 	Status   string `form:"status"`
 	Category string `form:"category"`
+	Q        string `form:"q"`
 	Page     int    `form:"page,default=1"`
 	PageSize int    `form:"page_size,default=20"`
 }
@@ -86,6 +87,12 @@ func (s *AdminSkillService) ListSkills(req ListSkillsRequest) (*ListSkillsRespon
 	}
 	if req.Category != "" {
 		base = base.Where("sk.category = ?", req.Category)
+	}
+	if req.Q != "" {
+		// Plain LIKE (not ILIKE) — cross-DB compatible with the rest of the
+		// codebase's search implementations (e.g. model.SearchUsers).
+		like := "%" + req.Q + "%"
+		base = base.Where("sk.name LIKE ? OR sk.slug LIKE ?", like, like)
 	}
 
 	var total int64
