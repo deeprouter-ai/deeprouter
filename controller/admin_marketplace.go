@@ -79,7 +79,9 @@ func AdminCreateSkill(c *gin.Context) {
 		switch {
 		case errors.Is(err, mktsvc.ErrSlugTaken):
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "slug already exists"})
-		case errors.Is(err, mktsvc.ErrInvalidSlugFormat):
+		case errors.Is(err, mktsvc.ErrInvalidSlugFormat),
+			errors.Is(err, mktsvc.ErrInvalidMonetizationType),
+			errors.Is(err, mktsvc.ErrPriceRequiredForPaid):
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
@@ -108,7 +110,9 @@ func AdminUpdateSkill(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "slug already exists"})
 		case errors.Is(err, mktsvc.ErrSlugLocked):
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
-		case errors.Is(err, mktsvc.ErrInvalidSlugFormat):
+		case errors.Is(err, mktsvc.ErrInvalidSlugFormat),
+			errors.Is(err, mktsvc.ErrInvalidMonetizationType),
+			errors.Is(err, mktsvc.ErrPriceRequiredForPaid):
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
