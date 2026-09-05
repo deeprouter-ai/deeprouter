@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-05
+
+- 补 P1/P2 controller 层测试——`controller/admin_marketplace.go` 的 12 个 admin 端点自上线以来一直是空白,service 层测得很扎实,但 controller 自己翻译状态码的那一层（`errors.Is` 分支怎么映射到 404/409/400/500)从没被测过。新增 `admin_marketplace_test.go`,39 个测试,直调 handler 函数（不走完整 router+中间件,跟 `user_create_test.go` 同一个先例;鉴权本身是 `AdminAuth()` 自己的职责,不在这次范围内),覆盖每个 handler 的状态码分支 + `skillIDParam`/`versionIDParam` 的非法输入处理。写这批测试、逐个过 `PublishSkill` 分支时顺带抓到了 `active_version_id` 从未被真正检查的那个业务规则缺口(见前一天日志的 `PublishSkill` 修复条目)（`controller/admin_marketplace_test.go`)
+
 ## 2026-09-04
 
 - 🔴 修复 `PublishSkill` 从未真正检查 `active_version_id`——`ErrNoActiveVersion` 这个 sentinel error 从 P1 就声明了,注释写着"P2 will enforce active_version_id != NULL before publish",但全仓库搜索确认它从未被 `return` 过。后果:**跳过前端、直接调 API 可以把一个没有 active version 的技能发布成 published**,前端按钮禁用(AC-4)只挡住了正常操作路径,后端完全没有兜底,违反 PRD §7.1"draft → published 前提是 active_version_id 不为空"。是在给 controller 层补测试、逐个过一遍 service 方法的分支时发现的——真机走查测不出来,因为全程通过 UI 点,从没绕过 UI 直接调接口。修法:`PublishSkill` 在通过状态机检查后、真正切换状态前,补上 `if skill.ActiveVersionID == nil { return nil, ErrNoActiveVersion }`;controller 的 `AdminPublishSkill` 把这个错误也映射到 409(跟 `ErrInvalidTransition` 一样,都是"当前状态不允许这个操作")。新增 2 个拒绝场景测试(draft、deprecated 各一个),验证过 red→green;顺带补上 2 个受影响的既有测试(`TestPublishSkill_FromDraft`/`FromDeprecated`/`TestGetLogs_ReturnsLogsForSkill` 原先靠这个 bug 才能跑通,现在都先设置好 active_version 再发布)(`internal/skill-marketplace/service/admin_skill{,_test}.go`, `controller/admin_marketplace.go`)
