@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-05
+
+- 补 P1/P2 controller 层测试——`controller/admin_marketplace.go` 的 12 个 admin 端点自上线以来一直是空白,service 层测得很扎实,但 controller 自己翻译状态码的那一层（`errors.Is` 分支怎么映射到 404/409/400/500)从没被测过。新增 `admin_marketplace_test.go`,39 个测试,直调 handler 函数（不走完整 router+中间件,跟 `user_create_test.go` 同一个先例;鉴权本身是 `AdminAuth()` 自己的职责,不在这次范围内),覆盖每个 handler 的状态码分支 + `skillIDParam`/`versionIDParam` 的非法输入处理。写这批测试、逐个过 `PublishSkill` 分支时顺带抓到了 `active_version_id` 从未被真正检查的那个业务规则缺口(见前一天日志的 `PublishSkill` 修复条目)（`controller/admin_marketplace_test.go`)
+
 ## 2026-09-04
 
 - 新增 Skill Marketplace V2 P4：面向用户的商店前端四页。公开 `/marketplace`（featured 置顶最多 4 张、其余时间倒序、7+All 分类过滤、防抖搜索、PRD 指定空态文案）与 `/marketplace/:slug`（价格/分类/tags/版本+changelog、常显「需要 DeepRouter API Key」提示、Downloaded badge、deprecated 横幅并隐藏下载按钮）；登录侧 `/user/skills`（已下架 badge + PRD 原文说明 + 隐藏再下载）与 `/user/purchases`（仅有购买记录的用户才在侧边栏看到入口——sidebar hook 里用缓存 probe 判断）。购买确认框在**打开瞬间**重新拉一次 `GET /api/skills/:slug` 显示实时价格（staleTime 0），确认才发起 `POST .../download`；402 走 toast「余额不足，前往 Wallet 充值」+ 跳 Wallet 动作。下载复用 V1 的 blob 工具（自 #159 历史恢复并适配 V2 `{success,message,data}` 信封，13 个 vitest 迁移重写）。顶部导航新增 Marketplace 链接（HeaderNavModules 可关）。技术：路径 `features/marketplace/` 全新建（V1 同名目录已删）；`routeTree.gen.ts` 随路由重新生成提交；新增 45 个 i18n key（en/zh，PRD 指定的两段下架文案 zh 逐字照抄）。验证：bun 容器内 build + typecheck + eslint（本次改动 0 error 0 warning）+ vitest 19/19；真栈冒烟 `/marketplace`、`/marketplace/:slug` 匿名 200 且 served bundle 含新路由。⚠️ 发现两个**存量**问题（干净 HEAD 复现，与本次无关）：`users-mutate-drawer.test.tsx` 在 vitest 下 `z.object` undefined 导致 Frontend Tests 工作流在 main 上就红；`copyright:check` 有 10 个既有文件缺头（`web/default/src/features/marketplace/**`, `web/default/src/routes/{marketplace,_authenticated/user}/**`, `web/default/src/hooks/{use-top-nav-links,use-sidebar-data}.ts`, `web/default/src/i18n/locales/{en,zh}.json`, `web/default/src/routeTree.gen.ts`）
