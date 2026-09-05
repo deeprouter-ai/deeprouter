@@ -46,6 +46,55 @@ func validManifestJSON(slug, version string) json.RawMessage {
 	}`, slug, version))
 }
 
+// ── ListVersions ─────────────────────────────────────────────────────────────
+
+func TestListVersions_ReturnsAllVersionsNewestFirst(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminVersionService(db)
+
+	skillID := insertSkill(t, db, "list-versions", "draft")
+	v1 := insertVersion(t, db, skillID, "1.0.0", "archived")
+	v2 := insertVersion(t, db, skillID, "1.1.0", "active")
+	v3 := insertVersion(t, db, skillID, "1.2.0", "draft")
+
+	versions, err := svc.ListVersions(skillID)
+	require.NoError(t, err)
+	require.Len(t, versions, 3)
+	// created_at ties (same-second inserts under SQLite) break on id DESC,
+	// so the most recently inserted row (v3) must come first regardless.
+	assert.Equal(t, v3, versions[0].ID)
+	assert.Equal(t, v2, versions[1].ID)
+	assert.Equal(t, v1, versions[2].ID)
+}
+
+func TestListVersions_EmptyWhenNoVersions(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminVersionService(db)
+
+	skillID := insertSkill(t, db, "no-versions", "draft")
+
+	versions, err := svc.ListVersions(skillID)
+	require.NoError(t, err)
+	assert.Empty(t, versions)
+}
+
+func TestListVersions_OmitsPackageZip(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminVersionService(db)
+
+	skillID := insertSkill(t, db, "omit-zip", "published")
+	versionID := insertVersion(t, db, skillID, "1.0.0", "active")
+	require.NoError(t, db.Exec(
+		`UPDATE skill_versions SET package_zip = ? WHERE id = ?`,
+		[]byte("not-actually-a-zip"), versionID,
+	).Error)
+
+	versions, err := svc.ListVersions(skillID)
+	require.NoError(t, err)
+	require.Len(t, versions, 1)
+	assert.Nil(t, versions[0].PackageZip)
+}
+
 // ── UploadVersion ────────────────────────────────────────────────────────────
 
 func TestUploadVersion_Success(t *testing.T) {

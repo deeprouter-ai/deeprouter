@@ -88,6 +88,21 @@ type UpdateVersionRequest struct {
 	Changelog      *string          `json:"changelog"`
 }
 
+// ListVersions returns every version of a skill, newest first. package_zip is
+// omitted at the query level — PRD §9 requires it never appear in an API
+// response body, and it can run tens of KB per row.
+func (s *AdminVersionService) ListVersions(skillID int64) ([]model.SkillVersion, error) {
+	var versions []model.SkillVersion
+	err := s.db.Omit("package_zip").
+		Where("skill_id = ?", skillID).
+		Order("created_at DESC, id DESC").
+		Find(&versions).Error
+	if err != nil {
+		return nil, err
+	}
+	return versions, nil
+}
+
 // UploadVersion creates a new draft version. PRD §6.3 / §9 stage 1.
 func (s *AdminVersionService) UploadVersion(
 	skillID int64, req UploadVersionRequest, adminID int,
