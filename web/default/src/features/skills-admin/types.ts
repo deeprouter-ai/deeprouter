@@ -76,6 +76,7 @@ export interface SkillAdminLog {
 export interface ListSkillsParams {
   status?: SkillStatus
   category?: string
+  q?: string
   page?: number
   page_size?: number
 }

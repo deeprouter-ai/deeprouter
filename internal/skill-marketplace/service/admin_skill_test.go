@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/QuantumNous/new-api/internal/skill-marketplace/model"
@@ -223,6 +224,77 @@ func TestListSkills_EmptyWhenNoSkills(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), resp.Total)
+	assert.Empty(t, resp.Skills)
+}
+
+// insertSkillNamed lets a test control `name` independently of `slug` —
+// insertSkill hardcodes name to "Test Skill", which is useless for the Q
+// (search) tests below where the match target is the name itself.
+func insertSkillNamed(t *testing.T, db *gorm.DB, slug, name, status string) int64 {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
+		slug, name, "d", "test", status, 1,
+	).Error)
+	var id int64
+	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
+	return id
+}
+
+// The admin list page's search box (skills-table.tsx) was found, during
+// live browser testing with more skills than fit on one page, to only ever
+// filter the currently-loaded page client-side — a skill on page 2 was
+// unfindable while sitting on page 1, because ListSkills had no `q` param
+// at all for the frontend to even pass. These tests pin the fix.
+func TestListSkills_QMatchesName(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillNamed(t, db, "a-slug", "Code Review Expert", "draft")
+	insertSkillNamed(t, db, "b-slug", "Translation Helper", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Q: "Review", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "a-slug", resp.Skills[0].Slug)
+}
+
+func TestListSkills_QMatchesSlug(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillNamed(t, db, "code-review-expert", "Name A", "draft")
+	insertSkillNamed(t, db, "translation-helper", "Name B", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Q: "code-review", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "code-review-expert", resp.Skills[0].Slug)
+}
+
+func TestListSkills_QFindsSkillBeyondTheFirstPage(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	for i := 0; i < 20; i++ {
+		insertSkillNamed(t, db, fmt.Sprintf("filler-%d", i), "Filler", "draft")
+	}
+	insertSkillNamed(t, db, "seed-skill-23", "Seed Skill 23", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Q: "seed-skill-23", Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "seed-skill-23", resp.Skills[0].Slug)
+}
+
+func TestListSkills_QNoMatch_ReturnsEmpty(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillNamed(t, db, "a-slug", "Code Review Expert", "draft")
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Q: "nonexistent", Page: 1, PageSize: 20})
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), resp.Total)
 	assert.Empty(t, resp.Skills)
