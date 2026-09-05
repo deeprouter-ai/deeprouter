@@ -110,6 +110,8 @@ export function SkillVersionUploadDrawer({
       } else {
         toast.error(result.message ?? t('Upload failed'))
       }
+    } catch (_error) {
+      // Errors are handled by the global interceptor (toast + reject)
     } finally {
       setIsSubmitting(false)
     }

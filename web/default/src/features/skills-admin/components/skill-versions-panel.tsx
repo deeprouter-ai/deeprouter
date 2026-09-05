@@ -66,6 +66,15 @@ export function SkillVersionsPanel({
         // fix the package. A toast disappears; this stays until dismissed.
         setActivationError(result.message ?? t('Activation failed'))
       }
+    } catch (error) {
+      // The security-guard rejections this Alert exists for (PRD §9) come
+      // back as a real HTTP 400, not a `{success:false}` body — so they
+      // land here, not in the `else` above. Read the message straight off
+      // the axios error the same way the global interceptor does.
+      const message =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message ?? t('Activation failed')
+      setActivationError(message)
     } finally {
       setActivatingId(null)
     }
