@@ -125,3 +125,25 @@ export function getUploadVersionFormSchema(t: TFunction) {
 export type UploadVersionFormValues = z.infer<
   ReturnType<typeof getUploadVersionFormSchema>
 >
+
+// The version edit drawer — same shape as upload minus `version`, which is
+// immutable once a version exists (PUT /versions/:vid never accepts it;
+// bumping the version number means uploading a new one).
+export function getUpdateVersionFormSchema(t: TFunction) {
+  return z.object({
+    skill_md_content: z.string().min(1, t('SKILL.md content is required')),
+    manifest_json: z.string().refine((value) => {
+      try {
+        JSON.parse(value)
+        return true
+      } catch {
+        return false
+      }
+    }, t('manifest.json must be valid JSON')),
+    changelog: z.string().optional(),
+  })
+}
+
+export type UpdateVersionFormValues = z.infer<
+  ReturnType<typeof getUpdateVersionFormSchema>
+>

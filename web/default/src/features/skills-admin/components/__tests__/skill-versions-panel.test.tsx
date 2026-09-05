@@ -40,10 +40,29 @@ vi.mock('../../api', () => ({
   activateVersion: mockActivateVersion,
 }))
 
-// Upload drawer has its own test file — stub it here so this file only
-// exercises the panel's own state (activation + the version table).
+// Upload/edit/delete each have their own test file — stub them here so this
+// file only exercises the panel's own state (activation, the version table,
+// and which row gets which actions).
 vi.mock('../skill-version-upload-drawer', () => ({
   SkillVersionUploadDrawer: () => null,
+}))
+vi.mock('../skill-version-edit-drawer', () => ({
+  SkillVersionEditDrawer: ({
+    open,
+    version,
+  }: {
+    open: boolean
+    version: { id: number } | null
+  }) => (open ? <div data-testid='edit-drawer'>{version?.id}</div> : null),
+}))
+vi.mock('../skill-version-delete-dialog', () => ({
+  SkillVersionDeleteDialog: ({
+    open,
+    version,
+  }: {
+    open: boolean
+    version: { id: number } | null
+  }) => (open ? <div data-testid='delete-dialog'>{version?.id}</div> : null),
 }))
 
 function makeSkill(overrides: Partial<SkillSummary> = {}): SkillSummary {
@@ -194,6 +213,56 @@ describe('SkillVersionsPanel', () => {
       )
     ).toBeInTheDocument()
     expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  // Coverage: PRD AC-4's edit/delete-a-draft-version capability had a
+  // backend (P1/P2) but no frontend entry point at all until now — this
+  // pins the row-level gating (draft only) and the wiring to the drawer/
+  // dialog, not the drawer/dialog's own behavior (covered by their files).
+  it('shows an Edit/Delete menu only for a draft version, not archived or active', async () => {
+    render(
+      <SkillVersionsPanel
+        skill={makeSkill()}
+        versions={[
+          makeVersion({ id: 1, version: '1.0.0', status: 'draft' }),
+          makeVersion({ id: 2, version: '0.9.0', status: 'archived' }),
+          makeVersion({ id: 3, version: '1.1.0', status: 'active' }),
+        ]}
+        onChanged={vi.fn()}
+      />
+    )
+    // One "Open menu" trigger per draft row only.
+    expect(screen.getAllByRole('button', { name: 'Open menu' })).toHaveLength(1)
+  })
+
+  it('opens the edit drawer for the version whose menu was used', async () => {
+    render(
+      <SkillVersionsPanel
+        skill={makeSkill()}
+        versions={[makeVersion({ id: 10, version: '1.0.0', status: 'draft' })]}
+        onChanged={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }))
+
+    expect(await screen.findByTestId('edit-drawer')).toHaveTextContent('10')
+  })
+
+  it('opens the delete dialog for the version whose menu was used', async () => {
+    render(
+      <SkillVersionsPanel
+        skill={makeSkill()}
+        versions={[makeVersion({ id: 10, version: '1.0.0', status: 'draft' })]}
+        onChanged={vi.fn()}
+      />
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+    await userEvent.click(
+      await screen.findByRole('menuitem', { name: 'Delete' })
+    )
+
+    expect(await screen.findByTestId('delete-dialog')).toHaveTextContent('10')
   })
 
   it('labels a draft-status activate button "Activate" and an archived one "Reactivate"', () => {

@@ -17,13 +17,25 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState } from 'react'
-import { Plus, Rocket } from 'lucide-react'
+import {
+  Plus,
+  Rocket,
+  Edit,
+  Trash2,
+  MoreHorizontal as DotsHorizontalIcon,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { formatDateTimeStr } from '@/lib/format'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -36,6 +48,8 @@ import { StatusBadge } from '@/components/status-badge'
 import { activateVersion } from '../api'
 import { SKILL_VERSION_STATUS_VARIANTS } from '../constants'
 import type { SkillSummary, SkillVersion } from '../types'
+import { SkillVersionDeleteDialog } from './skill-version-delete-dialog'
+import { SkillVersionEditDrawer } from './skill-version-edit-drawer'
 import { SkillVersionUploadDrawer } from './skill-version-upload-drawer'
 
 export function SkillVersionsPanel({
@@ -51,6 +65,12 @@ export function SkillVersionsPanel({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [activatingId, setActivatingId] = useState<number | null>(null)
   const [activationError, setActivationError] = useState<string | null>(null)
+  const [editingVersion, setEditingVersion] = useState<SkillVersion | null>(
+    null
+  )
+  const [deletingVersion, setDeletingVersion] = useState<SkillVersion | null>(
+    null
+  )
 
   const handleActivate = async (versionId: number) => {
     setActivatingId(versionId)
@@ -135,21 +155,56 @@ export function SkillVersionsPanel({
                     {version.changelog || '—'}
                   </TableCell>
                   <TableCell className='text-right'>
-                    {version.status !== 'active' && (
-                      <Button
-                        size='sm'
-                        variant='outline'
-                        disabled={activatingId === version.id}
-                        onClick={() => handleActivate(version.id)}
-                      >
-                        <Rocket className='h-3.5 w-3.5' />
-                        {activatingId === version.id
-                          ? t('Activating...')
-                          : version.status === 'archived'
-                            ? t('Reactivate')
-                            : t('Activate')}
-                      </Button>
-                    )}
+                    <div className='flex items-center justify-end gap-1'>
+                      {version.status !== 'active' && (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          disabled={activatingId === version.id}
+                          onClick={() => handleActivate(version.id)}
+                        >
+                          <Rocket className='h-3.5 w-3.5' />
+                          {activatingId === version.id
+                            ? t('Activating...')
+                            : version.status === 'archived'
+                              ? t('Reactivate')
+                              : t('Activate')}
+                        </Button>
+                      )}
+                      {/* Only draft versions can be edited/deleted — active
+                          and archived both return 409 on the backend. */}
+                      {version.status === 'draft' && (
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                className='h-8 w-8 p-0'
+                              />
+                            }
+                          >
+                            <DotsHorizontalIcon className='h-4 w-4' />
+                            <span className='sr-only'>{t('Open menu')}</span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align='end'>
+                            <DropdownMenuItem
+                              onClick={() => setEditingVersion(version)}
+                            >
+                              <Edit className='h-4 w-4' />
+                              {t('Edit')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDeletingVersion(version)}
+                              className='text-destructive focus:text-destructive'
+                            >
+                              <Trash2 className='h-4 w-4' />
+                              {t('Delete')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -164,6 +219,22 @@ export function SkillVersionsPanel({
         skillId={skill.id}
         skillSlug={skill.slug}
         onUploaded={onChanged}
+      />
+
+      <SkillVersionEditDrawer
+        open={editingVersion !== null}
+        onOpenChange={(v) => !v && setEditingVersion(null)}
+        skillId={skill.id}
+        version={editingVersion}
+        onUpdated={onChanged}
+      />
+
+      <SkillVersionDeleteDialog
+        open={deletingVersion !== null}
+        onOpenChange={(v) => !v && setDeletingVersion(null)}
+        skillId={skill.id}
+        version={deletingVersion}
+        onDeleted={onChanged}
       />
     </Card>
   )
