@@ -116,6 +116,10 @@ jobs:
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
           go test ./relay/channel/task/doubao/ -count=1 -timeout 60s
+          # Route registration smoke: gin validates its tree at registration
+          # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
+          # panics on startup and only this test catches it before deploy.
+          go test ./router/ -run 'TestSetApiRouter' -count=1 -timeout 60s
 
       - name: Verify kids coverage matrix (go test -list)
         # scripts/check-kids-coverage-matrix.sh parses docs/kids-coverage-matrix.md,

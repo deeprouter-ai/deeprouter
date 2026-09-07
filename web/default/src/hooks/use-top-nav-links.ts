@@ -32,6 +32,7 @@ export type TopNavLink = {
 const DEFAULT_HEADER_NAV_MODULES = {
   home: true,
   console: true,
+  marketplace: { enabled: true, requireAuth: false },
   pricing: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   docs: true,
@@ -77,6 +78,10 @@ function parseHeaderNavModules(
     return {
       ...DEFAULT_HEADER_NAV_MODULES,
       ...parsed,
+      marketplace: parseAccessModule(
+        parsed.marketplace,
+        DEFAULT_HEADER_NAV_MODULES.marketplace
+      ),
       pricing: parseAccessModule(
         parsed.pricing,
         DEFAULT_HEADER_NAV_MODULES.pricing
@@ -128,6 +133,13 @@ export function useTopNavLinks(): TopNavLink[] {
   // Console -> /dashboard (new console path)
   if (modules?.console !== false) {
     links.push({ title: t('Console'), href: '/dashboard' })
+  }
+
+  // Marketplace (Skill Marketplace V2 — public browsing)
+  const marketplace = modules?.marketplace
+  if (marketplace && typeof marketplace === 'object' && marketplace.enabled) {
+    const disabled = marketplace.requireAuth && !isAuthed
+    links.push({ title: t('Marketplace'), href: '/marketplace', disabled })
   }
 
   // Pricing

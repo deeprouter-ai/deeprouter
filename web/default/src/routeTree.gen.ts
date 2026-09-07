@@ -19,10 +19,12 @@ import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as ResourcesIndexRouteImport } from './routes/resources/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
+import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
 import { Route as ResourcesSlugRouteImport } from './routes/resources/$slug'
 import { Route as OnboardingSlugRouteImport } from './routes/onboarding/$slug'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
+import { Route as MarketplaceSlugRouteImport } from './routes/marketplace/$slug'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
 import { Route as AuthenticatedChat2linkRouteImport } from './routes/_authenticated/chat2link'
@@ -61,6 +63,8 @@ import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenti
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
 import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
+import { Route as AuthenticatedUserSkillsIndexRouteImport } from './routes/_authenticated/user/skills/index'
+import { Route as AuthenticatedUserPurchasesIndexRouteImport } from './routes/_authenticated/user/purchases/index'
 import { Route as AuthenticatedSystemSettingsSiteIndexRouteImport } from './routes/_authenticated/system-settings/site/index'
 import { Route as AuthenticatedSystemSettingsSecurityIndexRouteImport } from './routes/_authenticated/system-settings/security/index'
 import { Route as AuthenticatedSystemSettingsOperationsIndexRouteImport } from './routes/_authenticated/system-settings/operations/index'
@@ -124,6 +128,11 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
   path: '/pricing/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MarketplaceIndexRoute = MarketplaceIndexRouteImport.update({
+  id: '/marketplace/',
+  path: '/marketplace/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
@@ -142,6 +151,11 @@ const OnboardingSlugRoute = OnboardingSlugRouteImport.update({
 const OauthProviderRoute = OauthProviderRouteImport.update({
   id: '/oauth/$provider',
   path: '/oauth/$provider',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketplaceSlugRoute = MarketplaceSlugRouteImport.update({
+  id: '/marketplace/$slug',
+  path: '/marketplace/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConsoleTopupRoute = ConsoleTopupRouteImport.update({
@@ -350,6 +364,18 @@ const authUserResetRoute = authUserResetRouteImport.update({
   path: '/user/reset',
   getParentRoute: () => authRouteRoute,
 } as any)
+const AuthenticatedUserSkillsIndexRoute =
+  AuthenticatedUserSkillsIndexRouteImport.update({
+    id: '/user/skills/',
+    path: '/user/skills/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedUserPurchasesIndexRoute =
+  AuthenticatedUserPurchasesIndexRouteImport.update({
+    id: '/user/purchases/',
+    path: '/user/purchases/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsSiteIndexRoute =
   AuthenticatedSystemSettingsSiteIndexRouteImport.update({
     id: '/site/',
@@ -455,10 +481,12 @@ export interface FileRoutesByFullPath {
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
+  '/marketplace/$slug': typeof MarketplaceSlugRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
   '/about/': typeof AboutIndexRoute
+  '/marketplace/': typeof MarketplaceIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/resources/': typeof ResourcesIndexRoute
@@ -500,6 +528,8 @@ export interface FileRoutesByFullPath {
   '/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/user/purchases/': typeof AuthenticatedUserPurchasesIndexRoute
+  '/user/skills/': typeof AuthenticatedUserSkillsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -520,10 +550,12 @@ export interface FileRoutesByTo {
   '/chat2link': typeof AuthenticatedChat2linkRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
+  '/marketplace/$slug': typeof MarketplaceSlugRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
   '/about': typeof AboutIndexRoute
+  '/marketplace': typeof MarketplaceIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/resources': typeof ResourcesIndexRoute
@@ -565,6 +597,8 @@ export interface FileRoutesByTo {
   '/system-settings/operations': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/system-settings/security': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/system-settings/site': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/user/purchases': typeof AuthenticatedUserPurchasesIndexRoute
+  '/user/skills': typeof AuthenticatedUserSkillsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -589,10 +623,12 @@ export interface FileRoutesById {
   '/_authenticated/chat2link': typeof AuthenticatedChat2linkRoute
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
+  '/marketplace/$slug': typeof MarketplaceSlugRoute
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
   '/about/': typeof AboutIndexRoute
+  '/marketplace/': typeof MarketplaceIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/resources/': typeof ResourcesIndexRoute
@@ -634,6 +670,8 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
   '/_authenticated/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
   '/_authenticated/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
+  '/_authenticated/user/purchases/': typeof AuthenticatedUserPurchasesIndexRoute
+  '/_authenticated/user/skills/': typeof AuthenticatedUserSkillsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -657,10 +695,12 @@ export interface FileRouteTypes {
     | '/chat2link'
     | '/console/log'
     | '/console/topup'
+    | '/marketplace/$slug'
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
     | '/about/'
+    | '/marketplace/'
     | '/pricing/'
     | '/rankings/'
     | '/resources/'
@@ -702,6 +742,8 @@ export interface FileRouteTypes {
     | '/system-settings/operations/'
     | '/system-settings/security/'
     | '/system-settings/site/'
+    | '/user/purchases/'
+    | '/user/skills/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -722,10 +764,12 @@ export interface FileRouteTypes {
     | '/chat2link'
     | '/console/log'
     | '/console/topup'
+    | '/marketplace/$slug'
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
     | '/about'
+    | '/marketplace'
     | '/pricing'
     | '/rankings'
     | '/resources'
@@ -767,6 +811,8 @@ export interface FileRouteTypes {
     | '/system-settings/operations'
     | '/system-settings/security'
     | '/system-settings/site'
+    | '/user/purchases'
+    | '/user/skills'
   id:
     | '__root__'
     | '/'
@@ -790,10 +836,12 @@ export interface FileRouteTypes {
     | '/_authenticated/chat2link'
     | '/console/log'
     | '/console/topup'
+    | '/marketplace/$slug'
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
     | '/about/'
+    | '/marketplace/'
     | '/pricing/'
     | '/rankings/'
     | '/resources/'
@@ -835,6 +883,8 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/operations/'
     | '/_authenticated/system-settings/security/'
     | '/_authenticated/system-settings/site/'
+    | '/_authenticated/user/purchases/'
+    | '/_authenticated/user/skills/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -851,10 +901,12 @@ export interface RootRouteChildren {
   errors503Route: typeof errors503Route
   ConsoleLogRoute: typeof ConsoleLogRoute
   ConsoleTopupRoute: typeof ConsoleTopupRoute
+  MarketplaceSlugRoute: typeof MarketplaceSlugRoute
   OauthProviderRoute: typeof OauthProviderRoute
   OnboardingSlugRoute: typeof OnboardingSlugRoute
   ResourcesSlugRoute: typeof ResourcesSlugRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  MarketplaceIndexRoute: typeof MarketplaceIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   ResourcesIndexRoute: typeof ResourcesIndexRoute
@@ -934,6 +986,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/marketplace/': {
+      id: '/marketplace/'
+      path: '/marketplace'
+      fullPath: '/marketplace/'
+      preLoaderRoute: typeof MarketplaceIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about/': {
       id: '/about/'
       path: '/about'
@@ -960,6 +1019,13 @@ declare module '@tanstack/react-router' {
       path: '/oauth/$provider'
       fullPath: '/oauth/$provider'
       preLoaderRoute: typeof OauthProviderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace/$slug': {
+      id: '/marketplace/$slug'
+      path: '/marketplace/$slug'
+      fullPath: '/marketplace/$slug'
+      preLoaderRoute: typeof MarketplaceSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/console/topup': {
@@ -1228,6 +1294,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authUserResetRouteImport
       parentRoute: typeof authRouteRoute
     }
+    '/_authenticated/user/skills/': {
+      id: '/_authenticated/user/skills/'
+      path: '/user/skills'
+      fullPath: '/user/skills/'
+      preLoaderRoute: typeof AuthenticatedUserSkillsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/user/purchases/': {
+      id: '/_authenticated/user/purchases/'
+      path: '/user/purchases'
+      fullPath: '/user/purchases/'
+      preLoaderRoute: typeof AuthenticatedUserPurchasesIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/system-settings/site/': {
       id: '/_authenticated/system-settings/site/'
       path: '/site'
@@ -1433,6 +1513,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
+  AuthenticatedUserPurchasesIndexRoute: typeof AuthenticatedUserPurchasesIndexRoute
+  AuthenticatedUserSkillsIndexRoute: typeof AuthenticatedUserSkillsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1460,6 +1542,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
+  AuthenticatedUserPurchasesIndexRoute: AuthenticatedUserPurchasesIndexRoute,
+  AuthenticatedUserSkillsIndexRoute: AuthenticatedUserSkillsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -1479,10 +1563,12 @@ const rootRouteChildren: RootRouteChildren = {
   errors503Route: errors503Route,
   ConsoleLogRoute: ConsoleLogRoute,
   ConsoleTopupRoute: ConsoleTopupRoute,
+  MarketplaceSlugRoute: MarketplaceSlugRoute,
   OauthProviderRoute: OauthProviderRoute,
   OnboardingSlugRoute: OnboardingSlugRoute,
   ResourcesSlugRoute: ResourcesSlugRoute,
   AboutIndexRoute: AboutIndexRoute,
+  MarketplaceIndexRoute: MarketplaceIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   ResourcesIndexRoute: ResourcesIndexRoute,

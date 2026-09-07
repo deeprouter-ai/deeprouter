@@ -60,6 +60,8 @@ require (
 	gorm.io/gorm v1.25.2
 )
 
+require github.com/lib/pq v1.10.3 // indirect
+
 require (
 	github.com/DmitriyVTitov/size v1.5.0 // indirect
 	github.com/anknown/darts v0.0.0-20151216065714-83ff685239e6 // indirect
