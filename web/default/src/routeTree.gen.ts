@@ -72,6 +72,7 @@ import { Route as AuthenticatedSystemSettingsModelsIndexRouteImport } from './ro
 import { Route as AuthenticatedSystemSettingsContentIndexRouteImport } from './routes/_authenticated/system-settings/content/index'
 import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './routes/_authenticated/system-settings/billing/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
+import { Route as AuthenticatedAdminSkillsIndexRouteImport } from './routes/_authenticated/admin/skills/index'
 import { Route as AuthenticatedSystemSettingsSiteSectionRouteImport } from './routes/_authenticated/system-settings/site/$section'
 import { Route as AuthenticatedSystemSettingsSecuritySectionRouteImport } from './routes/_authenticated/system-settings/security/$section'
 import { Route as AuthenticatedSystemSettingsOperationsSectionRouteImport } from './routes/_authenticated/system-settings/operations/$section'
@@ -79,6 +80,7 @@ import { Route as AuthenticatedSystemSettingsModelsSectionRouteImport } from './
 import { Route as AuthenticatedSystemSettingsContentSectionRouteImport } from './routes/_authenticated/system-settings/content/$section'
 import { Route as AuthenticatedSystemSettingsBillingSectionRouteImport } from './routes/_authenticated/system-settings/billing/$section'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
+import { Route as AuthenticatedAdminSkillsIdEditRouteImport } from './routes/_authenticated/admin/skills/$id/edit'
 
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
@@ -418,6 +420,12 @@ const AuthenticatedSystemSettingsAuthIndexRoute =
     path: '/auth/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedAdminSkillsIndexRoute =
+  AuthenticatedAdminSkillsIndexRouteImport.update({
+    id: '/admin/skills/',
+    path: '/admin/skills/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsSiteSectionRoute =
   AuthenticatedSystemSettingsSiteSectionRouteImport.update({
     id: '/site/$section',
@@ -459,6 +467,12 @@ const AuthenticatedSystemSettingsAuthSectionRoute =
     id: '/auth/$section',
     path: '/auth/$section',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedAdminSkillsIdEditRoute =
+  AuthenticatedAdminSkillsIdEditRouteImport.update({
+    id: '/admin/skills/$id/edit',
+    path: '/admin/skills/$id/edit',
+    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -521,6 +535,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/admin/skills/': typeof AuthenticatedAdminSkillsIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -530,6 +545,7 @@ export interface FileRoutesByFullPath {
   '/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
   '/user/purchases/': typeof AuthenticatedUserPurchasesIndexRoute
   '/user/skills/': typeof AuthenticatedUserSkillsIndexRoute
+  '/admin/skills/$id/edit': typeof AuthenticatedAdminSkillsIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -590,6 +606,7 @@ export interface FileRoutesByTo {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/admin/skills': typeof AuthenticatedAdminSkillsIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -599,6 +616,7 @@ export interface FileRoutesByTo {
   '/system-settings/site': typeof AuthenticatedSystemSettingsSiteIndexRoute
   '/user/purchases': typeof AuthenticatedUserPurchasesIndexRoute
   '/user/skills': typeof AuthenticatedUserSkillsIndexRoute
+  '/admin/skills/$id/edit': typeof AuthenticatedAdminSkillsIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -663,6 +681,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/_authenticated/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/_authenticated/admin/skills/': typeof AuthenticatedAdminSkillsIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -672,6 +691,7 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
   '/_authenticated/user/purchases/': typeof AuthenticatedUserPurchasesIndexRoute
   '/_authenticated/user/skills/': typeof AuthenticatedUserSkillsIndexRoute
+  '/_authenticated/admin/skills/$id/edit': typeof AuthenticatedAdminSkillsIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -735,6 +755,7 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/admin/skills/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -744,6 +765,7 @@ export interface FileRouteTypes {
     | '/system-settings/site/'
     | '/user/purchases/'
     | '/user/skills/'
+    | '/admin/skills/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -804,6 +826,7 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/admin/skills'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -813,6 +836,7 @@ export interface FileRouteTypes {
     | '/system-settings/site'
     | '/user/purchases'
     | '/user/skills'
+    | '/admin/skills/$id/edit'
   id:
     | '__root__'
     | '/'
@@ -876,6 +900,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/operations/$section'
     | '/_authenticated/system-settings/security/$section'
     | '/_authenticated/system-settings/site/$section'
+    | '/_authenticated/admin/skills/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -885,6 +910,7 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/site/'
     | '/_authenticated/user/purchases/'
     | '/_authenticated/user/skills/'
+    | '/_authenticated/admin/skills/$id/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1357,6 +1383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsAuthIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/admin/skills/': {
+      id: '/_authenticated/admin/skills/'
+      path: '/admin/skills'
+      fullPath: '/admin/skills/'
+      preLoaderRoute: typeof AuthenticatedAdminSkillsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/system-settings/site/$section': {
       id: '/_authenticated/system-settings/site/$section'
       path: '/site/$section'
@@ -1405,6 +1438,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/system-settings/auth/$section'
       preLoaderRoute: typeof AuthenticatedSystemSettingsAuthSectionRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/admin/skills/$id/edit': {
+      id: '/_authenticated/admin/skills/$id/edit'
+      path: '/admin/skills/$id/edit'
+      fullPath: '/admin/skills/$id/edit'
+      preLoaderRoute: typeof AuthenticatedAdminSkillsIdEditRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
   }
 }
@@ -1513,8 +1553,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
+  AuthenticatedAdminSkillsIndexRoute: typeof AuthenticatedAdminSkillsIndexRoute
   AuthenticatedUserPurchasesIndexRoute: typeof AuthenticatedUserPurchasesIndexRoute
   AuthenticatedUserSkillsIndexRoute: typeof AuthenticatedUserSkillsIndexRoute
+  AuthenticatedAdminSkillsIdEditRoute: typeof AuthenticatedAdminSkillsIdEditRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1542,8 +1584,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
+  AuthenticatedAdminSkillsIndexRoute: AuthenticatedAdminSkillsIndexRoute,
   AuthenticatedUserPurchasesIndexRoute: AuthenticatedUserPurchasesIndexRoute,
   AuthenticatedUserSkillsIndexRoute: AuthenticatedUserSkillsIndexRoute,
+  AuthenticatedAdminSkillsIdEditRoute: AuthenticatedAdminSkillsIdEditRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
