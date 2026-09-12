@@ -132,4 +132,111 @@ describe('SkillsCreateDrawer', () => {
       expect.objectContaining({ monetization_type: 'paid', price_usd: 4.99 })
     )
   })
+
+  // PRD §13 — reference listings (link out to an external repo instead of
+  // being packaged).
+  describe('reference listings', () => {
+    it('hides Monetization and shows Source URL once Reference is selected', async () => {
+      render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
+      expect(screen.getByLabelText('Monetization')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Source URL')).not.toBeInTheDocument()
+
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'reference'
+      )
+
+      expect(screen.getByLabelText('Source URL')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Monetization')).not.toBeInTheDocument()
+    })
+
+    it('rejects submitting a reference listing with no source_url', async () => {
+      render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
+      await fillRequiredFields()
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'reference'
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(
+        await screen.findByText('A source URL is required for a reference listing')
+      ).toBeInTheDocument()
+      expect(mockCreateSkill).not.toHaveBeenCalled()
+    })
+
+    it('rejects a malformed source_url', async () => {
+      render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
+      await fillRequiredFields()
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'reference'
+      )
+      await userEvent.type(
+        screen.getByLabelText('Source URL'),
+        'github.com/owner/repo' // missing scheme
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(
+        await screen.findByText(
+          'Must be an absolute URL, e.g. https://github.com/owner/repo'
+        )
+      ).toBeInTheDocument()
+      expect(mockCreateSkill).not.toHaveBeenCalled()
+    })
+
+    it('creates a reference listing with listing_type + source_url, forced free', async () => {
+      mockCreateSkill.mockResolvedValue({ success: true, data: { id: 101 } })
+
+      render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
+      await fillRequiredFields()
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'reference'
+      )
+      await userEvent.type(
+        screen.getByLabelText('Source URL'),
+        'https://github.com/owner/repo'
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(mockCreateSkill).toHaveBeenCalledWith(
+        expect.objectContaining({
+          listing_type: 'reference',
+          source_url: 'https://github.com/owner/repo',
+          monetization_type: 'free',
+        })
+      )
+    })
+
+    // Switching hosted -> reference -> hosted must not leave a stale
+    // source_url sitting in form state that a later hosted submission
+    // would then need to not send.
+    it('resets monetization to free when switching to reference, and does not send source_url back to hosted', async () => {
+      mockCreateSkill.mockResolvedValue({ success: true, data: { id: 102 } })
+
+      render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
+      await fillRequiredFields()
+      await userEvent.selectOptions(screen.getByLabelText('Monetization'), 'paid')
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'reference'
+      )
+      await userEvent.type(
+        screen.getByLabelText('Source URL'),
+        'https://github.com/owner/repo'
+      )
+      await userEvent.selectOptions(screen.getByLabelText('Listing Type'), 'hosted')
+      await userEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+      expect(mockCreateSkill).toHaveBeenCalledWith(
+        expect.objectContaining({
+          listing_type: 'hosted',
+          source_url: undefined,
+          monetization_type: 'free',
+        })
+      )
+    })
+  })
 })

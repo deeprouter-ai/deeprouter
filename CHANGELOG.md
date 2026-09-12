@@ -11,6 +11,15 @@
   - 🟡 **实现时发现并修复一个真实缺口**：`UpdateSkill` 原来只检查"改价格时够不够钱"，没检查"把一个引用型 skill 改成 paid"——补了 `ErrReferenceMustBeFree` 分支。
   - **真实 Postgres 验证**（`model/migrate_test.go`，`TEST_POSTGRES_DSN` 门控）：既有的首次执行+二次幂等测试覆盖了新迁移步骤；新增"表已有数据行时加列"专项测试（正确 backfill 成 `hosted`/`NULL`，不会因 `NOT NULL` 炸掉）；新增端到端测试，用真实 `AdminSkillService`/`DownloadService` 走完整流程，并直接绕过 Go 层验证确认两条 CHECK 约束在数据库层真的拦得住。
   - `gofmt`/`go vet`/`go test ./internal/skill-marketplace/...`（含真 PG 网关测试）全干净。
+- **Skill Marketplace: Admin frontend for reference listings**——上一条的后端能力接上一个 Admin 真能用的界面。对应 task card P8。
+  - **`skills-create-drawer.tsx`**：表单顶部加"上架方式"切换（打包上传 / 引用外部链接）。选引用型：显示 `source_url` 输入框，隐藏"变现方式"（引用型只能免费，切换时顺手把 `monetization_type` 重置为 `free`，避免残留脏状态）。提交时显式带上 `listing_type`，不靠后端猜。
+  - **`skill-metadata-form.tsx`**（编辑页）：引用型 skill 可以改 `source_url`（修正链接拼写），`listing_type` 本身不可编辑——创建后锁定。
+  - **`skill-publish-actions.tsx`**：`canPublish` 按 `listing_type` 分支，跟 `admin_skill.go` 的 `PublishSkill` 逐字对应，前端按钮状态不会跟后端实际行为打架。
+  - **`skill-edit-page.tsx`**：引用型 skill 不渲染 `SkillVersionsPanel`——它永远没有版本，露出"上传版本"入口只会让 Admin 点了发现没用。
+  - **`skills-admin/constants.ts`**：Admin 表单自己有一份独立于 marketplace 筛选列表的 `SKILL_CATEGORIES`，也加了 `video`——两份列表要分别维护。
+  - 🟡 **实现时发现并修复一个真实回归**：`Skill`/`SkillSummary` 类型加上必填的 `listing_type` 字段后，8 个既有测试文件里手写的 fixture 全部编译不过（`tsc -b` 报错），逐个补上 `listing_type: 'hosted'`。
+  - **i18n**：`en.json`/`zh.json` 各追加 10 条新文案，直接在文件末尾插入而不是脚本重排——这两个文件是按功能模块顺序追加的，不是全局字母序，重排会产生几千行无关 diff（走过一次弯路，已撤销重做）。
+  - 新增/更新 12 个测试（`skills-create-drawer`/`skill-metadata-form`/`skill-publish-actions`/`skill-edit-page` 各自的引用型场景）。`tsc -b`、`eslint .`、`prettier --check`、`vitest run src/features/skills-admin`（18 files / 112 tests）全干净。
 
 ## 2026-09-08
 

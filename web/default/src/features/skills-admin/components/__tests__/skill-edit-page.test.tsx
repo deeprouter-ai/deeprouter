@@ -108,6 +108,7 @@ describe('SkillEditPage', () => {
         price_usd: 0,
         featured_flag: false,
         featured_rank: 0,
+        listing_type: 'hosted',
         created_by: 1,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -141,6 +142,7 @@ describe('SkillEditPage', () => {
         price_usd: 0,
         featured_flag: false,
         featured_rank: 0,
+        listing_type: 'hosted',
         created_by: 1,
         created_at: '2026-01-01T00:00:00Z',
         updated_at: '2026-01-01T00:00:00Z',
@@ -155,5 +157,38 @@ describe('SkillEditPage', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['admin-skill-logs', 1],
     })
+  })
+
+  // PRD §13 — a reference listing has no versions to manage; rendering the
+  // panel anyway would let an admin try to upload one for a skill type that
+  // will never have an active_version_id to activate.
+  it('does not render the versions panel for a reference listing', async () => {
+    mockGetSkill.mockResolvedValue({
+      success: true,
+      data: {
+        id: 1,
+        slug: 'ref-skill',
+        name: 'Ref Skill',
+        description: '',
+        category: 'video',
+        tags: [],
+        status: 'draft',
+        monetization_type: 'free',
+        price_usd: 0,
+        featured_flag: false,
+        featured_rank: 0,
+        listing_type: 'reference',
+        source_url: 'https://github.com/owner/repo',
+        created_by: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      } satisfies SkillSummary,
+    })
+    renderWithQuery(<SkillEditPage skillId={1} />)
+
+    expect(await screen.findByTestId('metadata-form')).toBeInTheDocument()
+    expect(screen.queryByTestId('versions-panel')).not.toBeInTheDocument()
+    expect(screen.getByTestId('publish-actions')).toBeInTheDocument()
+    expect(screen.getByTestId('activity-log')).toBeInTheDocument()
   })
 })

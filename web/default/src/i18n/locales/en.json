@@ -5093,6 +5093,16 @@
     "Version must be in X.Y.Z format": "Version must be in X.Y.Z format",
     "Version updated": "Version updated",
     "Version uploaded as draft": "Version uploaded as draft",
-    "Versions": "Versions"
+    "Versions": "Versions",
+    "Listing Type": "Listing Type",
+    "Hosted (upload & package)": "Hosted (upload & package)",
+    "Reference (link to external repo)": "Reference (link to external repo)",
+    "Source URL": "Source URL",
+    "Where the \"View on GitHub\" button on the skill page links to.": "Where the \"View on GitHub\" button on the skill page links to.",
+    "A source URL is required for a reference listing": "A source URL is required for a reference listing",
+    "Must be an absolute URL, e.g. https://github.com/owner/repo": "Must be an absolute URL, e.g. https://github.com/owner/repo",
+    "A reference listing cannot be paid": "A reference listing cannot be paid",
+    "Creates a draft skill that links out to an external repo — no package, no version to upload.": "Creates a draft skill that links out to an external repo — no package, no version to upload.",
+    "Set a source URL before publishing": "Set a source URL before publishing"
   }
 }

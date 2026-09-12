@@ -54,6 +54,7 @@ function makeSkill(overrides: Partial<SkillSummary>): SkillSummary {
     price_usd: 0,
     featured_flag: false,
     featured_rank: 0,
+    listing_type: 'hosted',
     created_by: 1,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -205,4 +206,81 @@ describe('SkillMetadataForm — slug editability (AC-9)', () => {
       expect(screen.queryByLabelText('Slug')).not.toBeInTheDocument()
     }
   )
+})
+
+// Coverage: PRD §13 — editing an existing reference listing. listing_type
+// itself isn't editable (see UpdateSkillRequest), but source_url should be.
+describe('SkillMetadataForm — reference listings', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows Source URL instead of Monetization for a reference listing', () => {
+    render(
+      <SkillMetadataForm
+        skill={makeSkill({
+          listing_type: 'reference',
+          source_url: 'https://github.com/owner/repo',
+        })}
+        onSaved={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('Source URL')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Monetization')).not.toBeInTheDocument()
+  })
+
+  it('does not render Source URL for a hosted skill', () => {
+    render(
+      <SkillMetadataForm skill={makeSkill({ listing_type: 'hosted' })} onSaved={vi.fn()} />
+    )
+    expect(screen.queryByLabelText('Source URL')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Monetization')).toBeInTheDocument()
+  })
+
+  it('saves an edited source_url', async () => {
+    mockUpdateSkill.mockResolvedValue({ success: true })
+    render(
+      <SkillMetadataForm
+        skill={makeSkill({
+          listing_type: 'reference',
+          source_url: 'https://github.com/owner/old',
+        })}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const urlInput = screen.getByLabelText('Source URL')
+    await userEvent.clear(urlInput)
+    await userEvent.type(urlInput, 'https://github.com/owner/new')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(mockUpdateSkill).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ source_url: 'https://github.com/owner/new' })
+    )
+  })
+
+  it('rejects a malformed source_url', async () => {
+    render(
+      <SkillMetadataForm
+        skill={makeSkill({
+          listing_type: 'reference',
+          source_url: 'https://github.com/owner/old',
+        })}
+        onSaved={vi.fn()}
+      />
+    )
+
+    const urlInput = screen.getByLabelText('Source URL')
+    await userEvent.clear(urlInput)
+    await userEvent.type(urlInput, 'not a url')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(
+      await screen.findByText(
+        'Must be an absolute URL, e.g. https://github.com/owner/repo'
+      )
+    ).toBeInTheDocument()
+    expect(mockUpdateSkill).not.toHaveBeenCalled()
+  })
 })

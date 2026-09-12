@@ -83,11 +83,13 @@ export function SkillEditPage({ skillId }: { skillId: number }) {
       <SectionPageLayout.Content>
         <div className='space-y-6'>
           <SkillMetadataForm skill={skill} onSaved={refresh} />
-          <SkillVersionsPanel
-            skill={skill}
-            versions={versions}
-            onChanged={refresh}
-          />
+          {skill.listing_type !== 'reference' && (
+            <SkillVersionsPanel
+              skill={skill}
+              versions={versions}
+              onChanged={refresh}
+            />
+          )}
           <SkillActivityLog skillId={skillId} />
         </div>
       </SectionPageLayout.Content>
