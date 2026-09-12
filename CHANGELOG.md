@@ -27,6 +27,12 @@
   - **My Skills 排除**：`reference` 条目不出现在 `/user/skills`，这是 P7 的自然结果（`reference` 从不写 `user_enabled_skills`），本卡补一条 `TestListUserSkills_ExcludesReferenceListings`（`internal/skill-marketplace/service/user_skill_test.go`）把这个保证钉在查询层，而不是只信任"没有写入路径"会一直成立。
   - **新增测试文件** `__tests__/skill-detail.test.tsx`（5 项，这个组件此前完全没有测试覆盖）、`__tests__/skill-card.test.tsx`（3 项）。前者需要把 `PublicLayout`/`Footer` 整体 stub 掉，避免 header 里 `LanguageSwitcher` 等组件的 hook 依赖级联失败；查询 `<Button render={<a/>}>` 渲染出的元素要用 `getByRole('button', ...)` 而不是 `'link'`——项目里这个多态 `Button` 即使渲染成 `<a>` 也保留 `role="button"`。
   - `go build`/`gofmt`/`go test ./internal/skill-marketplace/...`、`bun run typecheck`、`eslint .`（无 marketplace 相关报错）、`prettier --check`、`vitest run src/features/marketplace`（3 files / 21 tests）全干净。
+- 🟡 **Skill Marketplace: fixed timestamps displaying up to 16h off the real time (and sometimes on the wrong calendar day)**——发现于本地跑通 P7-P9 端到端测试时，My Skills 页面的"已下载"时间显示成了次日凌晨。生产同样受影响，从 P1 建表起就一直存在，跟任何一张 P7-P9 的卡无关。对应 task card P10。
+  - **根因**（`internal/skill-marketplace/model/migrate.go`）：`skills.created_at/updated_at`、`skill_versions.created_at/package_built_at`、`user_enabled_skills.enabled_at`、`skill_purchases.purchased_at`、`skill_admin_logs.created_at` 这 7 个字段全部是 `TIMESTAMP`（不带时区）而非 `TIMESTAMPTZ`。应用容器时区是 `Asia/Shanghai`（生产/本地 dev 配置一致），Postgres 是 UTC：Go 写入的正确、带偏移量的时刻被裸列截断成东八区墙钟数字，读出时又被误标成 UTC，两次东八区偏移叠加成最多 16 小时的偏差。
+  - **修法**：7 处 `CREATE TABLE` 语句的列类型直接改成 `TIMESTAMPTZ`（新库天然建对）；新增 `fixNaiveTimestampColumns`，对已存在的 `TIMESTAMP` 列执行 `ALTER COLUMN ... TYPE TIMESTAMPTZ USING <列> AT TIME ZONE 'Asia/Shanghai'`——显式重新按东八区解释旧数据，而不是简单地把裸数字重新贴上 UTC 标签（那样等于什么也没修）。幂等：先查 `information_schema.columns.data_type`，只在还是 `timestamp without time zone` 时才转换，防止已修好的列被二次错误偏移。走既有的 `Migrate()`/`migrateOrReport` 自动迁移路径，不写手动脚本，失败时降级为"marketplace 局部不可用"而非让网关崩溃（P6 已建好的保护）。
+  - `schema_assert.go` 的 `expectedColumns` 同步加了这 7 个字段的类型断言。
+  - **真实 Postgres 验证**：构造一个"带着当前生产这种错误数据"的旧库（`TIMESTAMP` 列 + 已知墙钟时间的种子数据），跑迁移后核对换算出的 UTC 时刻与预期一致；幂等性测试（连续跑两次，第二次不再偏移）；端到端测试用真实 `migrate()`（不是 fail-soft 版本）跑通整条迁移链路，确认 `assertSchema` 新增的类型断言也过。
+  - `go build`/`gofmt`/`go vet`/`go test ./internal/skill-marketplace/...`（含真 PG 网关测试）全干净。
 
 ## 2026-09-08
 

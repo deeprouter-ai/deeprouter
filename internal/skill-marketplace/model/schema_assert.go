@@ -71,6 +71,16 @@ var (
 		// wrong type exactly the way CREATE TABLE IF NOT EXISTS accepted V1's.
 		{"skills", "listing_type", "character varying"},
 		{"skills", "source_url", "character varying"},
+		// P10: these were TIMESTAMP (no timezone) from P1 through P9 — see
+		// fixNaiveTimestampColumns in migrate.go for the mechanism and the
+		// production bug it caused (displayed times off by up to 16h).
+		{"skills", "created_at", "timestamp with time zone"},
+		{"skills", "updated_at", "timestamp with time zone"},
+		{"skill_versions", "created_at", "timestamp with time zone"},
+		{"skill_versions", "package_built_at", "timestamp with time zone"},
+		{"user_enabled_skills", "enabled_at", "timestamp with time zone"},
+		{"skill_purchases", "purchased_at", "timestamp with time zone"},
+		{"skill_admin_logs", "created_at", "timestamp with time zone"},
 	}
 
 	// Indexes and constraints that a name collision can silently swallow,

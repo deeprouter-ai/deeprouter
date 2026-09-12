@@ -1,6 +1,8 @@
 package model
 
 import (
+	"fmt"
+
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
@@ -83,7 +85,15 @@ func migrate(db *gorm.DB) error {
 	if err := migrateSkillAdminLogs(db); err != nil {
 		return err
 	}
-	// Step 5: confirm the database actually holds what the steps above built.
+	// Step 5: every timestamp column above is TIMESTAMPTZ as of 2026-09-12
+	// (P10), but a database migrated before that fix still has them as
+	// TIMESTAMP — fix those in place. No-op on a database that already has
+	// TIMESTAMPTZ columns, or on a brand-new one where CREATE TABLE already
+	// built them correctly.
+	if err := fixNaiveTimestampColumns(db); err != nil {
+		return err
+	}
+	// Step 6: confirm the database actually holds what the steps above built.
 	// IF NOT EXISTS accepts a wrong-shaped table as an existing one, so without
 	// this the migration can report success over a schema it never created.
 	return assertSchema(db)
@@ -105,8 +115,8 @@ func migrateSkills(db *gorm.DB) error {
 		  featured_rank     INTEGER DEFAULT 0,
 		  active_version_id BIGINT,
 		  created_by        BIGINT NOT NULL REFERENCES users(id),
-		  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
-		  updated_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+		  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		  CONSTRAINT skills_status_check
 		    CHECK (status IN ('draft', 'published', 'deprecated')),
 		  CONSTRAINT skills_monetization_check
@@ -199,10 +209,10 @@ func migrateSkillVersions(db *gorm.DB) error {
 		  manifest_json    JSONB NOT NULL,
 		  package_zip      BYTEA,
 		  package_sha256   VARCHAR(64),
-		  package_built_at TIMESTAMP,
+		  package_built_at TIMESTAMPTZ,
 		  changelog        TEXT DEFAULT '',
 		  created_by       BIGINT NOT NULL REFERENCES users(id),
-		  created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+		  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		  UNIQUE (skill_id, version),
 		  CONSTRAINT skill_versions_status_check
 		    CHECK (status IN ('draft', 'active', 'archived')),
@@ -248,7 +258,7 @@ func migrateUserEnabledSkills(db *gorm.DB) error {
 		  user_id    BIGINT NOT NULL REFERENCES users(id),
 		  skill_id   BIGINT NOT NULL REFERENCES skills(id),
 		  version_id BIGINT NOT NULL REFERENCES skill_versions(id),
-		  enabled_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		  enabled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		  UNIQUE (user_id, skill_id)
 		)
 	`).Error; err != nil {
@@ -265,7 +275,7 @@ func migrateSkillPurchases(db *gorm.DB) error {
 		  skill_id       BIGINT NOT NULL REFERENCES skills(id),
 		  price_usd      NUMERIC(10,2) NOT NULL,
 		  quota_deducted BIGINT NOT NULL,
-		  purchased_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+		  purchased_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 		  UNIQUE (user_id, skill_id)
 		)
 	`).Error; err != nil {
@@ -285,7 +295,7 @@ func migrateSkillAdminLogs(db *gorm.DB) error {
 		  skill_id   BIGINT REFERENCES skills(id) ON DELETE SET NULL,
 		  action     VARCHAR(50) NOT NULL,
 		  details    JSONB DEFAULT '{}',
-		  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`).Error; err != nil {
 		return err
@@ -294,4 +304,70 @@ func migrateSkillAdminLogs(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_sal_skill  ON skill_admin_logs(skill_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sal_admin  ON skill_admin_logs(admin_id)`,
 	)
+}
+
+// timestampColumnsNeedingTZFix are every skill-marketplace column that was
+// TIMESTAMP (no timezone) before 2026-09-12 (P10).
+var timestampColumnsNeedingTZFix = []struct{ table, column string }{
+	{"skills", "created_at"},
+	{"skills", "updated_at"},
+	{"skill_versions", "created_at"},
+	{"skill_versions", "package_built_at"},
+	{"user_enabled_skills", "enabled_at"},
+	{"skill_purchases", "purchased_at"},
+	{"skill_admin_logs", "created_at"},
+}
+
+// fixNaiveTimestampColumns converts every column in
+// timestampColumnsNeedingTZFix that is still TIMESTAMP (no timezone) to
+// TIMESTAMPTZ, correctly reinterpreting its existing raw values as
+// Asia/Shanghai wall-clock time along the way — not simply re-tagging them
+// as UTC, which is what a bare `ALTER COLUMN ... TYPE TIMESTAMPTZ` (no
+// `USING`) would do and would leave every value exactly as wrong as before.
+//
+// Every environment that runs this migration (production, local dev, CI's
+// real-Postgres tests) sets the application container's TZ to Asia/Shanghai,
+// while Postgres itself defaults to UTC. A TIMESTAMP column has no way to
+// remember an offset, so Go's time.Now() — a real, correctly-offset instant —
+// got silently truncated to its raw Asia/Shanghai wall-clock digits on write,
+// then mislabeled as UTC on read. A client that honors the resulting "...Z"
+// suffix converts *again*, landing up to 16h off the real time and sometimes
+// on the wrong calendar day.
+//
+// 🔴 This fixes data already written under the Asia/Shanghai assumption; it
+// does not assert that assumption going forward. Once a column is
+// TIMESTAMPTZ, new writes are correct regardless of container TZ (Postgres
+// converts using the value's own embedded offset, not the session's). If
+// this application's container TZ is ever fixed retroactively (e.g. the
+// container starts always writing UTC), this specific backfill would need to
+// change accordingly, since it is a one-time repair, not a standing rule.
+//
+// Idempotent: a column that is already TIMESTAMPTZ (already fixed, or built
+// correctly by CREATE TABLE on a database that never had the bug) is left
+// alone — re-running `AT TIME ZONE 'Asia/Shanghai'` against an
+// already-correct value would shift it wrong a second time.
+func fixNaiveTimestampColumns(db *gorm.DB) error {
+	if db.Dialector.Name() != "postgres" {
+		return nil
+	}
+	for _, c := range timestampColumnsNeedingTZFix {
+		actual, err := columnType(db, c.table, c.column)
+		if err != nil {
+			return fmt.Errorf("check %s.%s type: %w", c.table, c.column, err)
+		}
+		if actual != "timestamp without time zone" {
+			// Already timestamptz, or the table doesn't exist yet (a
+			// brand-new database — CREATE TABLE above already built it
+			// correctly, so columnType returns "").
+			continue
+		}
+		stmt := fmt.Sprintf(
+			`ALTER TABLE %s ALTER COLUMN %s TYPE TIMESTAMPTZ USING %s AT TIME ZONE 'Asia/Shanghai'`,
+			c.table, c.column, c.column,
+		)
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("convert %s.%s to timestamptz: %w", c.table, c.column, err)
+		}
+	}
+	return nil
 }
