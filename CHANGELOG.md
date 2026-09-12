@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-09-12
+
+- **Skill Marketplace: reference listings (`listing_type: reference`)**——商店新增第二种上架方式：外部链接型 skill（比如开源 video skill 的 GitHub 仓库），不打包、不验证，用户点了直接跳转外链，DR 不为其背书。对应 `skill-marketplace-v2-prd.md` §13 / task card P7。
+  - **schema**（`internal/skill-marketplace/model/{skill.go,migrate.go,schema_assert.go}`）：`skills` 表加 `listing_type`（`hosted`/`reference`，缺省 `hosted`）+ `source_url`，加三条 CHECK 约束（类型合法性、引用型必须有链接、引用型必须免费）。`ADD COLUMN IF NOT EXISTS` + 照抄 `addActiveVersionFK` 的 `DO $$ IF NOT EXISTS (pg_constraint)` 写法保证幂等，接进现有 `Migrate()` 序列，天然被 P6 建的 fail-soft 包裹。`schema_assert.go` 补上新列/约束的结构断言。
+  - **校验 + canPublish**（`service/admin_skill.go`）：`source_url` 只做基础 URL 格式校验（有 scheme+host 即可，不限协议不限域名，不要求 github.com），格式不对 400。`listing_type` 仅在创建时可设，`UpdateSkillRequest` 不暴露该字段——不支持转换已有 skill 的类型。`PublishSkill` 按 `listing_type` 分支：`reference` 查 `source_url` 非空，`hosted` 分支原样不动。新增 `ErrInvalidListingType`/`ErrSourceURLRequired`/`ErrInvalidSourceURLFormat`/`ErrReferenceMustBeFree`/`ErrSourceURLOnHostedSkill`。
+  - **下载拒绝**（`service/download.go`）：`reference` 条目调下载接口在 `ActiveVersionID` 检查之前就被拦下（`ErrReferenceListingNotDownloadable`），不会误判成 `ErrPackageMissing`（500）——两者的 `ActiveVersionID` 都是 nil，顺序很关键。
+  - **controller 错误映射**（`controller/{marketplace.go,admin_marketplace.go}`）：新错误类型按 `errors.Is` 显式加进 400/409 分支——这个文件的既有模式是显式枚举，不加进去会全部落到 `default` 的 500。
+  - 🟡 **实现时发现并修复一个真实回归**：`service/admin_skill_test.go` 的 SQLite fixture 手写了一份 `skills` 表结构（不能跑 `Migrate()`，那是纯 PG DDL），没有跟着 model struct 加新列，导致整个 service 包的既有测试全部报 `no column named listing_type`。这个 fixture 是包内所有测试共用的，一改全好。
+  - 🟡 **实现时发现并修复一个真实缺口**：`UpdateSkill` 原来只检查"改价格时够不够钱"，没检查"把一个引用型 skill 改成 paid"——补了 `ErrReferenceMustBeFree` 分支。
+  - **真实 Postgres 验证**（`model/migrate_test.go`，`TEST_POSTGRES_DSN` 门控）：既有的首次执行+二次幂等测试覆盖了新迁移步骤；新增"表已有数据行时加列"专项测试（正确 backfill 成 `hosted`/`NULL`，不会因 `NOT NULL` 炸掉）；新增端到端测试，用真实 `AdminSkillService`/`DownloadService` 走完整流程，并直接绕过 Go 层验证确认两条 CHECK 约束在数据库层真的拦得住。
+  - `gofmt`/`go vet`/`go test ./internal/skill-marketplace/...`（含真 PG 网关测试）全干净。
+
 ## 2026-09-08
 
 - 🔴 **修复生产 `deeprouter.co` 全站 502——自 09-02 P1 上线当天起已持续 6 天**。根因不是代码写错,而是一个从没有人执行过的人工前置步骤:V1 时代的 9 张表在 PR #159 删除 V1 代码时被**刻意保留**(删表不可逆),善后交给 `scripts/migrations/2026-09-01-drop-v1-skill-tables.sql`,该脚本要求"部署 V2 P1 之前先在生产 PG 执行"。它从未被执行,而 `deploy.yml` 是 `push: main` 即部署,**合并与部署是同一瞬间,流程上根本没有留出执行人工步骤的窗口**。

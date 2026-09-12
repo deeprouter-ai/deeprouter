@@ -60,6 +60,11 @@ func migrate(db *gorm.DB) error {
 	if err := migrateSkills(db); err != nil {
 		return err
 	}
+	// Step 1b: PRD §13 reference-listing columns, added to the now-existing
+	// skills table before anything downstream reads it.
+	if err := addReferenceListingColumns(db); err != nil {
+		return err
+	}
 	// Step 2: skill_versions (references skills)
 	if err := migrateSkillVersions(db); err != nil {
 		return err
@@ -120,6 +125,55 @@ func migrateSkills(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_skills_status   ON skills(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_skills_featured ON skills(featured_flag, featured_rank) WHERE status = 'published'`,
 		`CREATE INDEX IF NOT EXISTS idx_skills_created  ON skills(created_at DESC)              WHERE status = 'published'`,
+	)
+}
+
+// addReferenceListingColumns adds the PRD §13 reference-listing columns
+// (listing_type, source_url) and their three CHECK constraints to skills.
+// ADD COLUMN IF NOT EXISTS and the pg_constraint guards (same pattern as
+// addActiveVersionFK below) make every statement safe to run on every
+// startup, whether the table is brand new or already has these columns.
+func addReferenceListingColumns(db *gorm.DB) error {
+	if err := execEach(db,
+		`ALTER TABLE skills ADD COLUMN IF NOT EXISTS listing_type VARCHAR(10) NOT NULL DEFAULT 'hosted'`,
+		`ALTER TABLE skills ADD COLUMN IF NOT EXISTS source_url VARCHAR(500)`,
+	); err != nil {
+		return err
+	}
+	return execEach(db,
+		`DO $$
+		BEGIN
+		  IF NOT EXISTS (
+		    SELECT 1 FROM pg_constraint
+		    WHERE conname = 'skills_listing_type_check'
+		      AND conrelid = to_regclass('skills')
+		  ) THEN
+		    ALTER TABLE skills ADD CONSTRAINT skills_listing_type_check
+		      CHECK (listing_type IN ('hosted', 'reference'));
+		  END IF;
+		END$$`,
+		`DO $$
+		BEGIN
+		  IF NOT EXISTS (
+		    SELECT 1 FROM pg_constraint
+		    WHERE conname = 'skills_reference_source_check'
+		      AND conrelid = to_regclass('skills')
+		  ) THEN
+		    ALTER TABLE skills ADD CONSTRAINT skills_reference_source_check
+		      CHECK (listing_type = 'hosted' OR source_url IS NOT NULL);
+		  END IF;
+		END$$`,
+		`DO $$
+		BEGIN
+		  IF NOT EXISTS (
+		    SELECT 1 FROM pg_constraint
+		    WHERE conname = 'skills_reference_free_check'
+		      AND conrelid = to_regclass('skills')
+		  ) THEN
+		    ALTER TABLE skills ADD CONSTRAINT skills_reference_free_check
+		      CHECK (listing_type = 'hosted' OR monetization_type = 'free');
+		  END IF;
+		END$$`,
 	)
 }
 
