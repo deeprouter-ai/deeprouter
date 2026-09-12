@@ -20,6 +20,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 // { success, message, data } envelope; these types describe `data`.
 
 export type SkillStatus = 'published' | 'deprecated'
+export type ListingType = 'hosted' | 'reference'
 
 export interface MarketplaceSkill {
   id: number
@@ -37,6 +38,10 @@ export interface MarketplaceSkill {
   updated_at: string
   /** Active version semver; empty when the skill has no active version. */
   version: string
+  // PRD §13: a reference listing links out to an external repo instead of
+  // being packaged — no download, no purchase, no version.
+  listing_type: ListingType
+  source_url?: string
 }
 
 export interface MarketplaceSkillDetail extends MarketplaceSkill {

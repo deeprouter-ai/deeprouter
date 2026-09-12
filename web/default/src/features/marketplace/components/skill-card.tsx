@@ -45,9 +45,12 @@ export function SkillCard({ skill }: { skill: MarketplaceSkill }) {
       </p>
       <div className='mt-3 flex items-center gap-2'>
         <Badge variant='secondary'>{skill.category}</Badge>
-        <Badge variant={free ? 'ghost' : 'outline'} className='tabular-nums'>
-          {skillPriceLabel(skill, t('Free'))}
-        </Badge>
+        {/* PRD §13: a reference listing is always free — no badge for it. */}
+        {skill.listing_type !== 'reference' && (
+          <Badge variant={free ? 'ghost' : 'outline'} className='tabular-nums'>
+            {skillPriceLabel(skill, t('Free'))}
+          </Badge>
+        )}
       </div>
     </Link>
   )

@@ -20,6 +20,13 @@
   - 🟡 **实现时发现并修复一个真实回归**：`Skill`/`SkillSummary` 类型加上必填的 `listing_type` 字段后，8 个既有测试文件里手写的 fixture 全部编译不过（`tsc -b` 报错），逐个补上 `listing_type: 'hosted'`。
   - **i18n**：`en.json`/`zh.json` 各追加 10 条新文案，直接在文件末尾插入而不是脚本重排——这两个文件是按功能模块顺序追加的，不是全局字母序，重排会产生几千行无关 diff（走过一次弯路，已撤销重做）。
   - 新增/更新 12 个测试（`skills-create-drawer`/`skill-metadata-form`/`skill-publish-actions`/`skill-edit-page` 各自的引用型场景）。`tsc -b`、`eslint .`、`prettier --check`、`vitest run src/features/skills-admin`（18 files / 112 tests）全干净。
+- **Skill Marketplace: Marketplace display for reference listings**——用户这一面：详情页遇到 `reference` 条目时换一套操作区。对应 task card P9。
+  - **`skill-detail.tsx`**：`listing_type === 'reference'` 时，把"Download/Buy"按钮整体换成"View on GitHub"外链按钮（`target="_blank" rel="noopener noreferrer"`）+ 一个复制链接的 `CopyButton`，不走登录/购买分支——引用型条目没有下载这回事，不该逼用户先登录。同时隐藏 Price 徽章和"需要 DeepRouter API Key"提示，这两者对引用型条目都不成立。`lucide-react@^1.7.0` 已不带品牌 icon（没有 `Github` 导出），用 `ExternalLink` 代替。
+  - **`skill-card.tsx`**：卡片列表同样隐藏 `reference` 条目的 Price 徽章。
+  - **`index.tsx`**：`CATEGORIES` 加 `video`，两种 `listing_type` 共用同一份分类列表。
+  - **My Skills 排除**：`reference` 条目不出现在 `/user/skills`，这是 P7 的自然结果（`reference` 从不写 `user_enabled_skills`），本卡补一条 `TestListUserSkills_ExcludesReferenceListings`（`internal/skill-marketplace/service/user_skill_test.go`）把这个保证钉在查询层，而不是只信任"没有写入路径"会一直成立。
+  - **新增测试文件** `__tests__/skill-detail.test.tsx`（5 项，这个组件此前完全没有测试覆盖）、`__tests__/skill-card.test.tsx`（3 项）。前者需要把 `PublicLayout`/`Footer` 整体 stub 掉，避免 header 里 `LanguageSwitcher` 等组件的 hook 依赖级联失败；查询 `<Button render={<a/>}>` 渲染出的元素要用 `getByRole('button', ...)` 而不是 `'link'`——项目里这个多态 `Button` 即使渲染成 `<a>` 也保留 `role="button"`。
+  - `go build`/`gofmt`/`go test ./internal/skill-marketplace/...`、`bun run typecheck`、`eslint .`（无 marketplace 相关报错）、`prettier --check`、`vitest run src/features/marketplace`（3 files / 21 tests）全干净。
 
 ## 2026-09-08
 

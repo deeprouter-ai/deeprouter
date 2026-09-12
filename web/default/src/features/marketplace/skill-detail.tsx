@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   Check,
   Download,
+  ExternalLink,
   KeyRound,
   Package,
 } from 'lucide-react'
@@ -30,6 +31,7 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CopyButton } from '@/components/copy-button'
 import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { PublicLayout } from '@/components/layout'
@@ -42,13 +44,11 @@ import {
   marketplaceQueryKeys,
 } from './api'
 import { BuyConfirmDialog } from './components/buy-confirm-dialog'
-import { skillPriceLabel } from './lib/price'
 import { useSkillDownload } from './hooks/use-skill-download'
+import { skillPriceLabel } from './lib/price'
 
 function isNotFound(error: unknown): boolean {
-  return (
-    (error as { response?: { status?: number } })?.response?.status === 404
-  )
+  return (error as { response?: { status?: number } })?.response?.status === 404
 }
 
 export function SkillDetailPage({ slug }: { slug: string }) {
@@ -88,6 +88,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
   const deprecated = skill?.status === 'deprecated'
   const paid = skill?.monetization_type === 'paid'
   const downloading = pendingSlug === slug
+  const isReference = skill?.listing_type === 'reference'
 
   // PRD §8.2 button branches: anonymous → sign-in; free or already
   // purchased → straight download; paid & unpurchased → confirm dialog
@@ -137,7 +138,10 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                     'This skill does not exist or has not been published.'
                   )}
                   action={
-                    <Button variant='outline' render={<Link to='/marketplace' />}>
+                    <Button
+                      variant='outline'
+                      render={<Link to='/marketplace' />}
+                    >
                       {t('Back to marketplace')}
                     </Button>
                   }
@@ -177,9 +181,14 @@ export function SkillDetailPage({ slug }: { slug: string }) {
 
               <div className='mt-3 flex flex-wrap items-center gap-2'>
                 <Badge variant='secondary'>{skill.category}</Badge>
-                <Badge variant='outline' className='tabular-nums'>
-                  {skillPriceLabel(skill, t('Free'))}
-                </Badge>
+                {/* PRD §13: a reference listing is always free (enforced by
+                    skills_reference_free_check) — showing a price badge for
+                    something with no purchase flow would be noise at best. */}
+                {!isReference && (
+                  <Badge variant='outline' className='tabular-nums'>
+                    {skillPriceLabel(skill, t('Free'))}
+                  </Badge>
+                )}
                 {skill.version && (
                   <Badge variant='ghost' className='tabular-nums'>
                     v{skill.version}
@@ -196,21 +205,23 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                 {skill.description}
               </p>
 
-              {/* PRD §8.2: the API-key requirement is always shown. */}
-              <div className='border-border bg-card mt-6 flex items-start gap-2.5 rounded-xl border p-3.5 text-sm'>
-                <KeyRound className='text-accent mt-0.5 size-4 shrink-0' />
-                <span>
-                  {t(
-                    'Running this skill needs a DeepRouter API Key — it calls models through your DeepRouter account.'
-                  )}{' '}
-                  <Link
-                    to='/keys'
-                    className='text-accent hover:underline'
-                  >
-                    {t('Get your key')}
-                  </Link>
-                </span>
-              </div>
+              {/* PRD §8.2: the API-key requirement is always shown for a
+                  packaged skill. A reference listing makes no such promise
+                  — DR doesn't package, verify, or run it, so there is
+                  nothing here to require a DR key for. */}
+              {!isReference && (
+                <div className='border-border bg-card mt-6 flex items-start gap-2.5 rounded-xl border p-3.5 text-sm'>
+                  <KeyRound className='text-accent mt-0.5 size-4 shrink-0' />
+                  <span>
+                    {t(
+                      'Running this skill needs a DeepRouter API Key — it calls models through your DeepRouter account.'
+                    )}{' '}
+                    <Link to='/keys' className='text-accent hover:underline'>
+                      {t('Get your key')}
+                    </Link>
+                  </span>
+                </div>
+              )}
 
               {skill.changelog && (
                 <section className='mt-6'>
@@ -227,20 +238,48 @@ export function SkillDetailPage({ slug }: { slug: string }) {
 
               {!deprecated && (
                 <div className='mt-8'>
-                  <Button
-                    size='lg'
-                    onClick={handleAction}
-                    disabled={downloading}
-                  >
-                    <Download className='size-4' />
-                    {!isAuthed
-                      ? t('Sign in to download')
-                      : paid && !purchased
-                        ? t('Buy for {{price}}', {
-                            price: `$${skill.price_usd.toFixed(2)}`,
-                          })
-                        : t('Download')}
-                  </Button>
+                  {isReference ? (
+                    // PRD §13.5: no download, no auth gate — the button just
+                    // sends the user to the upstream repo. The copy button
+                    // sits next to it for the users who'd rather paste the
+                    // link straight into Claude Code than open a browser.
+                    <div className='flex items-center gap-2'>
+                      <Button
+                        size='lg'
+                        render={
+                          <a
+                            href={skill.source_url}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                          />
+                        }
+                      >
+                        <ExternalLink className='size-4' />
+                        {t('View on GitHub')}
+                      </Button>
+                      <CopyButton
+                        value={skill.source_url ?? ''}
+                        size='lg'
+                        variant='outline'
+                        tooltip={t('Copy link')}
+                      />
+                    </div>
+                  ) : (
+                    <Button
+                      size='lg'
+                      onClick={handleAction}
+                      disabled={downloading}
+                    >
+                      <Download className='size-4' />
+                      {!isAuthed
+                        ? t('Sign in to download')
+                        : paid && !purchased
+                          ? t('Buy for {{price}}', {
+                              price: `$${skill.price_usd.toFixed(2)}`,
+                            })
+                          : t('Download')}
+                    </Button>
+                  )}
                 </div>
               )}
 
