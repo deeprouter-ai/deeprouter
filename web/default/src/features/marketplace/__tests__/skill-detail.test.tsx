@@ -21,6 +21,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SkillDetailPage } from '../skill-detail'
 import type { MarketplaceSkill, MarketplaceSkillDetail } from '../types'
@@ -209,6 +210,29 @@ describe('SkillDetailPage — reference listings', () => {
     const link = await screen.findByRole('button', { name: /View on GitHub/i })
     expect(link).toHaveAttribute('href', 'https://github.com/owner/repo')
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('copies source_url to the clipboard when the copy button is clicked', async () => {
+    // jsdom has no real Clipboard API — stub the one method
+    // lib/copy-to-clipboard.ts calls, so this actually exercises the button's
+    // onClick -> useCopyToClipboard -> navigator.clipboard.writeText chain
+    // instead of only checking the button renders.
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    mockFetchMarketplaceSkill.mockResolvedValue(
+      makeSkill({
+        listing_type: 'reference',
+        source_url: 'https://github.com/owner/repo',
+      })
+    )
+    renderPage()
+
+    await screen.findByRole('button', { name: /View on GitHub/i })
+    const copyButton = screen.getByRole('button', { name: /Copy Link/i })
+    await userEvent.click(copyButton)
+
+    expect(writeText).toHaveBeenCalledWith('https://github.com/owner/repo')
   })
 
   it('still shows the Download button, Price badge, and API-key notice for a hosted skill', async () => {
