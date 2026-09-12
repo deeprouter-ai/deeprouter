@@ -5103,6 +5103,7 @@
     "Must be an absolute URL, e.g. https://github.com/owner/repo": "必须是完整的 URL，例如 https://github.com/owner/repo",
     "A reference listing cannot be paid": "引用型条目不能设为付费",
     "Creates a draft skill that links out to an external repo — no package, no version to upload.": "创建一个链接到外部仓库的草稿技能——无需打包，无需上传版本。",
-    "Set a source URL before publishing": "发布前请先填写来源链接"
+    "Set a source URL before publishing": "发布前请先填写来源链接",
+    "View on GitHub": "在 GitHub 上查看"
   }
 }

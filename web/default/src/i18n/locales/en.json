@@ -5103,6 +5103,7 @@
     "Must be an absolute URL, e.g. https://github.com/owner/repo": "Must be an absolute URL, e.g. https://github.com/owner/repo",
     "A reference listing cannot be paid": "A reference listing cannot be paid",
     "Creates a draft skill that links out to an external repo — no package, no version to upload.": "Creates a draft skill that links out to an external repo — no package, no version to upload.",
-    "Set a source URL before publishing": "Set a source URL before publishing"
+    "Set a source URL before publishing": "Set a source URL before publishing",
+    "View on GitHub": "View on GitHub"
   }
 }

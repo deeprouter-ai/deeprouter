@@ -261,7 +261,7 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                         value={skill.source_url ?? ''}
                         size='lg'
                         variant='outline'
-                        tooltip={t('Copy link')}
+                        tooltip={t('Copy Link')}
                       />
                     </div>
                   ) : (
