@@ -67,7 +67,9 @@ function renderWithQuery(ui: ReactNode) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  const view = render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+  const view = render(
+    <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+  )
   return { ...view, client }
 }
 

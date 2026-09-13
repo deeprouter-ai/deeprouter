@@ -160,7 +160,9 @@ describe('SkillsCreateDrawer', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
 
       expect(
-        await screen.findByText('A source URL is required for a reference listing')
+        await screen.findByText(
+          'A source URL is required for a reference listing'
+        )
       ).toBeInTheDocument()
       expect(mockCreateSkill).not.toHaveBeenCalled()
     })
@@ -218,7 +220,10 @@ describe('SkillsCreateDrawer', () => {
 
       render(<SkillsCreateDrawer open onOpenChange={vi.fn()} />)
       await fillRequiredFields()
-      await userEvent.selectOptions(screen.getByLabelText('Monetization'), 'paid')
+      await userEvent.selectOptions(
+        screen.getByLabelText('Monetization'),
+        'paid'
+      )
       await userEvent.selectOptions(
         screen.getByLabelText('Listing Type'),
         'reference'
@@ -227,7 +232,10 @@ describe('SkillsCreateDrawer', () => {
         screen.getByLabelText('Source URL'),
         'https://github.com/owner/repo'
       )
-      await userEvent.selectOptions(screen.getByLabelText('Listing Type'), 'hosted')
+      await userEvent.selectOptions(
+        screen.getByLabelText('Listing Type'),
+        'hosted'
+      )
       await userEvent.click(screen.getByRole('button', { name: 'Create' }))
 
       expect(mockCreateSkill).toHaveBeenCalledWith(

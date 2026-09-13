@@ -231,7 +231,10 @@ describe('SkillMetadataForm — reference listings', () => {
 
   it('does not render Source URL for a hosted skill', () => {
     render(
-      <SkillMetadataForm skill={makeSkill({ listing_type: 'hosted' })} onSaved={vi.fn()} />
+      <SkillMetadataForm
+        skill={makeSkill({ listing_type: 'hosted' })}
+        onSaved={vi.fn()}
+      />
     )
     expect(screen.queryByLabelText('Source URL')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Monetization')).toBeInTheDocument()
