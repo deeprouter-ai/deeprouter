@@ -4532,7 +4532,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相关项目",
     "footer.defaultCopyright": "版权所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
+    "footer.newapi.projectAttributionSuffix": "版权所有，由项目贡献者设计与开发。",
     "gpt-3.5-turbo": "gpt-3.5-turbo",
     "gpt-3.5-turbo-0125": "gpt-3.5-turbo-0125",
     "gpt-4": "gpt-4",
@@ -5093,6 +5093,20 @@
     "Version must be in X.Y.Z format": "版本号必须符合 X.Y.Z 格式",
     "Version updated": "版本已更新",
     "Version uploaded as draft": "版本已上传为草稿",
-    "Versions": "版本"
+    "Versions": "版本",
+    "Make videos": "视频生成",
+    "Copy one block of text, paste it into your AI tool — it sets itself up and makes your first clip. After that, just say \"生成视频\".": "复制一段话，粘贴给你的 AI 助手——它会自己完成设置并生成第一条视频。之后直接说「生成视频」就行。",
+    "1. Pick a model — or keep the default": "1. 选个模型——不选就用默认的",
+    "Each generation is charged from your balance at the price shown on the card.": "每生成一次，按卡片上标的价格从你的余额扣费。",
+    "2. Copy this, paste it into Claude Code or Codex, press Enter": "2. 复制这段话，粘贴给 Claude Code 或 Codex，回车",
+    "You need a key first — one click on the keys page:": "还没有密钥——去密钥页一键创建：",
+    "Valid for 15 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.": "打开本页后 15 分钟内有效；过期就刷新本页重新复制。这段话里不含你的密钥明文。",
+    "The first run makes a small test clip (cost shown in the text), so you can see it working right away.": "第一次运行会先生成一条小的测试视频（花费已写在话术里），马上就能看到效果。",
+    "4–15 s · up to 2K · sound included": "4–15 秒 · 最高 2K · 自带音效",
+    "6 s ≈ $0.48 (768P) / $0.78 (2K)": "6 秒 ≈ $0.48（768P）/ $0.78（2K）",
+    "up to 30 s · 4K · synced sound": "最长 30 秒 · 4K · 同步音轨",
+    "≈ $5.4 / clip": "≈ $5.4 / 次",
+    "5 s · 1080p": "5 秒 · 1080p",
+    "≈ $1.0 / clip": "≈ $1.0 / 次"
   }
 }
