@@ -507,9 +507,32 @@ var defaultModelPrice = map[string]float64{
 	"kling-v2-master":                0.4,   // video gen (≈veo)
 	"kling-v2-6":                     0.4,   // video gen
 	"kling-v3":                       0.4,   // video gen
-	"gemini-3-pro-image":             0.134, // Nano Banana image $0.134/img (1K-2K)
-	"gemini-3.1-flash-image":         0.045, // image $0.045/img
-	"grok-imagine-image":             0.02,  // image $0.02/img
+	// ── MiniMax Hailuo video (intl platform, relay/channel/task/hailuo) ──
+	// MiniMax-H3 bills per OUTPUT SECOND upstream: $0.08/s @768P, $0.13/s @2K
+	// (platform.minimax.io pricing, checked 2026-09-15). This row is the 2K
+	// per-second rate, NOT one flat charge per call: the hailuo adaptor's
+	// EstimateBilling multiplies it by "seconds" (4-15) and a "resolution"
+	// ratio (0.08/0.13 for 768P) — e.g. 6s @2K = $0.78. ⚠️ At cost for now;
+	// margin pending Q3 (docs/video-first-wave-prd.md §10). Recalibrate this
+	// row together with hailuo/constants.go H3RatePerSecond* (a test in that
+	// package pins them equal).
+	"MiniMax-H3": 0.13,
+	// v1 Hailuo models: flat per call (their query API reports no usage, so
+	// per-call is the only mechanism). ⚠️ ESTIMATES from public per-clip tier
+	// prices, rounded to the high side per the Seedance convention above —
+	// verify against a real MiniMax bill in P3 before launch.
+	"MiniMax-Hailuo-2.3":      0.49,
+	"MiniMax-Hailuo-2.3-Fast": 0.33,
+	"MiniMax-Hailuo-02":       0.49,
+	"T2V-01-Director":         0.43,
+	"T2V-01":                  0.43,
+	"I2V-01-Director":         0.43,
+	"I2V-01-live":             0.43,
+	"I2V-01":                  0.43,
+	"S2V-01":                  0.43,
+	"gemini-3-pro-image":      0.134, // Nano Banana image $0.134/img (1K-2K)
+	"gemini-3.1-flash-image":  0.045, // image $0.045/img
+	"grok-imagine-image":      0.02,  // image $0.02/img
 }
 
 var defaultAudioRatio = map[string]float64{
