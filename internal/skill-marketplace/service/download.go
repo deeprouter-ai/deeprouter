@@ -32,6 +32,13 @@ var (
 	// ErrPackageMissing maps to HTTP 500 with the exact message PRD §6.2
 	// step 4 specifies.
 	ErrPackageMissing = errors.New("Skill package not available, please contact support")
+	// ErrReferenceListingNotDownloadable maps to HTTP 400 (PRD §13 AC-11):
+	// a reference listing has no ZIP by design — the marketplace card points
+	// its "View on GitHub" button at source_url instead. Checked before
+	// ActiveVersionID below on purpose: a reference skill's ActiveVersionID is
+	// always nil too, and falling through to that check would misreport this
+	// as ErrPackageMissing (500) instead of a clean, expected 400.
+	ErrReferenceListingNotDownloadable = errors.New("this skill is a reference listing; there is no package to download, use its source_url instead")
 )
 
 // InsufficientQuotaError carries the price the 402 response attaches as
@@ -70,6 +77,9 @@ func (s *DownloadService) Download(userID int64, slug string) (*DownloadResult, 
 			return nil, ErrSkillNotAvailable
 		}
 		return nil, err
+	}
+	if skill.ListingType == model.SkillListingTypeReference {
+		return nil, ErrReferenceListingNotDownloadable
 	}
 	if skill.ActiveVersionID == nil {
 		return nil, ErrPackageMissing

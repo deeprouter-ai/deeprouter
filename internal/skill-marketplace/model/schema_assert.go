@@ -66,6 +66,11 @@ var (
 		// Written through pq.StringArray; a plain TEXT column here was a P1
 		// production bug in its own right (fixed in #163).
 		{"skills", "tags", "ARRAY"},
+		// PRD §13 reference listings (addReferenceListingColumns) — added via
+		// ADD COLUMN IF NOT EXISTS, which accepts a pre-existing column of the
+		// wrong type exactly the way CREATE TABLE IF NOT EXISTS accepted V1's.
+		{"skills", "listing_type", "character varying"},
+		{"skills", "source_url", "character varying"},
 	}
 
 	// Indexes and constraints that a name collision can silently swallow,
@@ -76,7 +81,12 @@ var (
 	}
 
 	expectedConstraints = map[string][]string{
-		"skills": {"fk_skills_active_version"},
+		"skills": {
+			"fk_skills_active_version",
+			"skills_listing_type_check",
+			"skills_reference_source_check",
+			"skills_reference_free_check",
+		},
 	}
 )
 

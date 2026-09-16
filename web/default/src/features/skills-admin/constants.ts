@@ -30,6 +30,7 @@ export const SKILL_CATEGORIES = [
   'research',
   'legal',
   'finance',
+  'video',
 ] as const
 
 export const SKILL_STATUS_VARIANTS: Record<SkillStatus, StatusVariant> = {
@@ -64,6 +65,7 @@ export function getSkillCategoryOptions(t: TFunction) {
     research: t('Research'),
     legal: t('Legal'),
     finance: t('Finance'),
+    video: t('Video'),
   }
   return SKILL_CATEGORIES.map((value) => ({ label: labels[value], value }))
 }

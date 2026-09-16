@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-09-12
+
+- **Skill Marketplace: reference listings (`listing_type: reference`)**——商店新增第二种上架方式：外部链接型 skill（比如开源 video skill 的 GitHub 仓库），不打包、不验证，用户点了直接跳转外链，DR 不为其背书。对应 `skill-marketplace-v2-prd.md` §13 / task card P7。
+  - **schema**（`internal/skill-marketplace/model/{skill.go,migrate.go,schema_assert.go}`）：`skills` 表加 `listing_type`（`hosted`/`reference`，缺省 `hosted`）+ `source_url`，加三条 CHECK 约束（类型合法性、引用型必须有链接、引用型必须免费）。`ADD COLUMN IF NOT EXISTS` + 照抄 `addActiveVersionFK` 的 `DO $$ IF NOT EXISTS (pg_constraint)` 写法保证幂等，接进现有 `Migrate()` 序列，天然被 P6 建的 fail-soft 包裹。`schema_assert.go` 补上新列/约束的结构断言。
+  - **校验 + canPublish**（`service/admin_skill.go`）：`source_url` 只做基础 URL 格式校验（有 scheme+host 即可，不限协议不限域名，不要求 github.com），格式不对 400。`listing_type` 仅在创建时可设，`UpdateSkillRequest` 不暴露该字段——不支持转换已有 skill 的类型。`PublishSkill` 按 `listing_type` 分支：`reference` 查 `source_url` 非空，`hosted` 分支原样不动。新增 `ErrInvalidListingType`/`ErrSourceURLRequired`/`ErrInvalidSourceURLFormat`/`ErrReferenceMustBeFree`/`ErrSourceURLOnHostedSkill`。
+  - **下载拒绝**（`service/download.go`）：`reference` 条目调下载接口在 `ActiveVersionID` 检查之前就被拦下（`ErrReferenceListingNotDownloadable`），不会误判成 `ErrPackageMissing`（500）——两者的 `ActiveVersionID` 都是 nil，顺序很关键。
+  - **controller 错误映射**（`controller/{marketplace.go,admin_marketplace.go}`）：新错误类型按 `errors.Is` 显式加进 400/409 分支——这个文件的既有模式是显式枚举，不加进去会全部落到 `default` 的 500。
+  - 🟡 **实现时发现并修复一个真实回归**：`service/admin_skill_test.go` 的 SQLite fixture 手写了一份 `skills` 表结构（不能跑 `Migrate()`，那是纯 PG DDL），没有跟着 model struct 加新列，导致整个 service 包的既有测试全部报 `no column named listing_type`。这个 fixture 是包内所有测试共用的，一改全好。
+  - 🟡 **实现时发现并修复一个真实缺口**：`UpdateSkill` 原来只检查"改价格时够不够钱"，没检查"把一个引用型 skill 改成 paid"——补了 `ErrReferenceMustBeFree` 分支。
+  - **真实 Postgres 验证**（`model/migrate_test.go`，`TEST_POSTGRES_DSN` 门控）：既有的首次执行+二次幂等测试覆盖了新迁移步骤；新增"表已有数据行时加列"专项测试（正确 backfill 成 `hosted`/`NULL`，不会因 `NOT NULL` 炸掉）；新增端到端测试，用真实 `AdminSkillService`/`DownloadService` 走完整流程，并直接绕过 Go 层验证确认两条 CHECK 约束在数据库层真的拦得住。
+  - `gofmt`/`go vet`/`go test ./internal/skill-marketplace/...`（含真 PG 网关测试）全干净。
+- **Skill Marketplace: Admin frontend for reference listings**——上一条的后端能力接上一个 Admin 真能用的界面。对应 task card P8。
+  - **`skills-create-drawer.tsx`**：表单顶部加"上架方式"切换（打包上传 / 引用外部链接）。选引用型：显示 `source_url` 输入框，隐藏"变现方式"（引用型只能免费，切换时顺手把 `monetization_type` 重置为 `free`，避免残留脏状态）。提交时显式带上 `listing_type`，不靠后端猜。
+  - **`skill-metadata-form.tsx`**（编辑页）：引用型 skill 可以改 `source_url`（修正链接拼写），`listing_type` 本身不可编辑——创建后锁定。
+  - **`skill-publish-actions.tsx`**：`canPublish` 按 `listing_type` 分支，跟 `admin_skill.go` 的 `PublishSkill` 逐字对应，前端按钮状态不会跟后端实际行为打架。
+  - **`skill-edit-page.tsx`**：引用型 skill 不渲染 `SkillVersionsPanel`——它永远没有版本，露出"上传版本"入口只会让 Admin 点了发现没用。
+  - **`skills-admin/constants.ts`**：Admin 表单自己有一份独立于 marketplace 筛选列表的 `SKILL_CATEGORIES`，也加了 `video`——两份列表要分别维护。
+  - 🟡 **实现时发现并修复一个真实回归**：`Skill`/`SkillSummary` 类型加上必填的 `listing_type` 字段后，8 个既有测试文件里手写的 fixture 全部编译不过（`tsc -b` 报错），逐个补上 `listing_type: 'hosted'`。
+  - **i18n**：`en.json`/`zh.json` 各追加 10 条新文案，直接在文件末尾插入而不是脚本重排——这两个文件是按功能模块顺序追加的，不是全局字母序，重排会产生几千行无关 diff（走过一次弯路，已撤销重做）。
+  - 新增/更新 12 个测试（`skills-create-drawer`/`skill-metadata-form`/`skill-publish-actions`/`skill-edit-page` 各自的引用型场景）。`tsc -b`、`eslint .`、`prettier --check`、`vitest run src/features/skills-admin`（18 files / 112 tests）全干净。
+- **Skill Marketplace: Marketplace display for reference listings**——用户这一面：详情页遇到 `reference` 条目时换一套操作区。对应 task card P9。
+  - **`skill-detail.tsx`**：`listing_type === 'reference'` 时，把"Download/Buy"按钮整体换成"View on GitHub"外链按钮（`target="_blank" rel="noopener noreferrer"`）+ 一个复制链接的 `CopyButton`，不走登录/购买分支——引用型条目没有下载这回事，不该逼用户先登录。同时隐藏 Price 徽章和"需要 DeepRouter API Key"提示，这两者对引用型条目都不成立。`lucide-react@^1.7.0` 已不带品牌 icon（没有 `Github` 导出），用 `ExternalLink` 代替。
+  - **`skill-card.tsx`**：卡片列表同样隐藏 `reference` 条目的 Price 徽章。
+  - **`index.tsx`**：`CATEGORIES` 加 `video`，两种 `listing_type` 共用同一份分类列表。
+  - **My Skills 排除**：`reference` 条目不出现在 `/user/skills`，这是 P7 的自然结果（`reference` 从不写 `user_enabled_skills`），本卡补一条 `TestListUserSkills_ExcludesReferenceListings`（`internal/skill-marketplace/service/user_skill_test.go`）把这个保证钉在查询层，而不是只信任"没有写入路径"会一直成立。
+  - **新增测试文件** `__tests__/skill-detail.test.tsx`（5 项，这个组件此前完全没有测试覆盖）、`__tests__/skill-card.test.tsx`（3 项）。前者需要把 `PublicLayout`/`Footer` 整体 stub 掉，避免 header 里 `LanguageSwitcher` 等组件的 hook 依赖级联失败；查询 `<Button render={<a/>}>` 渲染出的元素要用 `getByRole('button', ...)` 而不是 `'link'`——项目里这个多态 `Button` 即使渲染成 `<a>` 也保留 `role="button"`。
+  - `go build`/`gofmt`/`go test ./internal/skill-marketplace/...`、`bun run typecheck`、`eslint .`（无 marketplace 相关报错）、`prettier --check`、`vitest run src/features/marketplace`（3 files / 21 tests）全干净。
+
 ## 2026-09-08
 
 - 🔴 **修复生产 `deeprouter.co` 全站 502——自 09-02 P1 上线当天起已持续 6 天**。根因不是代码写错,而是一个从没有人执行过的人工前置步骤:V1 时代的 9 张表在 PR #159 删除 V1 代码时被**刻意保留**(删表不可逆),善后交给 `scripts/migrations/2026-09-01-drop-v1-skill-tables.sql`,该脚本要求"部署 V2 P1 之前先在生产 PG 执行"。它从未被执行,而 `deploy.yml` 是 `push: main` 即部署,**合并与部署是同一瞬间,流程上根本没有留出执行人工步骤的窗口**。

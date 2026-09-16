@@ -76,6 +76,8 @@ export function SkillsCreateDrawer({
   })
 
   const monetizationType = form.watch('monetization_type')
+  const listingType = form.watch('listing_type')
+  const isReference = listingType === 'reference'
 
   const onSubmit = async (data: CreateSkillFormValues) => {
     setIsSubmitting(true)
@@ -86,8 +88,15 @@ export function SkillsCreateDrawer({
         description: data.description,
         category: data.category,
         tags: parseTagsInput(data.tags),
+        // A reference listing is free-only (backend also enforces this via
+        // ErrReferenceMustBeFree) — the schema's refine already blocks
+        // submitting monetization_type:"paid" for one, so this is just
+        // being explicit about what actually goes over the wire.
         monetization_type: data.monetization_type,
         price_usd: data.monetization_type === 'paid' ? data.price_usd : 0,
+        listing_type: data.listing_type,
+        source_url:
+          data.listing_type === 'reference' ? data.source_url : undefined,
       })
       if (result.success && result.data) {
         toast.success(t('Skill created as draft'))
@@ -117,9 +126,13 @@ export function SkillsCreateDrawer({
         <SheetHeader className='border-b px-4 py-3 text-start sm:px-6 sm:py-4'>
           <SheetTitle>{t('Create Skill')}</SheetTitle>
           <SheetDescription>
-            {t(
-              'Creates a draft skill. Upload and activate a version before publishing.'
-            )}
+            {isReference
+              ? t(
+                  'Creates a draft skill that links out to an external repo — no package, no version to upload.'
+                )
+              : t(
+                  'Creates a draft skill. Upload and activate a version before publishing.'
+                )}
           </SheetDescription>
         </SheetHeader>
         <Form {...form}>
@@ -128,6 +141,64 @@ export function SkillsCreateDrawer({
             onSubmit={form.handleSubmit(onSubmit)}
             className='flex-1 space-y-4 overflow-y-auto px-3 py-3 pb-4 sm:space-y-6 sm:px-4'
           >
+            <FormField
+              control={form.control}
+              name='listing_type'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Listing Type')}</FormLabel>
+                  <FormControl>
+                    <NativeSelect
+                      value={field.value}
+                      onChange={(e) => {
+                        const next = e.target
+                          .value as CreateSkillFormValues['listing_type']
+                        field.onChange(next)
+                        // A reference listing is free-only (backend
+                        // enforces this too) — reset so switching types
+                        // never leaves a stale paid+reference combination.
+                        if (next === 'reference') {
+                          form.setValue('monetization_type', 'free')
+                        }
+                      }}
+                    >
+                      <NativeSelectOption value='hosted'>
+                        {t('Hosted (upload & package)')}
+                      </NativeSelectOption>
+                      <NativeSelectOption value='reference'>
+                        {t('Reference (link to external repo)')}
+                      </NativeSelectOption>
+                    </NativeSelect>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {isReference && (
+              <FormField
+                control={form.control}
+                name='source_url'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Source URL')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder='https://github.com/owner/repo'
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Where the "View on GitHub" button on the skill page links to.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             <FormField
               control={form.control}
               name='name'
@@ -212,36 +283,38 @@ export function SkillsCreateDrawer({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name='monetization_type'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Monetization')}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      value={field.value}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target
-                            .value as CreateSkillFormValues['monetization_type']
-                        )
-                      }
-                    >
-                      <NativeSelectOption value='free'>
-                        {t('Free')}
-                      </NativeSelectOption>
-                      <NativeSelectOption value='paid'>
-                        {t('Paid')}
-                      </NativeSelectOption>
-                    </NativeSelect>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {!isReference && (
+              <FormField
+                control={form.control}
+                name='monetization_type'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Monetization')}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        value={field.value}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target
+                              .value as CreateSkillFormValues['monetization_type']
+                          )
+                        }
+                      >
+                        <NativeSelectOption value='free'>
+                          {t('Free')}
+                        </NativeSelectOption>
+                        <NativeSelectOption value='paid'>
+                          {t('Paid')}
+                        </NativeSelectOption>
+                      </NativeSelect>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
-            {monetizationType === 'paid' && (
+            {!isReference && monetizationType === 'paid' && (
               <FormField
                 control={form.control}
                 name='price_usd'

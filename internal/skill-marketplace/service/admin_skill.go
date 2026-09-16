@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -18,6 +19,18 @@ import (
 // spaces, uppercase letters or other characters P3's public URLs won't
 // tolerate later.
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
+// isValidSourceURL is deliberately loose (PRD §13.3): any absolute URL with a
+// scheme and a host passes — no domain allowlist (the field is source_url,
+// not github_url) and no scheme restriction (http is accepted, not just
+// https).
+func isValidSourceURL(raw string) bool {
+	u, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return false
+	}
+	return u.Scheme != "" && u.Host != ""
+}
 
 type AdminSkillService struct {
 	db *gorm.DB
@@ -55,6 +68,10 @@ type CreateSkillRequest struct {
 	Tags             []string `json:"tags"`
 	MonetizationType string   `json:"monetization_type"`
 	PriceUSD         float64  `json:"price_usd"`
+	// ListingType/SourceURL: PRD §13. ListingType defaults to "hosted" when
+	// empty, matching MonetizationType's own default-to-"free" below.
+	ListingType string `json:"listing_type"`
+	SourceURL   string `json:"source_url"`
 }
 
 type UpdateSkillRequest struct {
@@ -65,6 +82,11 @@ type UpdateSkillRequest struct {
 	Tags             []string `json:"tags"`
 	MonetizationType string   `json:"monetization_type"`
 	PriceUSD         *float64 `json:"price_usd"`
+	// SourceURL only — listing_type is create-time only (PRD §13.4 picks it
+	// once, in the same request that supplies source_url); there is no
+	// supported path for converting an existing skill between hosted and
+	// reference, so UpdateSkillRequest does not expose the field at all.
+	SourceURL string `json:"source_url"`
 }
 
 type FeaturedRequest struct {
@@ -170,6 +192,33 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		return nil, ErrPriceRequiredForPaid
 	}
 
+	listingType := req.ListingType
+	if listingType == "" {
+		listingType = model.SkillListingTypeHosted
+	}
+	if listingType != model.SkillListingTypeHosted && listingType != model.SkillListingTypeReference {
+		return nil, ErrInvalidListingType
+	}
+	var sourceURL *string
+	if listingType == model.SkillListingTypeReference {
+		if req.SourceURL == "" {
+			return nil, ErrSourceURLRequired
+		}
+		if !isValidSourceURL(req.SourceURL) {
+			return nil, ErrInvalidSourceURLFormat
+		}
+		if monetization != "free" {
+			return nil, ErrReferenceMustBeFree
+		}
+		sourceURL = &req.SourceURL
+	} else if req.SourceURL != "" {
+		// See ErrSourceURLOnHostedSkill: a hosted skill's marketplace card and
+		// canPublish check both key off source_url being nil — accepting one
+		// here would let it disagree with listing_type from the moment of
+		// creation, the exact inconsistency listing_type exists to prevent.
+		return nil, ErrSourceURLOnHostedSkill
+	}
+
 	skill := &model.Skill{
 		Slug:             req.Slug,
 		Name:             req.Name,
@@ -179,6 +228,8 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		Status:           model.SkillStatusDraft,
 		MonetizationType: monetization,
 		PriceUSD:         req.PriceUSD,
+		ListingType:      listingType,
+		SourceURL:        sourceURL,
 		CreatedBy:        adminID,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
@@ -253,6 +304,21 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	if effectiveMonetization == "paid" && effectivePrice <= 0 {
 		return nil, ErrPriceRequiredForPaid
 	}
+	// listing_type itself is create-time only (see UpdateSkillRequest), so
+	// skill.ListingType is authoritative here — a reference skill can never
+	// legitimately go paid, matching CreateSkill's ErrReferenceMustBeFree.
+	if skill.ListingType == model.SkillListingTypeReference && effectiveMonetization == "paid" {
+		return nil, ErrReferenceMustBeFree
+	}
+	if req.SourceURL != "" {
+		if skill.ListingType != model.SkillListingTypeReference {
+			return nil, ErrSourceURLOnHostedSkill
+		}
+		if !isValidSourceURL(req.SourceURL) {
+			return nil, ErrInvalidSourceURLFormat
+		}
+		updates["source_url"] = req.SourceURL
+	}
 
 	if err := s.db.Model(&skill).Updates(updates).Error; err != nil {
 		if isUniqueViolation(err) {
@@ -277,6 +343,11 @@ var ErrInvalidSlugFormat = errors.New("slug must be lowercase letters, numbers a
 var ErrSkillNotPublished = errors.New("only published skills can be featured")
 var ErrInvalidMonetizationType = errors.New("monetization_type must be 'free' or 'paid'")
 var ErrPriceRequiredForPaid = errors.New("price_usd must be greater than 0 for a paid skill")
+var ErrInvalidListingType = errors.New("listing_type must be 'hosted' or 'reference'")
+var ErrSourceURLRequired = errors.New("source_url is required for a reference listing")
+var ErrInvalidSourceURLFormat = errors.New("source_url must be an absolute URL with a scheme and a host")
+var ErrReferenceMustBeFree = errors.New("a reference listing cannot be paid")
+var ErrSourceURLOnHostedSkill = errors.New("source_url can only be set on a reference listing")
 
 // isUniqueViolation detects unique constraint errors from both PostgreSQL
 // ("duplicate key value violates unique constraint") and SQLite
@@ -304,13 +375,23 @@ func (s *AdminSkillService) PublishSkill(id int64, adminID int) (*model.Skill, e
 		return nil, fmt.Errorf("%w: %s → published", ErrInvalidTransition, skill.Status)
 	}
 
-	// PRD §7.1: draft/deprecated -> published requires active_version_id
-	// to be set. This check was deferred at P1 ("P2 will enforce") and P2
-	// never came back to add it — ErrNoActiveVersion existed but was never
-	// returned anywhere, so the API would happily publish a versionless
-	// skill. Found auditing controller-layer test coverage.
-	if skill.ActiveVersionID == nil {
-		return nil, ErrNoActiveVersion
+	// PRD §7.1 (hosted) / §13.4 (reference): each listing_type has its own
+	// "is there anything to publish" gate — hosted needs an active version,
+	// reference needs its link. This mirrors the frontend's canPublish check
+	// in skill-publish-actions.tsx so a direct API call can't bypass it.
+	if skill.ListingType == model.SkillListingTypeReference {
+		if skill.SourceURL == nil || *skill.SourceURL == "" {
+			return nil, ErrSourceURLRequired
+		}
+	} else {
+		// PRD §7.1: draft/deprecated -> published requires active_version_id
+		// to be set. This check was deferred at P1 ("P2 will enforce") and P2
+		// never came back to add it — ErrNoActiveVersion existed but was never
+		// returned anywhere, so the API would happily publish a versionless
+		// skill. Found auditing controller-layer test coverage.
+		if skill.ActiveVersionID == nil {
+			return nil, ErrNoActiveVersion
+		}
 	}
 
 	fromStatus := skill.Status

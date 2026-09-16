@@ -39,6 +39,7 @@ const CATEGORIES: { value: string; labelKey: string }[] = [
   { value: 'research', labelKey: 'Research' },
   { value: 'legal', labelKey: 'Legal' },
   { value: 'finance', labelKey: 'Finance' },
+  { value: 'video', labelKey: 'Video' },
 ]
 
 // The catalog is admin-curated and small, so one page covers it; 100 is the
@@ -71,7 +72,9 @@ export function MarketplacePage() {
   // PRD §8.1: featured cards on top, rank ascending, at most 4 — only on the
   // unfiltered view. The backend already sorts featured-first, so the first
   // items are the featured ones.
-  const featured = filtered ? [] : skills.filter((s) => s.featured_flag).slice(0, 4)
+  const featured = filtered
+    ? []
+    : skills.filter((s) => s.featured_flag).slice(0, 4)
   const rest = skills.filter((s) => !featured.includes(s))
 
   return (

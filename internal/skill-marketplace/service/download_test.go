@@ -218,6 +218,33 @@ func TestDownload_NoActiveVersion_PackageMissing(t *testing.T) {
 	assert.ErrorIs(t, err, mktsvc.ErrPackageMissing)
 }
 
+// ── Reference listings (PRD §13) ────────────────────────────────────────────
+
+// A reference listing's active_version_id is nil for the exact same reason a
+// broken hosted skill's is (TestDownload_NoActiveVersion_PackageMissing) —
+// without the listing_type check ahead of it, this would misreport as
+// ErrPackageMissing (500) instead of the clean, expected
+// ErrReferenceListingNotDownloadable (400).
+func TestDownload_ReferenceListing_Rejected(t *testing.T) {
+	db := setupDownloadDB(t)
+	svc := newDownloadSvc(db)
+	seedUser(t, db, 42, 0)
+	skillID := insertSkillRow(t, db, "ref-download", "published", "video", false, 0, "2026-01-01 00:00:00")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET listing_type = 'reference', source_url = 'https://github.com/owner/repo' WHERE id = ?`,
+		skillID).Error)
+
+	_, err := svc.Download(42, "ref-download")
+	assert.ErrorIs(t, err, mktsvc.ErrReferenceListingNotDownloadable)
+	assert.Equal(t, int64(0), purchaseCount(t, db, 42, skillID), "must not produce a skill_purchases row")
+
+	var enabledCount int64
+	require.NoError(t, db.Raw(
+		`SELECT COUNT(*) FROM user_enabled_skills WHERE user_id = 42 AND skill_id = ?`, skillID,
+	).Scan(&enabledCount).Error)
+	assert.Equal(t, int64(0), enabledCount, "must not appear in My Skills")
+}
+
 // ── Re-download / upsert ──────────────────────────────────────────────────────
 
 func TestDownload_Redownload_UpdatesVersionID(t *testing.T) {

@@ -20,32 +20,81 @@ import { z } from 'zod'
 import type { TFunction } from 'i18next'
 import { SKILL_SLUG_PATTERN } from '../constants'
 
+// Mirrors service/admin_skill.go's isValidSourceURL (PRD §13.3): scheme + host
+// is enough, deliberately no domain allowlist and no https-only requirement.
+export function isValidSourceUrl(value: string): boolean {
+  try {
+    const u = new URL(value)
+    return u.protocol !== '' && u.host !== ''
+  } catch {
+    return false
+  }
+}
+
 // Shared by the list page's create drawer and the edit page's metadata form.
 export function getCreateSkillFormSchema(t: TFunction) {
-  return z
-    .object({
-      slug: z
-        .string()
-        .min(1, t('Slug is required'))
-        .max(100, t('Slug must be 100 characters or fewer'))
-        .regex(
-          SKILL_SLUG_PATTERN,
-          t('Slug must be lowercase letters, numbers and hyphens only')
-        ),
-      name: z.string().min(1, t('Name is required')).max(200),
-      description: z.string().min(1, t('Description is required')),
-      category: z.string().min(1, t('Category is required')),
-      tags: z.string().optional(),
-      monetization_type: z.enum(['free', 'paid']),
-      price_usd: z.number().min(0).optional(),
-    })
-    .refine(
-      (data) => data.monetization_type === 'free' || (data.price_usd ?? 0) > 0,
-      {
-        message: t('Price must be greater than 0 for a paid skill'),
-        path: ['price_usd'],
-      }
-    )
+  return (
+    z
+      .object({
+        slug: z
+          .string()
+          .min(1, t('Slug is required'))
+          .max(100, t('Slug must be 100 characters or fewer'))
+          .regex(
+            SKILL_SLUG_PATTERN,
+            t('Slug must be lowercase letters, numbers and hyphens only')
+          ),
+        name: z.string().min(1, t('Name is required')).max(200),
+        description: z.string().min(1, t('Description is required')),
+        category: z.string().min(1, t('Category is required')),
+        tags: z.string().optional(),
+        monetization_type: z.enum(['free', 'paid']),
+        price_usd: z.number().min(0).optional(),
+        listing_type: z.enum(['hosted', 'reference']),
+        source_url: z.string().optional(),
+      })
+      .refine(
+        (data) =>
+          data.monetization_type === 'free' || (data.price_usd ?? 0) > 0,
+        {
+          message: t('Price must be greater than 0 for a paid skill'),
+          path: ['price_usd'],
+        }
+      )
+      .refine(
+        (data) =>
+          data.listing_type !== 'reference' ||
+          (data.source_url ?? '').trim() !== '',
+        {
+          message: t('A source URL is required for a reference listing'),
+          path: ['source_url'],
+        }
+      )
+      .refine(
+        (data) =>
+          data.listing_type !== 'reference' ||
+          (data.source_url ?? '').trim() === '' ||
+          isValidSourceUrl(data.source_url ?? ''),
+        {
+          message: t(
+            'Must be an absolute URL, e.g. https://github.com/owner/repo'
+          ),
+          path: ['source_url'],
+        }
+      )
+      // Backend rejects paid reference listings (ErrReferenceMustBeFree) —
+      // catching it here means the admin sees this before submitting, not
+      // after a round trip.
+      .refine(
+        (data) =>
+          data.listing_type !== 'reference' ||
+          data.monetization_type === 'free',
+        {
+          message: t('A reference listing cannot be paid'),
+          path: ['monetization_type'],
+        }
+      )
+  )
 }
 
 export type CreateSkillFormValues = z.infer<
@@ -60,6 +109,8 @@ export const CREATE_SKILL_FORM_DEFAULT_VALUES: CreateSkillFormValues = {
   tags: '',
   monetization_type: 'free',
   price_usd: 0,
+  listing_type: 'hosted',
+  source_url: '',
 }
 
 // tags is a comma-separated string in the form, string[] on the wire.
@@ -82,6 +133,10 @@ export function formatTagsInput(tags: string[] | null | undefined): string {
 // skill is still draft (AC-9) — the form disables/hides the field once the
 // skill has been published, but the schema validates it unconditionally so
 // a draft-state edit gets the same format check CreateSkill uses.
+//
+// No listing_type field here — it is create-time only (Skill.listing_type),
+// so this schema takes source_url on its own and lets the component decide
+// whether to render/submit it at all, based on the skill it already has.
 export function getUpdateSkillFormSchema(t: TFunction) {
   return z
     .object({
@@ -99,12 +154,24 @@ export function getUpdateSkillFormSchema(t: TFunction) {
       tags: z.string().optional(),
       monetization_type: z.enum(['free', 'paid']),
       price_usd: z.number().min(0).optional(),
+      source_url: z.string().optional(),
     })
     .refine(
       (data) => data.monetization_type === 'free' || (data.price_usd ?? 0) > 0,
       {
         message: t('Price must be greater than 0 for a paid skill'),
         path: ['price_usd'],
+      }
+    )
+    .refine(
+      (data) =>
+        (data.source_url ?? '').trim() === '' ||
+        isValidSourceUrl(data.source_url ?? ''),
+      {
+        message: t(
+          'Must be an absolute URL, e.g. https://github.com/owner/repo'
+        ),
+        path: ['source_url'],
       }
     )
 }
