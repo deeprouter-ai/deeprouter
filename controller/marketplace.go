@@ -79,6 +79,8 @@ func DownloadMarketplaceSkill(c *gin.Context) {
 			c.JSON(http.StatusPaymentRequired, resp)
 		case errors.Is(err, mktsvc.ErrPackageMissing):
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		case errors.Is(err, mktsvc.ErrReferenceListingNotDownloadable):
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		}

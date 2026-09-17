@@ -34,6 +34,34 @@ func TestListUserSkills_ReturnsOwnRowsWithStatusAndVersion(t *testing.T) {
 	_ = versionID
 }
 
+// PRD §13 AC-11 — a reference listing must not appear in My Skills. It never
+// gets a user_enabled_skills row in the first place (Download rejects it
+// before that write), so ListUserSkills' inner join can never surface one;
+// this pins that guarantee at the query level rather than trusting the
+// absence of a write path to hold forever.
+func TestListUserSkills_ExcludesReferenceListings(t *testing.T) {
+	db := setupDownloadDB(t)
+	svc := newDownloadSvc(db)
+	seedUser(t, db, 42, 0)
+
+	hostedID, _ := seedFreeSkill(t, db, "hosted-one")
+	_, err := svc.Download(42, "hosted-one")
+	require.NoError(t, err)
+
+	refID := insertSkillRow(t, db, "ref-one", "published", "video", false, 0, "2026-01-01 00:00:00")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET listing_type = 'reference', source_url = 'https://github.com/owner/repo' WHERE id = ?`,
+		refID).Error)
+	_, err = svc.Download(42, "ref-one")
+	require.ErrorIs(t, err, mktsvc.ErrReferenceListingNotDownloadable)
+
+	resp, err := mktsvc.NewUserSkillService(db).ListUserSkills(42, 1, 20)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total, "the reference listing must not count")
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, hostedID, resp.Skills[0].SkillID)
+}
+
 func TestListUserSkills_EmptyIsAnEmptyListNotNull(t *testing.T) {
 	db := setupDownloadDB(t)
 	seedUser(t, db, 42, 0)

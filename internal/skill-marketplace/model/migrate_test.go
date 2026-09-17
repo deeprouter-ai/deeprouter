@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/internal/skill-marketplace/model"
+	"github.com/QuantumNous/new-api/internal/skill-marketplace/service"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -70,6 +71,121 @@ func TestMigrate_RunsAgainstRealPostgres(t *testing.T) {
 	// IF NOT EXISTS / guarded-DO-block design only holds up if a second run
 	// is a genuine no-op.
 	require.NoError(t, model.Migrate(db), "second Migrate() run must be idempotent")
+}
+
+// TestAddReferenceListingColumns_OnTableWithExistingRows simulates the actual
+// upgrade this PR ships into: a database already migrated by a pre-§13
+// binary, with real rows in skills, seeing addReferenceListingColumns for the
+// first time. The idempotency check above only ever adds these columns to a
+// table it just created itself (zero rows) — that proves the statements are
+// safe to re-run, not that ADD COLUMN ... NOT NULL DEFAULT behaves on a
+// populated table, which is what actually happens on deploy.
+func TestAddReferenceListingColumns_OnTableWithExistingRows(t *testing.T) {
+	adminDSN := os.Getenv("TEST_POSTGRES_DSN")
+	if adminDSN == "" {
+		t.Skip("set TEST_POSTGRES_DSN to run the real-Postgres migration test")
+	}
+
+	testDSN := createScratchDatabase(t, adminDSN)
+	db, err := gorm.Open(postgres.Open(testDSN), &gorm.Config{PrepareStmt: true})
+	require.NoError(t, err, "open scratch database")
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Exec(`CREATE TABLE users (id BIGSERIAL PRIMARY KEY)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (1)`).Error)
+
+	// A skills table shaped exactly like migrateSkills' CREATE TABLE, but
+	// built by hand and pre-populated — standing in for a database that a
+	// pre-§13 binary already migrated and real Admins already used.
+	require.NoError(t, db.Exec(`
+		CREATE TABLE skills (
+		  id                BIGSERIAL PRIMARY KEY,
+		  slug              VARCHAR(100) UNIQUE NOT NULL,
+		  name              VARCHAR(200) NOT NULL,
+		  description       TEXT NOT NULL,
+		  category          VARCHAR(50) NOT NULL,
+		  tags              TEXT[] DEFAULT '{}',
+		  status            VARCHAR(20) NOT NULL DEFAULT 'draft',
+		  monetization_type VARCHAR(10) NOT NULL DEFAULT 'free',
+		  price_usd         NUMERIC(10,2) NOT NULL DEFAULT 0,
+		  featured_flag     BOOLEAN DEFAULT FALSE,
+		  featured_rank     INTEGER DEFAULT 0,
+		  active_version_id BIGINT,
+		  created_by        BIGINT NOT NULL REFERENCES users(id),
+		  created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+		  updated_at        TIMESTAMP NOT NULL DEFAULT NOW()
+		)
+	`).Error)
+	require.NoError(t, db.Exec(`
+		INSERT INTO skills (slug, name, description, category, created_by)
+		VALUES ('pre-existing', 'Pre-existing skill', 'd', 'writing', 1)
+	`).Error)
+
+	require.NoError(t, model.Migrate(db), "Migrate() against skills with a pre-existing row")
+
+	var listingType string
+	var sourceURL *string
+	require.NoError(t,
+		db.Raw(`SELECT listing_type, source_url FROM skills WHERE slug = 'pre-existing'`).
+			Row().Scan(&listingType, &sourceURL))
+	require.Equal(t, "hosted", listingType, "pre-existing row must backfill to hosted, not break NOT NULL")
+	require.Nil(t, sourceURL, "pre-existing row's source_url must stay NULL, not some empty-string default")
+}
+
+// TestReferenceListing_EndToEndOnRealPostgres exercises the whole PRD §13
+// path through the real service layer against a real Postgres database that
+// went through the actual Migrate() — not the SQLite fixtures the service
+// package's own tests use, which cannot enforce the skills_* CHECK
+// constraints and would pass even if migrate.go's DDL were wrong.
+func TestReferenceListing_EndToEndOnRealPostgres(t *testing.T) {
+	adminDSN := os.Getenv("TEST_POSTGRES_DSN")
+	if adminDSN == "" {
+		t.Skip("set TEST_POSTGRES_DSN to run the real-Postgres migration test")
+	}
+
+	testDSN := createScratchDatabase(t, adminDSN)
+	db, err := gorm.Open(postgres.Open(testDSN), &gorm.Config{PrepareStmt: true})
+	require.NoError(t, err, "open scratch database")
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Exec(`CREATE TABLE users (id BIGSERIAL PRIMARY KEY)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (1)`).Error)
+	require.NoError(t, model.Migrate(db))
+
+	adminSvc := service.NewAdminSkillService(db)
+	skill, err := adminSvc.CreateSkill(service.CreateSkillRequest{
+		Slug: "e2e-ref-skill", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
+	}, 1)
+	require.NoError(t, err, "CreateSkill against real Postgres")
+
+	published, err := adminSvc.PublishSkill(skill.ID, 1)
+	require.NoError(t, err, "PublishSkill against real Postgres")
+	require.Equal(t, "published", published.Status)
+
+	downloadSvc := service.NewDownloadService(db, func() float64 { return 500_000 })
+	_, err = downloadSvc.Download(1, "e2e-ref-skill")
+	require.ErrorIs(t, err, service.ErrReferenceListingNotDownloadable,
+		"a published reference listing must still refuse to be downloaded")
+
+	// The CHECK constraint, not just Go-level validation: a direct write that
+	// bypasses AdminSkillService entirely must still be refused by the
+	// database itself.
+	err = db.Exec(`
+		INSERT INTO skills (slug, name, description, category, listing_type, source_url, created_by)
+		VALUES ('e2e-bad-ref', 'n', 'd', 'video', 'reference', NULL, 1)
+	`).Error
+	require.Error(t, err, "skills_reference_source_check must reject a reference row with no source_url")
+
+	err = db.Exec(`
+		INSERT INTO skills (slug, name, description, category, listing_type, source_url, monetization_type, price_usd, created_by)
+		VALUES ('e2e-bad-ref-paid', 'n', 'd', 'video', 'reference', 'https://github.com/o/r', 'paid', 5, 1)
+	`).Error
+	require.Error(t, err, "skills_reference_free_check must reject a paid reference row")
 }
 
 // createScratchDatabase opens the admin DSN's own (maintenance) database,

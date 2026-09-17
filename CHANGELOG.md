@@ -23,6 +23,52 @@
   - v1 老 9 型号补平价占位(偏高侧估,P3 对真实账单校准)。
   - 回归测试 `hailuo/constants_test.go`(7 个:漏价守卫、每秒价与常量一致、H3 能力参数、v2 转换/钳制/首帧、v2 状态解析),接进 `unit-test.yml` + `airbotix-internal.yml` 双门(含 path filter)。
   - `scripts/seed-models/channels.yaml` 新增「MiniMax 国际站视频 Hailuo」渠道(type 35、`MINIMAX_API_KEY_INTL`、base_url `api.minimax.io`——与 CN 三域名严格区分)。
+## 2026-09-12
+
+- **Skill Marketplace: reference listings (`listing_type: reference`)**——商店新增第二种上架方式：外部链接型 skill（比如开源 video skill 的 GitHub 仓库），不打包、不验证，用户点了直接跳转外链，DR 不为其背书。对应 `skill-marketplace-v2-prd.md` §13 / task card P7。
+  - **schema**（`internal/skill-marketplace/model/{skill.go,migrate.go,schema_assert.go}`）：`skills` 表加 `listing_type`（`hosted`/`reference`，缺省 `hosted`）+ `source_url`，加三条 CHECK 约束（类型合法性、引用型必须有链接、引用型必须免费）。`ADD COLUMN IF NOT EXISTS` + 照抄 `addActiveVersionFK` 的 `DO $$ IF NOT EXISTS (pg_constraint)` 写法保证幂等，接进现有 `Migrate()` 序列，天然被 P6 建的 fail-soft 包裹。`schema_assert.go` 补上新列/约束的结构断言。
+  - **校验 + canPublish**（`service/admin_skill.go`）：`source_url` 只做基础 URL 格式校验（有 scheme+host 即可，不限协议不限域名，不要求 github.com），格式不对 400。`listing_type` 仅在创建时可设，`UpdateSkillRequest` 不暴露该字段——不支持转换已有 skill 的类型。`PublishSkill` 按 `listing_type` 分支：`reference` 查 `source_url` 非空，`hosted` 分支原样不动。新增 `ErrInvalidListingType`/`ErrSourceURLRequired`/`ErrInvalidSourceURLFormat`/`ErrReferenceMustBeFree`/`ErrSourceURLOnHostedSkill`。
+  - **下载拒绝**（`service/download.go`）：`reference` 条目调下载接口在 `ActiveVersionID` 检查之前就被拦下（`ErrReferenceListingNotDownloadable`），不会误判成 `ErrPackageMissing`（500）——两者的 `ActiveVersionID` 都是 nil，顺序很关键。
+  - **controller 错误映射**（`controller/{marketplace.go,admin_marketplace.go}`）：新错误类型按 `errors.Is` 显式加进 400/409 分支——这个文件的既有模式是显式枚举，不加进去会全部落到 `default` 的 500。
+  - 🟡 **实现时发现并修复一个真实回归**：`service/admin_skill_test.go` 的 SQLite fixture 手写了一份 `skills` 表结构（不能跑 `Migrate()`，那是纯 PG DDL），没有跟着 model struct 加新列，导致整个 service 包的既有测试全部报 `no column named listing_type`。这个 fixture 是包内所有测试共用的，一改全好。
+  - 🟡 **实现时发现并修复一个真实缺口**：`UpdateSkill` 原来只检查"改价格时够不够钱"，没检查"把一个引用型 skill 改成 paid"——补了 `ErrReferenceMustBeFree` 分支。
+  - **真实 Postgres 验证**（`model/migrate_test.go`，`TEST_POSTGRES_DSN` 门控）：既有的首次执行+二次幂等测试覆盖了新迁移步骤；新增"表已有数据行时加列"专项测试（正确 backfill 成 `hosted`/`NULL`，不会因 `NOT NULL` 炸掉）；新增端到端测试，用真实 `AdminSkillService`/`DownloadService` 走完整流程，并直接绕过 Go 层验证确认两条 CHECK 约束在数据库层真的拦得住。
+  - `gofmt`/`go vet`/`go test ./internal/skill-marketplace/...`（含真 PG 网关测试）全干净。
+- **Skill Marketplace: Admin frontend for reference listings**——上一条的后端能力接上一个 Admin 真能用的界面。对应 task card P8。
+  - **`skills-create-drawer.tsx`**：表单顶部加"上架方式"切换（打包上传 / 引用外部链接）。选引用型：显示 `source_url` 输入框，隐藏"变现方式"（引用型只能免费，切换时顺手把 `monetization_type` 重置为 `free`，避免残留脏状态）。提交时显式带上 `listing_type`，不靠后端猜。
+  - **`skill-metadata-form.tsx`**（编辑页）：引用型 skill 可以改 `source_url`（修正链接拼写），`listing_type` 本身不可编辑——创建后锁定。
+  - **`skill-publish-actions.tsx`**：`canPublish` 按 `listing_type` 分支，跟 `admin_skill.go` 的 `PublishSkill` 逐字对应，前端按钮状态不会跟后端实际行为打架。
+  - **`skill-edit-page.tsx`**：引用型 skill 不渲染 `SkillVersionsPanel`——它永远没有版本，露出"上传版本"入口只会让 Admin 点了发现没用。
+  - **`skills-admin/constants.ts`**：Admin 表单自己有一份独立于 marketplace 筛选列表的 `SKILL_CATEGORIES`，也加了 `video`——两份列表要分别维护。
+  - 🟡 **实现时发现并修复一个真实回归**：`Skill`/`SkillSummary` 类型加上必填的 `listing_type` 字段后，8 个既有测试文件里手写的 fixture 全部编译不过（`tsc -b` 报错），逐个补上 `listing_type: 'hosted'`。
+  - **i18n**：`en.json`/`zh.json` 各追加 10 条新文案，直接在文件末尾插入而不是脚本重排——这两个文件是按功能模块顺序追加的，不是全局字母序，重排会产生几千行无关 diff（走过一次弯路，已撤销重做）。
+  - 新增/更新 12 个测试（`skills-create-drawer`/`skill-metadata-form`/`skill-publish-actions`/`skill-edit-page` 各自的引用型场景）。`tsc -b`、`eslint .`、`prettier --check`、`vitest run src/features/skills-admin`（18 files / 112 tests）全干净。
+- **Skill Marketplace: Marketplace display for reference listings**——用户这一面：详情页遇到 `reference` 条目时换一套操作区。对应 task card P9。
+  - **`skill-detail.tsx`**：`listing_type === 'reference'` 时，把"Download/Buy"按钮整体换成"View on GitHub"外链按钮（`target="_blank" rel="noopener noreferrer"`）+ 一个复制链接的 `CopyButton`，不走登录/购买分支——引用型条目没有下载这回事，不该逼用户先登录。同时隐藏 Price 徽章和"需要 DeepRouter API Key"提示，这两者对引用型条目都不成立。`lucide-react@^1.7.0` 已不带品牌 icon（没有 `Github` 导出），用 `ExternalLink` 代替。
+  - **`skill-card.tsx`**：卡片列表同样隐藏 `reference` 条目的 Price 徽章。
+  - **`index.tsx`**：`CATEGORIES` 加 `video`，两种 `listing_type` 共用同一份分类列表。
+  - **My Skills 排除**：`reference` 条目不出现在 `/user/skills`，这是 P7 的自然结果（`reference` 从不写 `user_enabled_skills`），本卡补一条 `TestListUserSkills_ExcludesReferenceListings`（`internal/skill-marketplace/service/user_skill_test.go`）把这个保证钉在查询层，而不是只信任"没有写入路径"会一直成立。
+  - **新增测试文件** `__tests__/skill-detail.test.tsx`（5 项，这个组件此前完全没有测试覆盖）、`__tests__/skill-card.test.tsx`（3 项）。前者需要把 `PublicLayout`/`Footer` 整体 stub 掉，避免 header 里 `LanguageSwitcher` 等组件的 hook 依赖级联失败；查询 `<Button render={<a/>}>` 渲染出的元素要用 `getByRole('button', ...)` 而不是 `'link'`——项目里这个多态 `Button` 即使渲染成 `<a>` 也保留 `role="button"`。
+  - `go build`/`gofmt`/`go test ./internal/skill-marketplace/...`、`bun run typecheck`、`eslint .`（无 marketplace 相关报错）、`prettier --check`、`vitest run src/features/marketplace`（3 files / 21 tests）全干净。
+
+## 2026-09-08
+
+- 🔴 **修复生产 `deeprouter.co` 全站 502——自 09-02 P1 上线当天起已持续 6 天**。根因不是代码写错,而是一个从没有人执行过的人工前置步骤:V1 时代的 9 张表在 PR #159 删除 V1 代码时被**刻意保留**(删表不可逆),善后交给 `scripts/migrations/2026-09-01-drop-v1-skill-tables.sql`,该脚本要求"部署 V2 P1 之前先在生产 PG 执行"。它从未被执行,而 `deploy.yml` 是 `push: main` 即部署,**合并与部署是同一瞬间,流程上根本没有留出执行人工步骤的窗口**。
+  - **崩溃链**:V2 复用了 V1 的三个表名(`skills`/`skill_versions`/`user_enabled_skills`)但结构不同(V1 `skills.id` 是 `char(36)`,V2 是 `BIGSERIAL`)。建表语句全部是 `CREATE TABLE IF NOT EXISTS`,老表在,于是**静默跳过**——不报错、只有一句 `NOTICE`,`err == nil`,迁移继续往下走,代码从此认定 `skills.id` 是 bigint 而库里躺着的是字符串。直到轮到建第一张 V1 从来没有过的表 `skill_purchases`(V1 叫 `skill_purchase_orders`),它的 `skill_id BIGINT REFERENCES skills(id)` 指不到 `char(36)` 主键,Postgres 拒绝:`foreign key constraint "skill_purchases_skill_id_fkey" cannot be implemented (SQLSTATE 42804)`。`migrateDB` 失败 → `main.go` 的 `common.FatalLog` → 进程退出 → `restart: unless-stopped` 拉起 → 再崩,**无限循环**,Caddy 永远等不到后端。
+  - **为什么 6 天没被发现**:`deploy.yml` 只检查 SSM 里 `docker compose up -d` 这条命令的退出码。`up -d` 只要容器**启动了**就返回 0,完全不管它几秒后是否又退出——所以三次生产部署(P1、P3、P5)CI 全绿,而生产一直是死的。
+  - **修法(`internal/skill-marketplace/model/legacy_v1.go`,新文件)**:把那个人工脚本的逻辑写进启动迁移。既然确认了不会有人手工执行,就让它自动发生。在 `Migrate()` 最前面加一步,把 9 张 V1 表**连同它们拥有的索引、约束、序列**一起改名到 `_v1_bak_` 前缀下,腾出名字给 V2;**只改名,绝不 DROP**,V1 数据一行不少地留在备份表里。原脚本里 `ALTER TABLE users DROP COLUMN tier2_telemetry_consent` 那两行**刻意没有搬进来**——不可逆,且与解锁启动无关,自动执行的东西里不该有不可逆操作。
+  - 🔴 **只改表名是不够的,这是最容易漏的地方**。三类对象在表改名时会留在原地,各有各的坏法:①**索引名在 PostgreSQL 里是全局的**(与表共享命名空间),V1 和 V2 都有 `idx_skills_featured`,不腾开的话 V2 的 `CREATE INDEX IF NOT EXISTS` 会静默跳过,发布一张没有该索引的表;②**约束名跟着表走**,而 `addActiveVersionFK` 检查约束是否存在时**只按名字查、没限定表**,老约束跟到 `_v1_bak_skills` 上之后会让这个检查永远返回真,V2 的 `skills` 从此**再也拿不到那条外键**;③**序列同样不跟着改名**,会把 V2 的序列挤成 `xxx_id_seq1`,让生产的 schema 与所有其他环境**永久不一致**——这一条是靠对比隔离库与全新库的 `pg_dump` 逐字 diff 才发现的,当时它是唯一剩下的差异。三者失败后都**不会崩**,服务照常起,schema 悄悄长歪。
+  - 🔴 **不能按"已知的 V1 对象名单"来清理**。6 天崩溃循环期间,V2 自己的迁移已经把 `idx_skills_status`、`idx_skills_created` 和 `fk_skills_active_version` 一件件加到了 V1 的老表上(这些 DDL 在 V1 表上是合法的),所以生产那张表现在是个混血,任何硬编码名单都会漏掉这些。实现改为**从系统目录读出这张表实际拥有什么,有什么改什么**。
+  - 🔴 **还要能从"人工脚本被执行过"的状态里恢复**——补测试时才发现的,而且是个很可能发生的状态,因为那个脚本本来就是给人执行的。它**只改表名,不改索引和约束**,且没有事务(遇到不存在的表就中途 abort,复现事故时我自己就撞上了)。如果有人执行过它,数据库会变成:`_v1_bak_skills` 存在,但 `idx_skills_featured` / `idx_skills_status` / `idx_skills_created` / `fk_skills_active_version` 这些名字**仍被它占着**。此时检测发现没有 V1 的 `skills` 表 → 正确地判定无事可做 → V2 建表 → 那四个 `CREATE ... IF NOT EXISTS` **全部静默跳过**,marketplace 带着缺三个索引和一条外键上线,没有任何报错。补 `freeNamesHeldByBackupTables`:无论本次有没有隔离动作都会跑,把所有 `_v1_bak_` 前缀表**自己拥有但没带前缀**的对象一并改名,把这些名字腾还给 V2。这个不变式("备份表只拥有带前缀的对象")天然幂等。**这个 bug 是被 `schema_assert.go` 的断言抓出来的**——那个当初被定位成"只留给将来有日志权限的人"的东西,在开发阶段就先抓到了一个真问题。
+  - **双重特征检测**才动手:`skills.id` 是字符类型(V2 的主键永远是 bigint,这是结构性不变量,后来的 PR 可以给表加列但不会改主键类型)**并且**存在 V1 独有的列。单一信号不够——将来某个 PR 完全可能给 V2 加一个叫 `required_plan` 的列,那时单信号检测会把一张装着真实数据的活表改名掉。整个操作包在一个事务里(PG 支持事务性 DDL),失败整体回滚;干净库/已隔离库/非 PG 方言一律严格 no-op;目标名被占用时自动加后缀,保证可重复执行。
+  - `addActiveVersionFK` 的存在性检查补上 `AND conrelid = to_regclass('skills')` 限定到表(`migrate.go`)。
+- 🟡 **marketplace 迁移失败不再拖垮网关**(`migrate.go` 的 `migrateOrReport`)。marketplace 是整条迁移链的**最后一步**,它之前的所有迁移(users/channels/tokens/billing/referral)都已完成,后面也没有任何东西依赖它——可它的失败却一路传到 `FatalLog` 把进程杀掉。一个全新的、可选的功能模块建表失败,不应该让整个 LLM 网关下线。降级逻辑放在 `internal/` 而不是改 `model/main.go` 的调用点:"marketplace 的建表失败该不该致命"是 marketplace 自己的策略,**`model/main.go` 一行未动**。
+  - ⚠️ **代价是真实的**:从此 marketplace 的 schema 问题在生产上是静默的。没有部署健康检查、没有诊断接口、团队没有生产日志权限,唯一的外部症状是公开的 `/api/skills` 把 Postgres 原文透传出来——而那只覆盖"会让查询失败"的那一类。**缺索引、缺外键这两种(恰恰是本次发现的两个坑)完全没有外部症状,不会有任何人知道。** 这是 2026-09-08 权衡后明确接受的取舍。
+- 🟢 **建表后结构断言**(`schema_assert.go`,新文件)。`IF NOT EXISTS` 会把一张名字对、结构错的表当成"已存在"接受,这正是让 V1 的表冒充 V2 的表长达 6 天的机制。断言检查迁移**实际建出来的东西**是不是它想建的:五张表存在、`skills.id`/`skill_versions.id`/`skill_purchases.skill_id` 是 bigint、`skills.tags` 是数组、`idx_skills_*` 三个索引和 `fk_skills_active_version` 确实挂在 `skills` 上(**按表限定查询,只查名字正是本文件要抓的那个错误**)。一次报出全部问题而不是遇到第一个就停——读到这条日志的人大概率没有第二次机会。断言的定位在文件头写明:**它是留给将来有日志权限的人的,不是本团队的安全网**。
+- **测试**(`legacy_v1_test.go`,新文件,`TEST_POSTGRES_DSN` 门控,沿用 `migrate_test.go` 的约定):17 组,夹具忠实复现生产状态——不是纯 V1,而是带上崩溃循环期间被加进去的 V2 索引和外键。覆盖:9 张表连同索引/约束/序列全部隔离且 V2 五张表在**同一次启动内**建出、V1 数据完整保留、**隔离后能真的写入一条技能且 `tags` 正确往返**(schema 对不等于能用,而这次事故涉及的字段全在写入路径上)、外键落在 V2 表上、featured 索引落在 V2 表上且是 V2 的定义(带 `published` 分区条件)、V2 保住未加后缀的序列名、V1 的约束/索引/序列确实带上前缀且原名被腾空、**从人工脚本执行过的状态中恢复**、备份名已被占用时落到下一个空号、干净库严格 no-op、重复执行 no-op、**双重检测两个信号缺一不可**(加 `required_plan` 列的 V2 表不动、只有字符 id 的陌生表也不动)、非 PG 方言 no-op、`Migrate()` 吞错误而 `migrate()` 不吞、断言能发现缺表/缺列/类型错/缺索引/缺外键且一次报全、**失败时整体回滚**(用尽 50 个后缀强制在最后一张表失败,断言前八张一张都没动)。
+  - 其中三条做过 red→green 验证:撤掉 `conrelid` 限定、去掉事务、去掉 `freeNamesHeldByBackupTables`,对应测试各自正确变红。撤掉 `conrelid` 时**主测试仍然是绿的**(隔离本身已把老约束腾空),只有那个专属测试红——说明该限定是纵深防御,而那个测试是唯一钉住它的东西。
+- **真机端到端验证**:同一个镜像、同一个带 V1 遗留表的库,打补丁前 `Exited (1)` 报错逐字一致,打补丁后 `ready in 1329 ms`;隔离后的库与全新库的 V2 schema `pg_dump` **逐字相同(157 行,零差异)**,残留对象全部带 `_v1_bak_` 前缀。
+- ⚠️ **本次未处理、需另行决定的两件事**:①`deploy.yml` 仍然不验证容器起来后是否存活(生产挂 6 天而 CI 全绿的直接原因);②CI 的两个测试 workflow **都不跑真实 Postgres**,本次事故涉及的三个 bug(42601 多语句 Exec、`tags text[]` 不可写、42804 外键类型)全部属于"SQLite 过、Postgres 崩"这一类,结构性地测不出来。另:`scripts/migrations/2026-09-01-cleanup-v1-bak-tables.sql` 做的是真正的 `DROP TABLE`,`_v1_bak_*` 是本次事故唯一的数据后路,**生产稳定验证若干天之前不要执行**。
 
 ## 2026-09-05
 

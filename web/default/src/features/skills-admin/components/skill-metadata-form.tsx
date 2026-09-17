@@ -65,6 +65,7 @@ function toFormValues(skill: SkillSummary): UpdateSkillFormValues {
     tags: formatTagsInput(skill.tags),
     monetization_type: skill.monetization_type,
     price_usd: skill.price_usd,
+    source_url: skill.source_url ?? '',
   }
 }
 
@@ -97,6 +98,7 @@ export function SkillMetadataForm({
 
   const hasEverBeenPublished =
     skill.status === 'published' || skill.status === 'deprecated'
+  const isReference = skill.listing_type === 'reference'
 
   const submit = async (values: UpdateSkillFormValues) => {
     setIsSubmitting(true)
@@ -109,6 +111,10 @@ export function SkillMetadataForm({
         tags: parseTagsInput(values.tags),
         monetization_type: values.monetization_type,
         price_usd: values.monetization_type === 'paid' ? values.price_usd : 0,
+        // listing_type isn't editable (see UpdateSkillRequest) — only send
+        // source_url when this is actually a reference listing; the backend
+        // rejects it on a hosted skill (ErrSourceURLOnHostedSkill).
+        source_url: isReference ? values.source_url : undefined,
       })
       if (result.success) {
         toast.success(t('Skill updated'))
@@ -235,36 +241,62 @@ export function SkillMetadataForm({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name='monetization_type'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Monetization')}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      value={field.value}
-                      onChange={(e) =>
-                        field.onChange(
-                          e.target
-                            .value as UpdateSkillFormValues['monetization_type']
-                        )
-                      }
-                    >
-                      <NativeSelectOption value='free'>
-                        {t('Free')}
-                      </NativeSelectOption>
-                      <NativeSelectOption value='paid'>
-                        {t('Paid')}
-                      </NativeSelectOption>
-                    </NativeSelect>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isReference && (
+              <FormField
+                control={form.control}
+                name='source_url'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Source URL')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder='https://github.com/owner/repo'
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Where the "View on GitHub" button on the skill page links to.'
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
-            {monetizationType === 'paid' && (
+            {!isReference && (
+              <FormField
+                control={form.control}
+                name='monetization_type'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Monetization')}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        value={field.value}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target
+                              .value as UpdateSkillFormValues['monetization_type']
+                          )
+                        }
+                      >
+                        <NativeSelectOption value='free'>
+                          {t('Free')}
+                        </NativeSelectOption>
+                        <NativeSelectOption value='paid'>
+                          {t('Paid')}
+                        </NativeSelectOption>
+                      </NativeSelect>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {!isReference && monetizationType === 'paid' && (
               <FormField
                 control={form.control}
                 name='price_usd'

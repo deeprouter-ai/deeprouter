@@ -37,9 +37,15 @@ export function SkillPublishActions({
 }) {
   const { t } = useTranslation()
 
+  // PRD §13.4: each listing_type has its own "is there anything to publish"
+  // gate — mirrors PublishSkill's server-side check exactly (admin_skill.go)
+  // so this button's disabled state never disagrees with what the API would
+  // actually do.
   const canPublish =
     (skill.status === 'draft' || skill.status === 'deprecated') &&
-    !!skill.active_version_id
+    (skill.listing_type === 'reference'
+      ? !!skill.source_url
+      : !!skill.active_version_id)
 
   const handlePublish = async () => {
     try {
@@ -93,7 +99,9 @@ export function SkillPublishActions({
     <Tooltip>
       <TooltipTrigger render={<div />}>{publishButton}</TooltipTrigger>
       <TooltipContent>
-        {t('Upload and activate a version before publishing')}
+        {skill.listing_type === 'reference'
+          ? t('Set a source URL before publishing')
+          : t('Upload and activate a version before publishing')}
       </TooltipContent>
     </Tooltip>
   )

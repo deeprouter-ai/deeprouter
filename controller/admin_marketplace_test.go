@@ -56,6 +56,8 @@ func setupMarketplaceControllerTestDB(t *testing.T) *gorm.DB {
 			featured_flag     INTEGER DEFAULT 0,
 			featured_rank     INTEGER DEFAULT 0,
 			active_version_id INTEGER,
+			listing_type      TEXT NOT NULL DEFAULT 'hosted',
+			source_url        TEXT,
 			created_by        INTEGER NOT NULL,
 			created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -105,6 +107,24 @@ func insertTestSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 	require.NoError(t, db.Exec(
 		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
 		slug, "Test Skill", "d", "code", status, 1,
+	).Error)
+	var id int64
+	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
+	return id
+}
+
+// insertTestReferenceSkill seeds a reference-listing skill directly via SQL,
+// bypassing AdminSkillService's own validation — used to reach states the
+// service layer would never produce on its own (e.g. a reference row with no
+// source_url), to prove the controller's defense-in-depth mapping actually
+// fires rather than assuming the service-layer guard is the only thing
+// standing between that state and a 500.
+func insertTestReferenceSkill(t *testing.T, db *gorm.DB, slug, status, sourceURL string) int64 {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO skills (slug, name, description, category, status, listing_type, source_url, created_by)
+		 VALUES (?, ?, ?, ?, ?, 'reference', ?, ?)`,
+		slug, "Test Skill", "d", "video", status, sourceURL, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -167,6 +187,10 @@ func decodeMarketplaceResponse(t *testing.T, recorder *httptest.ResponseRecorder
 
 func intToStr(id int64) string {
 	return strconv.FormatInt(id, 10)
+}
+
+func floatPtr(f float64) *float64 {
+	return &f
 }
 
 // ── param helpers (skillIDParam / versionIDParam) ──────────────────────────────
@@ -310,6 +334,106 @@ func TestAdminCreateSkill_PaidWithZeroPrice_Returns400(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
+// ── AdminCreateSkill — reference listings (PRD §13, AC-11 #1) ──────────────────
+//
+// admin_skill_test.go already proves the service layer rejects these; the
+// tests below exist because controller/admin_marketplace.go maps each new
+// service error to an HTTP status through its own hand-written errors.Is
+// switch (see the file header), and that mapping has no coverage of its own
+// until now — a new sentinel error left out of the switch falls through to
+// 500 silently, and nothing but a test exercising the actual handler catches it.
+
+func TestAdminCreateSkill_Reference_MissingSourceURL_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "ref-no-url", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference",
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrSourceURLRequired.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminCreateSkill_Reference_InvalidSourceURLFormat_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "ref-bad-url", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "not-a-url",
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrInvalidSourceURLFormat.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminCreateSkill_Reference_Paid_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "ref-paid", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "https://github.com/o/r",
+		MonetizationType: "paid", PriceUSD: 5,
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrReferenceMustBeFree.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminCreateSkill_Hosted_WithSourceURL_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "hosted-with-url", Name: "n", Description: "d", Category: "c",
+		SourceURL: "https://github.com/o/r",
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrSourceURLOnHostedSkill.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminCreateSkill_InvalidListingType_Returns400(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "bogus-type", Name: "n", Description: "d", Category: "c",
+		ListingType: "bogus",
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrInvalidListingType.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminCreateSkill_Reference_Success_Returns200(t *testing.T) {
+	setupMarketplaceControllerTestDB(t)
+	req := mktsvc.CreateSkillRequest{
+		Slug: "ref-ok", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "https://github.com/o/r",
+	}
+	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
+
+	AdminCreateSkill(ctx)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	resp := decodeMarketplaceResponse(t, recorder)
+	assert.True(t, resp.Success)
+	var skill mktmodel.Skill
+	require.NoError(t, json.Unmarshal(resp.Data, &skill))
+	assert.Equal(t, "reference", skill.ListingType)
+	require.NotNil(t, skill.SourceURL)
+	assert.Equal(t, "https://github.com/o/r", *skill.SourceURL)
+}
+
 // ── AdminUpdateSkill ─────────────────────────────────────────────────────────
 
 func TestAdminUpdateSkill_NotFound_Returns404(t *testing.T) {
@@ -379,6 +503,46 @@ func TestAdminUpdateSkill_DuplicateSlug_Returns409(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, recorder.Code)
 }
 
+func TestAdminUpdateSkill_Reference_SwitchToPaid_Returns400(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestReferenceSkill(t, db, "ref-going-paid", "draft", "https://github.com/o/r")
+	req := mktsvc.UpdateSkillRequest{MonetizationType: "paid", PriceUSD: floatPtr(5)}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrReferenceMustBeFree.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminUpdateSkill_Hosted_WithSourceURL_Returns400(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestSkill(t, db, "hosted-adding-url", "draft")
+	req := mktsvc.UpdateSkillRequest{SourceURL: "https://github.com/o/r"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, mktsvc.ErrSourceURLOnHostedSkill.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminUpdateSkill_Reference_EditSourceURL_Returns200(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestReferenceSkill(t, db, "ref-editing-url", "draft", "https://github.com/o/old")
+	req := mktsvc.UpdateSkillRequest{SourceURL: "https://github.com/o/new"}
+	ctx, recorder := marketplaceContext(t, http.MethodPut, req, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminUpdateSkill(ctx)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	resp := decodeMarketplaceResponse(t, recorder)
+	var skill mktmodel.Skill
+	require.NoError(t, json.Unmarshal(resp.Data, &skill))
+	require.NotNil(t, skill.SourceURL)
+	assert.Equal(t, "https://github.com/o/new", *skill.SourceURL)
+}
+
 // ── AdminPublishSkill ────────────────────────────────────────────────────────
 
 func TestAdminPublishSkill_NotFound_Returns404(t *testing.T) {
@@ -399,6 +563,42 @@ func TestAdminPublishSkill_NoActiveVersion_Returns409(t *testing.T) {
 
 	assert.Equal(t, http.StatusConflict, recorder.Code)
 	assert.Contains(t, decodeMarketplaceResponse(t, recorder).Message, "no active version")
+}
+
+// A reference listing can never actually reach this state through the public
+// API — AdminCreateSkill requires source_url up front and AdminUpdateSkill
+// can never clear it back to empty (§ admin_skill.go UpdateSkill: `if
+// req.SourceURL != ""`) — so this seeds the row directly, the same way
+// TestAdminPublishSkill_InvalidTransition_Returns409 above reaches an
+// otherwise-unreachable status. It exists to prove PublishSkill's defense in
+// depth actually maps to 409 through the controller, not just in the service
+// layer's own tests.
+func TestAdminPublishSkill_Reference_MissingSourceURL_Returns409(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	id := insertTestReferenceSkill(t, db, "ref-no-url-somehow", "draft", "")
+	ctx, recorder := marketplaceContext(t, http.MethodPost, nil, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminPublishSkill(ctx)
+
+	assert.Equal(t, http.StatusConflict, recorder.Code)
+	assert.Equal(t, mktsvc.ErrSourceURLRequired.Error(), decodeMarketplaceResponse(t, recorder).Message)
+}
+
+func TestAdminPublishSkill_Reference_Success_Returns200(t *testing.T) {
+	db := setupMarketplaceControllerTestDB(t)
+	// Unlike a hosted skill, a reference listing publishes with no version at
+	// all — this is the controller-level mirror of admin_skill_test.go's
+	// TestPublishSkill_Reference_WithSourceURL_Succeeds.
+	id := insertTestReferenceSkill(t, db, "ref-publish-me", "draft", "https://github.com/o/r")
+	ctx, recorder := marketplaceContext(t, http.MethodPost, nil, gin.Params{{Key: "id", Value: intToStr(id)}})
+
+	AdminPublishSkill(ctx)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	resp := decodeMarketplaceResponse(t, recorder)
+	var skill mktmodel.Skill
+	require.NoError(t, json.Unmarshal(resp.Data, &skill))
+	assert.Equal(t, "published", skill.Status)
 }
 
 func TestAdminPublishSkill_InvalidTransition_Returns409(t *testing.T) {

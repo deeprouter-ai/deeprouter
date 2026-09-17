@@ -71,7 +71,7 @@ jobs:
           # Upstream-adjacent fork tests (kept in sync with airbotix-internal.yml).
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
           go test ./relay/ -run 'TestApplyAirbotixPolicy|TestClampUint|TestCheckAirbotixModelWhitelist|TestKidsModeCoverageMatrix' -count=1 -race -timeout 60s
-          go test ./controller/ -run 'TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion' -count=1 -race -timeout 60s
+          go test ./controller/ -run 'TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill' -count=1 -race -timeout 60s
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance + MiniMax/Hailuo video ModelLists (价格未配置

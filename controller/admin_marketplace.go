@@ -81,7 +81,12 @@ func AdminCreateSkill(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": "slug already exists"})
 		case errors.Is(err, mktsvc.ErrInvalidSlugFormat),
 			errors.Is(err, mktsvc.ErrInvalidMonetizationType),
-			errors.Is(err, mktsvc.ErrPriceRequiredForPaid):
+			errors.Is(err, mktsvc.ErrPriceRequiredForPaid),
+			errors.Is(err, mktsvc.ErrInvalidListingType),
+			errors.Is(err, mktsvc.ErrSourceURLRequired),
+			errors.Is(err, mktsvc.ErrInvalidSourceURLFormat),
+			errors.Is(err, mktsvc.ErrReferenceMustBeFree),
+			errors.Is(err, mktsvc.ErrSourceURLOnHostedSkill):
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
@@ -112,7 +117,10 @@ func AdminUpdateSkill(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
 		case errors.Is(err, mktsvc.ErrInvalidSlugFormat),
 			errors.Is(err, mktsvc.ErrInvalidMonetizationType),
-			errors.Is(err, mktsvc.ErrPriceRequiredForPaid):
+			errors.Is(err, mktsvc.ErrPriceRequiredForPaid),
+			errors.Is(err, mktsvc.ErrInvalidSourceURLFormat),
+			errors.Is(err, mktsvc.ErrSourceURLOnHostedSkill),
+			errors.Is(err, mktsvc.ErrReferenceMustBeFree):
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
@@ -133,7 +141,8 @@ func AdminPublishSkill(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill not found"})
 			return
 		}
-		if errors.Is(err, mktsvc.ErrInvalidTransition) || errors.Is(err, mktsvc.ErrNoActiveVersion) {
+		if errors.Is(err, mktsvc.ErrInvalidTransition) || errors.Is(err, mktsvc.ErrNoActiveVersion) ||
+			errors.Is(err, mktsvc.ErrSourceURLRequired) {
 			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
 			return
 		}

@@ -22,6 +22,7 @@ For commercial licensing, please contact support@quantumnous.com
 export type SkillStatus = 'draft' | 'published' | 'deprecated'
 export type SkillVersionStatus = 'draft' | 'active' | 'archived'
 export type MonetizationType = 'free' | 'paid'
+export type ListingType = 'hosted' | 'reference'
 
 export interface Skill {
   id: number
@@ -36,6 +37,11 @@ export interface Skill {
   featured_flag: boolean
   featured_rank: number
   active_version_id?: number
+  // PRD §13: reference listings link out to an external repo instead of
+  // being packaged. listing_type is create-time only — there is no
+  // supported path for converting an existing skill between the two.
+  listing_type: ListingType
+  source_url?: string
   created_by: number
   created_at: string
   updated_at: string
@@ -89,6 +95,10 @@ export interface CreateSkillRequest {
   tags?: string[]
   monetization_type: MonetizationType
   price_usd?: number
+  // Omit for a hosted skill (defaults to "hosted" server-side). Required
+  // alongside source_url for a reference listing.
+  listing_type?: ListingType
+  source_url?: string
 }
 
 export interface UpdateSkillRequest {
@@ -99,6 +109,10 @@ export interface UpdateSkillRequest {
   tags?: string[]
   monetization_type?: MonetizationType
   price_usd?: number
+  // listing_type itself is not editable — see Skill.listing_type. Only
+  // meaningful when the skill being updated is already a reference listing;
+  // the backend rejects it on a hosted skill (ErrSourceURLOnHostedSkill).
+  source_url?: string
 }
 
 export interface FeaturedRequest {

@@ -40,6 +40,8 @@ func setupDB(t *testing.T) *gorm.DB {
 			featured_flag     INTEGER DEFAULT 0,
 			featured_rank     INTEGER DEFAULT 0,
 			active_version_id INTEGER,
+			listing_type      TEXT NOT NULL DEFAULT 'hosted',
+			source_url        TEXT,
 			created_by        INTEGER NOT NULL,
 			created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -100,6 +102,18 @@ func insertSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 	require.NoError(t, db.Exec(
 		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
 		slug, "Test Skill", "Test Description", "test", status, 1,
+	).Error)
+	var id int64
+	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
+	return id
+}
+
+func insertReferenceSkill(t *testing.T, db *gorm.DB, slug, status, sourceURL string) int64 {
+	t.Helper()
+	require.NoError(t, db.Exec(
+		`INSERT INTO skills (slug, name, description, category, status, listing_type, source_url, created_by)
+		 VALUES (?, ?, ?, ?, ?, 'reference', ?, ?)`,
+		slug, "Test Skill", "Test Description", "test", status, sourceURL, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -432,6 +446,121 @@ func TestCreateSkill_PaidWithZeroPrice_Rejected(t *testing.T) {
 	require.ErrorIs(t, err, mktsvc.ErrPriceRequiredForPaid)
 }
 
+// ── CreateSkill: reference listings (PRD §13) ───────────────────────────────
+
+func TestCreateSkill_EmptyListingType_DefaultsToHosted(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "default-listing-type", Name: "n", Description: "d", Category: "c",
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, model.SkillListingTypeHosted, skill.ListingType)
+	assert.Nil(t, skill.SourceURL)
+}
+
+func TestCreateSkill_InvalidListingType_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "bad-listing-type", Name: "n", Description: "d", Category: "c",
+		ListingType: "hosted-and-reference",
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrInvalidListingType)
+}
+
+func TestCreateSkill_Reference_Success(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "ref-skill", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, model.SkillListingTypeReference, skill.ListingType)
+	require.NotNil(t, skill.SourceURL)
+	assert.Equal(t, "https://github.com/owner/repo", *skill.SourceURL)
+	assert.Equal(t, "free", skill.MonetizationType)
+}
+
+func TestCreateSkill_Reference_MissingSourceURL_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "ref-no-url", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference",
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSourceURLRequired)
+}
+
+// isValidSourceURL is deliberately loose (PRD §13.3) — these pin exactly
+// which malformed inputs it rejects vs. accepts, since "loose" is easy to
+// accidentally make "accepts anything".
+func TestCreateSkill_Reference_InvalidSourceURLFormat_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	for _, bad := range []string{
+		"github.com/owner/repo", // missing scheme
+		"not a url at all",
+		"://missing-scheme.com",
+	} {
+		_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+			Slug: "ref-bad-url", Name: "n", Description: "d", Category: "video",
+			ListingType: "reference", SourceURL: bad,
+		}, 1)
+		require.ErrorIsf(t, err, mktsvc.ErrInvalidSourceURLFormat, "source_url %q should have been rejected", bad)
+	}
+}
+
+// No domain allowlist and no https-only requirement — PRD §13.3 explicitly
+// rejected both restrictions, so this pins http:// and a non-GitHub host as
+// accepted, not just documents the rejection cases above.
+func TestCreateSkill_Reference_AcceptsHTTPAndNonGitHubHosts(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	for i, ok := range []string{
+		"http://example.com/repo",
+		"https://gitlab.com/owner/repo",
+	} {
+		skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+			Slug: fmt.Sprintf("ref-ok-url-%d", i), Name: "n", Description: "d", Category: "video",
+			ListingType: "reference", SourceURL: ok,
+		}, 1)
+		require.NoErrorf(t, err, "source_url %q should have been accepted", ok)
+		require.NotNil(t, skill.SourceURL)
+		assert.Equal(t, ok, *skill.SourceURL)
+	}
+}
+
+func TestCreateSkill_Reference_Paid_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "ref-paid", Name: "n", Description: "d", Category: "video",
+		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
+		MonetizationType: "paid", PriceUSD: 5,
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrReferenceMustBeFree)
+}
+
+func TestCreateSkill_Hosted_SourceURLProvided_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "hosted-with-url", Name: "n", Description: "d", Category: "c",
+		SourceURL: "https://github.com/owner/repo",
+	}, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSourceURLOnHostedSkill)
+}
+
 // ── UpdateSkill ───────────────────────────────────────────────────────────────
 
 func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
@@ -641,6 +770,61 @@ func TestUpdateSkill_DoesNotWriteAuditLog(t *testing.T) {
 	assert.Equal(t, int64(1), total, "only the create log should exist")
 }
 
+// ── UpdateSkill: reference listings (PRD §13) ───────────────────────────────
+
+func TestUpdateSkill_Reference_SourceURLUpdated(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertReferenceSkill(t, db, "ref-update", "draft", "https://github.com/owner/old")
+	skill, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{
+		SourceURL: "https://github.com/owner/new",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, skill.SourceURL)
+	assert.Equal(t, "https://github.com/owner/new", *skill.SourceURL)
+}
+
+func TestUpdateSkill_Reference_InvalidSourceURLFormat_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertReferenceSkill(t, db, "ref-update-bad", "draft", "https://github.com/owner/old")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{SourceURL: "not a url"})
+	require.ErrorIs(t, err, mktsvc.ErrInvalidSourceURLFormat)
+}
+
+// Same protection as CreateSkill's version: without this, editing an
+// existing hosted skill could silently give it a source_url, leaving
+// listing_type="hosted" disagreeing with "has a source_url" from that point
+// on — the exact inconsistency listing_type exists to prevent.
+// listing_type can't be changed via UpdateSkillRequest, so this checks the
+// same rule CreateSkill enforces (a reference listing must stay free) from
+// the update side, where skill.ListingType (not a request field) is what's
+// authoritative.
+func TestUpdateSkill_Reference_SwitchToPaid_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertReferenceSkill(t, db, "ref-no-paid", "draft", "https://github.com/owner/repo")
+	price := 5.0
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{
+		MonetizationType: "paid", PriceUSD: &price,
+	})
+	require.ErrorIs(t, err, mktsvc.ErrReferenceMustBeFree)
+}
+
+func TestUpdateSkill_Hosted_SourceURLProvided_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "hosted-update", "draft")
+	_, err := svc.UpdateSkill(id, mktsvc.UpdateSkillRequest{
+		SourceURL: "https://github.com/owner/repo",
+	})
+	require.ErrorIs(t, err, mktsvc.ErrSourceURLOnHostedSkill)
+}
+
 // ── GetSkill ──────────────────────────────────────────────────────────────────
 
 func TestGetSkill_ReturnsSkillWithActiveVersion(t *testing.T) {
@@ -762,6 +946,49 @@ func TestPublishSkill_NotFound(t *testing.T) {
 
 	_, err := svc.PublishSkill(9999, 1)
 	require.Error(t, err)
+}
+
+// ── PublishSkill: reference listings (PRD §13) ──────────────────────────────
+
+func TestPublishSkill_Reference_WithSourceURL_Succeeds(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertReferenceSkill(t, db, "ref-publish", "draft", "https://github.com/owner/repo")
+	skill, err := svc.PublishSkill(id, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "published", skill.Status)
+	assert.Equal(t, int64(1), logCount(t, db, id, "publish"))
+}
+
+// Defends canPublish's branch itself, not just the CHECK constraint: a
+// reference skill can never actually reach this state through CreateSkill
+// (skills_reference_source_check forbids it), so this constructs one
+// directly to prove PublishSkill's own gate would still catch it if that
+// constraint were ever bypassed — mirrors
+// TestPublishSkill_NoActiveVersion_FromDraft_Rejected's hosted-side coverage.
+func TestPublishSkill_Reference_NoSourceURL_Rejected(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertReferenceSkill(t, db, "ref-no-url-publish", "draft", "https://github.com/owner/repo")
+	require.NoError(t, db.Exec(`UPDATE skills SET source_url = NULL WHERE id = ?`, id).Error)
+
+	_, err := svc.PublishSkill(id, 1)
+	require.ErrorIs(t, err, mktsvc.ErrSourceURLRequired)
+	assert.Equal(t, int64(0), logCount(t, db, id, "publish"))
+}
+
+// hosted's existing gate (ErrNoActiveVersion) must still fire on its own
+// terms — a reference skill's absent active_version_id must not leak into
+// the hosted branch's check.
+func TestPublishSkill_Hosted_StillRequiresActiveVersion(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	id := insertSkill(t, db, "hosted-no-version", "draft")
+	_, err := svc.PublishSkill(id, 1)
+	require.ErrorIs(t, err, mktsvc.ErrNoActiveVersion)
 }
 
 // ── Deprecate ─────────────────────────────────────────────────────────────────

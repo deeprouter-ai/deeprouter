@@ -55,6 +55,7 @@ function makeSkill(overrides: Partial<SkillSummary>): SkillSummary {
     price_usd: 0,
     featured_flag: false,
     featured_rank: 0,
+    listing_type: 'hosted',
     created_by: 1,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
@@ -128,6 +129,48 @@ describe('SkillPublishActions', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Deprecate/i }))
     expect(mockDeprecateSkill).toHaveBeenCalledWith(1)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  // PRD §13.4 — a reference listing's canPublish gate is source_url, not
+  // active_version_id (which it never has). Mirrors admin_skill.go
+  // PublishSkill's own branch exactly, so this test pins the frontend side
+  // of that same contract.
+  it('disables Publish for a reference listing with no source_url, ignoring active_version_id', () => {
+    render(
+      <SkillPublishActions
+        skill={makeSkill({
+          status: 'draft',
+          listing_type: 'reference',
+          source_url: undefined,
+          active_version_id: 42, // must not make canPublish true for reference
+        })}
+        onChanged={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('button', { name: /Publish/i })).toBeDisabled()
+  })
+
+  it('enables Publish for a reference listing once source_url is set, with no active_version_id needed', async () => {
+    const onChanged = vi.fn()
+    mockPublishSkill.mockResolvedValue({ success: true })
+
+    render(
+      <SkillPublishActions
+        skill={makeSkill({
+          status: 'draft',
+          listing_type: 'reference',
+          source_url: 'https://github.com/owner/repo',
+          active_version_id: undefined,
+        })}
+        onChanged={onChanged}
+      />
+    )
+
+    const button = screen.getByRole('button', { name: /Publish/i })
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+    expect(mockPublishSkill).toHaveBeenCalledWith(1)
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
 })
