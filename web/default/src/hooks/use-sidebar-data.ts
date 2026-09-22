@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   Activity,
@@ -31,20 +32,20 @@ import {
   Radio,
   // MessageSquare,  // un-comment when restoring chat-presets dropdown
   CreditCard,
+  Clapperboard,
   ListTodo,
   Settings,
   HelpCircle,
   Sparkles,
   Receipt,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
+import { type SidebarData } from '@/components/layout/types'
 import {
   fetchMyPurchases,
   marketplaceQueryKeys,
 } from '@/features/marketplace/api'
-import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
-import { type SidebarData } from '@/components/layout/types'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -93,6 +94,12 @@ export function useSidebarData(): SidebarData {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
+          },
+          // Video First Wave P2: the「可以做视频」paste-prompt page.
+          {
+            title: t('Make videos'),
+            url: '/video',
+            icon: Clapperboard,
           },
           {
             title: t('Call history'),

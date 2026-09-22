@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-09-16
+
+- **视频页两处修正**（Video First Wave P2 eval 反馈,@sam 本地实测提出):
+  - 粘贴话术**随界面语言出中英双版**——英文模式下不再给出整段中文(`buildVideoPrompt` 增加 `language` 参数,`testRun` 逐型号双语;组件按 `i18n.language` 选版)。测试改为双语循环断言,6 个全绿。
+  - 中文入口名「可以做视频」→**「视频生成」**(zh.json 值改动;英文 "Make videos" 不变)。PRD/任务卡里引用的页名同步(AC 两条逐字对账,audit 绿),D6 决定行与老板原话保留原词。
+  - 话术的记忆规则末尾增加**自述式移除指引**(双语):用户说"把视频配置删掉"时,agent 按规则本身即知删 .env 两行 + 本段规则,新会话也不用猜。测试加双语断言。
+
+## 2026-09-15
+
+- **「可以做视频」入口页 + 粘贴式配置话术**（Video First Wave P2,分支 `sam/video-first-wave`):
+  - 新页面 `/video`(`web/default/src/features/video/`,路由 `_authenticated/video/`,侧栏「可以做视频」入口):模型菜单(MiniMax-H3 与 Seedance 2.5/2.0 并列,各标单价与特点)+ 一键复制配置话术 + 单次花费明示。无可用 key 时引导去密钥页。
+  - 话术三层(PRD §5 B1):凭证=**一次性令牌**(Q10 老板拍板 2026-09-15;复用 `internal/connect` 的 `POST /api/connect/token` + `GET /i/{token}`,agent 从兑换文本读 DR_BASE_URL/DR_API_KEY 写进项目 .env,明文 key 不进页面/剪贴板,零后端改动);方法=提交→轮询→下载→自动开播放器/输出绝对路径;记忆=写入 CLAUDE.md(Claude Code)/AGENTS.md(Codex),此后直说「生成视频」。粘贴后立即用所选模型生成一条测试片(费用在话术里预告)。
+  - 话术模板是纯函数(`lib/prompt-template.ts`),5 个 vitest 盯住三层契约:令牌 URL 恰出现一次、无明文 key 形态、端点/状态值与网关一致(completed/failed)、CLAUDE.md+AGENTS.md 双记忆文件、菜单模型与话术内价目不漂移。
+  - i18n 新增 14 组中英词条;设计系统走 token(accent/ring/7px 圆角),无裸 hex。
+  - 注:`copyright:check` 存量 12 个文件在 main 上就不达标,本次未动(只保证新文件达标)。
+
+- **MiniMax-H3（海螺 3.0）视频模型支持**（Video First Wave P1,分支 `sam/video-first-wave`):
+  - `relay/channel/task/hailuo/` 扩列 `MiniMax-H3`(4–15 秒、768P/2K、自带音轨)。上游 `QuantumNous/new-api` 已把内置 task 适配器整体换成 JS 插件系统(`eb48396d5`),无法 upstream-sync,故**自行扩列**(AC 二选一,记录在案)。
+  - 国际站 v2 协议分支:H3 家族走 `POST /v2/video_generation`(多模态 `content` 数组)+ `GET /v2/query/video_generation/{task_id}`(视频 URL 直接随查询响应返回,无 file retrieve 步骤)。存储的 upstream task id 带 `v2:` 前缀,`FetchTask` 据此选端点;旧任务不带前缀,继续走 v1,零迁移。
+  - 计费:H3 上游按输出秒计费($0.08/s@768P、$0.13/s@2K),`defaultModelPrice` 入 2K 每秒价,适配器新增 `EstimateBilling` 乘秒数与分辨率折扣(6s@2K=$0.78)。metadata 不得改宽计费口径(duration/resolution 在合并后强制回填;注意 JSON unmarshal 会穿透非 nil 指针,Duration 必须在合并后再挂)。⚠️ 现为成本价,毛利率待 video PRD Q3 拍板。
+  - v1 老 9 型号补平价占位(偏高侧估,P3 对真实账单校准)。
+  - 回归测试 `hailuo/constants_test.go`(7 个:漏价守卫、每秒价与常量一致、H3 能力参数、v2 转换/钳制/首帧、v2 状态解析),接进 `unit-test.yml` + `airbotix-internal.yml` 双门(含 path filter)。
+  - `scripts/seed-models/channels.yaml` 新增「MiniMax 国际站视频 Hailuo」渠道(type 35、`MINIMAX_API_KEY_INTL`、base_url `api.minimax.io`——与 CN 三域名严格区分)。
 ## 2026-09-12
 
 - **Skill Marketplace: reference listings (`listing_type: reference`)**——商店新增第二种上架方式：外部链接型 skill（比如开源 video skill 的 GitHub 仓库），不打包、不验证，用户点了直接跳转外链，DR 不为其背书。对应 `skill-marketplace-v2-prd.md` §13 / task card P7。

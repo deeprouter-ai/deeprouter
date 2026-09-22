@@ -19,6 +19,7 @@ on:
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'relay/channel/task/doubao/**'
+      - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
       - 'relay/channel/claude/**'
       - 'relay/channel/openai/**'
@@ -43,6 +44,7 @@ on:
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'relay/channel/task/doubao/**'
+      - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
       - 'relay/channel/claude/**'
       - 'relay/channel/openai/**'
@@ -108,7 +110,8 @@ jobs:
           # kids_mode middleware layer: policy resolution + defensive pass-through (DR-12).
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
-          # and the Doubao/Seedance video ModelList (价格未配置 regression guards).
+          # and the Doubao/Seedance + MiniMax/Hailuo video ModelLists (价格未配置
+          # regression guards; hailuo also covers the v2/H3 request conversion).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the
           # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
           go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
@@ -116,6 +119,7 @@ jobs:
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
           go test ./relay/channel/task/doubao/ -count=1 -timeout 60s
+          go test ./relay/channel/task/hailuo/ -count=1 -timeout 60s
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.

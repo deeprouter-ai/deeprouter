@@ -379,6 +379,23 @@ channels:
       - MiniMax-M2.7
       - MiniMax-M2
 
+  # MiniMax 国际站视频生成（海螺 / Hailuo 3.0）。type 35 = ChannelTypeMiniMax ——
+  # 任务路径（relay_adaptor.go GetTaskAdaptor）按渠道 type 派给 hailuo 视频适配器。
+  # 🔴 三个域名别配混：国际站 API = api.minimax.io（本条目）；platform.minimaxi.com
+  #    是 CN 控制台；api.minimax.chat 是 CN 聊天 API（上一条渠道）。
+  # MiniMax-H3 按输出秒计费（768P $0.08/s、2K $0.13/s），4–15 秒、自带音轨，
+  # 走 /v2/video_generation（适配器按模型自动选 v1/v2）。key 归属见
+  # video-first-wave PRD Q2；国际站 key 与上一条的 CN key 不通用。
+  - name: MiniMax 国际站视频 Hailuo
+    type: 35
+    enabled: true
+    key_env: MINIMAX_API_KEY_INTL
+    base_url: https://api.minimax.io
+    test_model: MiniMax-H3
+    tag: minimax
+    models:
+      - MiniMax-H3
+
   - name: 零一万物 Yi
     type: 31
     enabled: true
