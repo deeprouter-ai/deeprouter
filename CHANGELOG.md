@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-28
+
+- **视频页明示并可切换「配置的是哪把 key」**（Video First Wave P2 eval 反馈,@sam 提出):
+  - 原先话术里的一次性令牌**默默绑定第一把启用的 key**,页面不显示是哪把——手上有多把 key 的用户,事后只能翻项目 `.env` 比对或查调用记录才知道。现在:只有一把时页面直接写出密钥名;有多把时给选择器(复用密钥页 2026-08-28 那次同因同修的写法与既有词条 `Key to set up` / `(limited to some models)`,i18n 零新增),切换即按新 key 重新签发令牌,话术同步更新。
+  - 只列**启用**的 key(用停用的 key 配好工具,只会在几天后从工具里回一个 401);选中的 key 若限了模型,页面就地提示——否则会以"生成失败"的形态出现在 agent 流程深处。
+  - 新增组件测试 `features/video/__tests__/video-page.test.tsx`(4 个:单 key 只写名字不给控件、多 key 默认最新且切换后按新 id 重签、停用 key 不出现在可选项、限模型 key 有提示),video 目录 10 个测试全绿;tsc / prettier / copyright 干净。存量 lint 两处(effect 内 setState、模板里的转义引号)在 main 上就有,未动。
+
 ## 2026-09-16
 
 - **视频页两处修正**（Video First Wave P2 eval 反馈,@sam 本地实测提出):
