@@ -1,0 +1,91 @@
+#!/bin/sh
+# DeepRouter macOS installer — postinstall.
+#
+# The package body is signed and identical for everyone, so everything personal
+# arrives in the FILENAME (PRD §11.7): deeprouter-setup-<TOKEN>-<host[_port]>.pkg.
+# This script reads its own filename, fetches the setup script from the
+# deployment that issued the token (the same /i/<token> the one-line command
+# uses), runs it, and leaves a report where the user can actually find it —
+# a GUI install has no terminal window to read.
+set -u
+
+# Installer exports PACKAGE_PATH; $1 is the same path when run by hand.
+PKG_PATH="${PACKAGE_PATH:-${1:-}}"
+LOG_DIR="$HOME/Library/Logs"
+LOG="$LOG_DIR/deeprouter-setup.log"
+
+# A parse failure must still leave a report saying what to do — the Installer
+# failure pane is generic and this log is the only place with a real answer.
+fail() {
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+  {
+    echo "DeepRouter setup could not start: $1"
+    echo "Fix: open your API keys page and download a fresh installer."
+    echo "修复方法：打开你的密钥页，重新下载一个安装器。"
+  } | tee "$LOG" 2>/dev/null
+  exit 1
+}
+
+name=$(basename "$PKG_PATH")
+# Tolerate a browser copy suffix: "deeprouter-setup-XXX-host (2).pkg".
+name=$(printf '%s' "$name" | sed -E 's/ \([0-9]+\)\.pkg$/.pkg/')
+
+case "$name" in
+  deeprouter-setup-*-*.pkg) ;;
+  *) fail "this file's name does not carry a setup token ($name)" ;;
+esac
+
+rest=${name#deeprouter-setup-}
+rest=${rest%.pkg}
+# The token alphabet has no '-', so the first '-' is the split even though the
+# host may contain its own (deep-router.com does).
+token=${rest%%-*}
+host=${rest#*-}
+
+printf '%s' "$token" | grep -Eq '^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{10}$' \
+  || fail "this file's name does not carry a valid setup token ($name)"
+[ -n "$host" ] || fail "this file's name does not carry a server address ($name)"
+
+# '_' spells ':' because ':' cannot live in a macOS filename. Loopback means a
+# developer install over plain http; every real deployment terminates TLS.
+hostport=$(printf '%s' "$host" | sed 's/_/:/')
+case "$hostport" in
+  localhost|localhost:*|127.0.0.1|127.0.0.1:*) scheme="http" ;;
+  *) scheme="https" ;;
+esac
+base="${DEEPROUTER_BASE_URL:-$scheme://$hostport}"
+
+# Test hook: print what was parsed and stop before touching the network.
+if [ "${DR_PKG_PARSE_ONLY:-}" = "1" ]; then
+  printf '%s %s\n' "$token" "$base"
+  exit 0
+fi
+
+mkdir -p "$LOG_DIR"
+tmp=$(mktemp /tmp/deeprouter-setup.XXXXXX) || fail "could not create a temp file"
+trap 'rm -f "$tmp"' EXIT
+
+# 🔴 Fetch to a file first, never `curl | sh`: in the pipe form a network
+# failure feeds sh an empty script, which exits 0 — and the Installer would
+# report a completely failed run as a successful install.
+if ! curl -fsSL "$base/i/$token" -o "$tmp"; then
+  fail "could not reach $base"
+fi
+
+{
+  echo "DeepRouter setup — $(date)"
+  echo "Server: $base"
+  echo
+  sh "$tmp"
+} >"$LOG" 2>&1
+status=$?
+
+# Mirror into /var/log/install.log for whoever debugs with Installer's tools.
+cat "$LOG" || true
+
+# setup.sh exits non-zero only when NOTHING verified (measured: its last lines
+# are `[ bad>0 && ok==0 ] && exit 1; exit 0`), so the Installer's success and
+# failure panes line up with "at least one tool works" vs "none do". A spent
+# or expired token takes this path too: /i answers HTTP 200 with a script that
+# explains itself and exits 1, so the explanation is already in the log.
+exit $status

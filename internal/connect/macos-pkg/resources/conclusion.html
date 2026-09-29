@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<!-- Shown by Installer on its final pane. A GUI install has no terminal, so
+     this page is where the user learns the report's address (PRD §11.7 —
+     "用户必须能看到装了什么、跳过了什么、为什么"). Keep it dependency-free:
+     Installer renders it in a tiny embedded WebView. -->
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font: 13px -apple-system, "Helvetica Neue", sans-serif; color: #333; margin: 16px; }
+    code { font: 12px Menlo, monospace; background: #f2f2f2; padding: 1px 4px; border-radius: 3px; }
+    p { margin: 0 0 10px; }
+    .zh { color: #555; }
+  </style>
+</head>
+<body>
+  <p><b>Setup finished.</b> Each tool was configured, skipped or reported — the full
+    story is in <code>~/Library/Logs/deeprouter-setup.log</code>.</p>
+  <p>To read it: Finder → Go → Go to Folder… → paste the path above.</p>
+  <p class="zh"><b>配置完成。</b>每个工具装没装上、为什么跳过，完整报告都在
+    <code>~/Library/Logs/deeprouter-setup.log</code>。<br>
+    查看方法：访达 → 前往 → 前往文件夹… → 粘贴上面的路径。</p>
+</body>
+</html>

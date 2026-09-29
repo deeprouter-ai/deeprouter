@@ -44,6 +44,15 @@ RUN apt-get update \
     && update-ca-certificates
 
 COPY --from=builder2 /build/new-api /
+
+# Signed macOS installer (PRD §11.7). deploy.yml stages the artifact into this
+# dir before building; normally it holds only .gitkeep and the pkg endpoint
+# stays dark — os.ReadFile on the missing path is the off switch. Only SIGNED
+# artifacts are ever staged: an unsigned pkg would be Gatekeeper-blocked on
+# double-click, which is worse than dark.
+COPY internal/connect/macos-pkg/dist/ /opt/deeprouter-pkg/
+ENV DEEPROUTER_PKG_FILE=/opt/deeprouter-pkg/deeprouter-setup.pkg
+
 EXPOSE 3000
 WORKDIR /data
 ENTRYPOINT ["/new-api"]

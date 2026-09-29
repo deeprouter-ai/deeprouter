@@ -31,6 +31,11 @@ services:
       - REDIS_CONN_STRING=redis://redis
       - TZ=Asia/Shanghai
       - BATCH_UPDATE_ENABLED=true
+      # macOS installer artifact (PRD §11.7). Empty = the pkg endpoint stays
+      # dark, same as production. For a local try: put a file into the dev_data
+      # volume and `DEEPROUTER_PKG_FILE=/data/deeprouter-setup.pkg docker
+      # compose -f docker-compose.dev.yml up -d new-api`.
+      - DEEPROUTER_PKG_FILE=${DEEPROUTER_PKG_FILE:-}
     depends_on:
       redis:
         condition: service_started
