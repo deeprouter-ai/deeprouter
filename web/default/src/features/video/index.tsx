@@ -18,10 +18,18 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { SectionPageLayout } from '@/components/layout'
 import { getApiKeys, issueConnectToken } from '@/features/keys/api'
 import { API_KEY_STATUS } from '@/features/keys/constants'
@@ -42,7 +50,15 @@ import {
  * What travels in the copied text is a one-time token URL, never the key —
  * the same `internal/connect` machinery the key page's one-click block uses
  * (Q10, decided 2026-09-15: token, not plaintext key). The token is minted on
- * page load and bound to the user's first enabled key.
+ * page load and bound to one of the user's enabled keys.
+ *
+ * Which key that is, is said on the page and can be changed — the same fix the
+ * key page's setup card got on 2026-08-28 after @sam asked which key the
+ * buttons were configuring and the page could not answer. Here it bit again
+ * (@sam, 2026-09-16): the prompt silently took the first enabled key, and a
+ * user with several had no way to tell which one the project's `.env` ended up
+ * holding. With one key there is nothing to decide, so the page states the name
+ * instead of showing a control.
  *
  * 🔴 Naming Claude Code / Codex here is the same deliberate CLAUDE.md §0
  * exception the one-click block records: "paste it into your AI tool" cannot
@@ -51,27 +67,34 @@ import {
 export function VideoPage() {
   const { t, i18n } = useTranslation()
 
-  const [apiKey, setApiKey] = useState<ApiKey | null>(null)
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null)
   const [keysLoaded, setKeysLoaded] = useState(false)
   const [scriptUrl, setScriptUrl] = useState('')
   const [issuing, setIssuing] = useState(false)
   const [modelId, setModelId] = useState(DEFAULT_VIDEO_MODEL.id)
   const [copied, setCopied] = useState(false)
 
-  // The token needs a key to bind to; the first enabled one is the right
-  // default for an audience that owns exactly one.
+  // Only enabled keys are offered: a disabled one configures the project just
+  // as happily and then answers 401 from inside the tool, with nothing here to
+  // explain it. The list arrives newest-first, and the newest is the default —
+  // the same choice the key page's setup card makes.
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
         const res = await getApiKeys({ p: 1, size: 100 })
         if (cancelled) return
-        const enabled = (res.data?.items ?? []).find(
+        const enabled = (res.data?.items ?? []).filter(
           (k) => k.status === API_KEY_STATUS.ENABLED
         )
-        setApiKey(enabled ?? null)
+        setKeys(enabled)
+        setSelectedKeyId(enabled[0]?.id ?? null)
       } catch {
-        if (!cancelled) setApiKey(null)
+        if (!cancelled) {
+          setKeys([])
+          setSelectedKeyId(null)
+        }
       } finally {
         if (!cancelled) setKeysLoaded(true)
       }
@@ -80,6 +103,26 @@ export function VideoPage() {
       cancelled = true
     }
   }, [])
+
+  const apiKey = useMemo(
+    () => keys.find((k) => k.id === selectedKeyId) ?? null,
+    [keys, selectedKeyId]
+  )
+
+  // `label` is what the closed trigger renders, so the restriction hint has to
+  // be baked into it there; inside the open list it is a separate muted span.
+  const keyOptions = useMemo(
+    () =>
+      keys.map((key) => ({
+        value: String(key.id),
+        name: key.name,
+        limited: key.model_limits_enabled,
+        label: key.model_limits_enabled
+          ? `${key.name} ${t('(limited to some models)')}`
+          : key.name,
+      })),
+    [keys, t]
+  )
 
   // Mint the one-time token once the key is known (same lifecycle as the
   // one-click block: issue on load, let stale ones expire server-side).
@@ -213,6 +256,77 @@ export function VideoPage() {
               </p>
             ) : (
               <>
+                {/* Which key the copied text configures. With one key there is
+                    nothing to decide, so the name is simply stated; with
+                    several, leaving the pick implicit means the project's .env
+                    ends up holding whichever key happened to sort first and the
+                    page never said which. */}
+                {apiKey &&
+                  (keys.length > 1 ? (
+                    <div className='mt-3'>
+                      <label
+                        htmlFor='video-key'
+                        className='text-xs font-medium'
+                      >
+                        {t('Key to set up')}
+                      </label>
+                      {/* Not a native <select>: its popup is drawn by the OS
+                          and ignores the app's theme. */}
+                      <Select
+                        items={keyOptions}
+                        value={String(selectedKeyId ?? '')}
+                        onValueChange={(v) =>
+                          v !== null && setSelectedKeyId(Number(v))
+                        }
+                      >
+                        <SelectTrigger
+                          id='video-key'
+                          className='mt-1.5 w-full text-xs sm:max-w-sm'
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {keyOptions.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                <span className='truncate'>{option.name}</span>
+                                {option.limited && (
+                                  <span className='text-muted-foreground ml-1.5'>
+                                    {t('(limited to some models)')}
+                                  </span>
+                                )}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <p className='text-muted-foreground mt-3 text-xs'>
+                      {t('Key to set up')}:{' '}
+                      <span className='text-foreground font-semibold'>
+                        {apiKey.name}
+                      </span>
+                    </p>
+                  ))}
+
+                {/* A key restricted to a few models is a legitimate thing to
+                    own and a poor thing to generate video with — say so here
+                    rather than letting it surface as a failed clip. */}
+                {apiKey?.model_limits_enabled && (
+                  <p className='text-muted-foreground mt-2 flex items-start gap-1.5 text-xs'>
+                    <TriangleAlert className='mt-px h-3 w-3 shrink-0' />
+                    <span>
+                      {t(
+                        'This key is limited to certain models. Tools configured with it will only work for those — pick an unrestricted key if you want everything to work.'
+                      )}
+                    </span>
+                  </p>
+                )}
+
                 <div className='border-border bg-card mt-3 rounded-[7px] border'>
                   <pre className='max-h-72 overflow-auto p-4 text-xs leading-5 whitespace-pre-wrap'>
                     {prompt || (issuing ? t('Preparing…') : '')}
@@ -220,7 +334,7 @@ export function VideoPage() {
                   <div className='border-border flex items-center justify-between gap-3 border-t px-4 py-3'>
                     <p className='text-muted-foreground text-xs'>
                       {t(
-                        'Valid for 15 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.'
+                        'Valid for 30 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.'
                       )}
                     </p>
                     <Button
