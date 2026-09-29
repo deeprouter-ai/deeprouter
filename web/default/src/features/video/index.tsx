@@ -334,7 +334,7 @@ export function VideoPage() {
                   <div className='border-border flex items-center justify-between gap-3 border-t px-4 py-3'>
                     <p className='text-muted-foreground text-xs'>
                       {t(
-                        'Valid for 15 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.'
+                        'Valid for 30 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.'
                       )}
                     </p>
                     <Button
