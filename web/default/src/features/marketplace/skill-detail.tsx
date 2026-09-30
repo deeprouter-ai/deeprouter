@@ -23,7 +23,6 @@ import {
   Check,
   Download,
   ExternalLink,
-  KeyRound,
   Package,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -204,24 +203,6 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               <p className='text-muted-foreground mt-4 whitespace-pre-line'>
                 {skill.description}
               </p>
-
-              {/* PRD §8.2: the API-key requirement is always shown for a
-                  packaged skill. A reference listing makes no such promise
-                  — DR doesn't package, verify, or run it, so there is
-                  nothing here to require a DR key for. */}
-              {!isReference && (
-                <div className='border-border bg-card mt-6 flex items-start gap-2.5 rounded-xl border p-3.5 text-sm'>
-                  <KeyRound className='text-accent mt-0.5 size-4 shrink-0' />
-                  <span>
-                    {t(
-                      'Running this skill needs a DeepRouter API Key — it calls models through your DeepRouter account.'
-                    )}{' '}
-                    <Link to='/keys' className='text-accent hover:underline'>
-                      {t('Get your key')}
-                    </Link>
-                  </span>
-                </div>
-              )}
 
               {skill.changelog && (
                 <section className='mt-6'>

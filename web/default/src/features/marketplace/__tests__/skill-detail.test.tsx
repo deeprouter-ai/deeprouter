@@ -15,9 +15,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 // Coverage: PRD §13 — a reference listing's detail page swaps the whole
-// Download/Buy action for an external-link button, and drops the parts of
-// the page (Price badge, "needs a DR key" notice) that only make sense for
-// a packaged skill DR actually runs.
+// Download/Buy action for an external-link button, and drops the Price
+// badge, which only makes sense for a packaged skill.
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -180,21 +179,6 @@ describe('SkillDetailPage — reference listings', () => {
     expect(screen.queryByText('Free')).not.toBeInTheDocument()
   })
 
-  it('does not show the "needs a DeepRouter API Key" notice for a reference listing', async () => {
-    mockFetchMarketplaceSkill.mockResolvedValue(
-      makeSkill({
-        listing_type: 'reference',
-        source_url: 'https://github.com/owner/repo',
-      })
-    )
-    renderPage()
-
-    await screen.findByRole('button', { name: /View on GitHub/i })
-    expect(
-      screen.queryByText(/needs a DeepRouter API Key/i)
-    ).not.toBeInTheDocument()
-  })
-
   it('does not require sign-in to see or use the GitHub link', async () => {
     // useAuthStore is mocked to an anonymous user throughout this suite —
     // a hosted skill would redirect anonymous users to sign-in instead of
@@ -235,7 +219,7 @@ describe('SkillDetailPage — reference listings', () => {
     expect(writeText).toHaveBeenCalledWith('https://github.com/owner/repo')
   })
 
-  it('still shows the Download button, Price badge, and API-key notice for a hosted skill', async () => {
+  it('still shows the Download button and Price badge for a hosted skill', async () => {
     mockFetchMarketplaceSkill.mockResolvedValue(
       makeSkill({ listing_type: 'hosted', version: '1.0.0' })
     )
@@ -247,7 +231,6 @@ describe('SkillDetailPage — reference listings', () => {
       ).toBeInTheDocument()
     )
     expect(screen.getByText('Free')).toBeInTheDocument()
-    expect(screen.getByText(/needs a DeepRouter API Key/i)).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /View on GitHub/i })
     ).not.toBeInTheDocument()
