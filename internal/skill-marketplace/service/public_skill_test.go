@@ -125,6 +125,24 @@ func TestListPublishedSkills_TagsFilter_ORSemantics(t *testing.T) {
 	assert.ElementsMatch(t, []string{"w1", "c1"}, listSlugs(resp))
 }
 
+// Tags are free text (Admin types them, no suggestions) but the fixed
+// filter-button list always sends its canonical lowercase value — an Admin
+// who typed "Writing" must still match a click on the "writing" filter.
+// Found via a real browser click-through: a skill tagged "Writing" showed
+// up as unfiltered/invisible against the "writing" button because the
+// first (exact-match) implementation of this filter wasn't case-insensitive
+// at all, only the search fallback was.
+func TestListPublishedSkills_TagsFilter_CaseInsensitive(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewPublicSkillService(db)
+
+	insertSkillRow(t, db, "w1", "published", []string{"Writing"}, false, 0, "2026-01-01 00:00:00")
+
+	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Tags: []string{"writing"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"w1"}, listSlugs(resp))
+}
+
 func TestListPublishedSkills_SearchIsCaseInsensitive(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)

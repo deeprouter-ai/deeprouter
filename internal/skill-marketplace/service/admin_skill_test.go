@@ -194,6 +194,22 @@ func TestListSkills_FiltersByTags_ORSemantics(t *testing.T) {
 	assert.ElementsMatch(t, []string{"writing-only", "code-only"}, slugs)
 }
 
+// See the identical case on the public listing side
+// (TestListPublishedSkills_TagsFilter_CaseInsensitive) for why this matters:
+// tags are free text, the filter buttons always send their fixed lowercase
+// value.
+func TestListSkills_FiltersByTags_CaseInsensitive(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillWithTags(t, db, "writing-skill", "draft", []string{"Writing"})
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Tags: []string{"writing"}, Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "writing-skill", resp.Skills[0].Slug)
+}
+
 func TestListSkills_StatusAndTagsCombine(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)

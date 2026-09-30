@@ -11,24 +11,37 @@ import (
 // least one of these tags" (OR semantics), used by both the public and
 // admin skill listing filters.
 //
-// Production runs on PostgreSQL only (PRD §5 preamble), where this is the
-// native array-overlap operator against the tags text[] column. The unit
-// test harness for this package runs on SQLite (no && operator, no array
-// type), where model.Skill.Tags round-trips through the same
-// pq.StringArray serialization into a TEXT column formatted like
-// `{"writing","code-review"}` — so on that dialect we approximate overlap
-// with a per-tag LIKE against that literal, OR'd together. Good enough to
-// exercise the surrounding branch logic in tests; the exact operator
-// semantics are only real against Postgres.
+// Case-insensitive on purpose: tags are free text (Admin types them into a
+// plain input, no suggestions, unlike the old category ComboboxInput), but
+// the fixed filter-button list sends its canonical lowercase value
+// (constants.ts SKILL_LABELS / marketplace/index.tsx LABELS). An Admin who
+// types "Writing" must still match a click on the "Writing" filter button —
+// found the hard way: the && operator is exact-match, so a skill tagged
+// "Writing" never matched a filter request for "writing" and looked like
+// the filter was broken (2026-09-30, real browser click-through).
+//
+// Production runs on PostgreSQL only (PRD §5 preamble); the unit test
+// harness for this package runs on SQLite (no && operator, no array type),
+// where model.Skill.Tags round-trips through the same pq.StringArray
+// serialization into a TEXT column formatted like `{"Writing","code"}` — so
+// on that dialect we approximate overlap with a per-tag case-insensitive
+// LIKE against that literal, OR'd together. Good enough to exercise the
+// surrounding branch logic in tests; the exact operator semantics are only
+// real against Postgres.
 func tagsOverlapWhere(db *gorm.DB, column string, tags []string) (string, []interface{}) {
 	if db.Dialector.Name() == "postgres" {
-		return column + " && ?", []interface{}{pq.StringArray(tags)}
+		lowered := make([]string, len(tags))
+		for i, t := range tags {
+			lowered[i] = strings.ToLower(t)
+		}
+		return "EXISTS (SELECT 1 FROM unnest(" + column + ") t WHERE LOWER(t) = ANY(?))",
+			[]interface{}{pq.StringArray(lowered)}
 	}
 
 	clauses := make([]string, len(tags))
 	args := make([]interface{}, len(tags))
 	for i, tag := range tags {
-		clauses[i] = column + " LIKE ?"
+		clauses[i] = "LOWER(" + column + ") LIKE LOWER(?)"
 		args[i] = `%"` + tag + `"%`
 	}
 	return "(" + strings.Join(clauses, " OR ") + ")", args

@@ -253,6 +253,52 @@ func TestTagsFilter_ORSemanticsOnRealPostgres(t *testing.T) {
 		"&& must match a skill with ANY requested tag (OR), and must not also return a skill with neither")
 }
 
+// TestTagsFilter_CaseInsensitiveOnRealPostgres catches the exact bug a real
+// browser click-through found (2026-09-30): the Admin's tags input is free
+// text with no suggestions, so nothing stops "Writing" (capital) from being
+// typed, while the fixed filter-button list always sends its canonical
+// lowercase value. The first implementation used Postgres's raw &&
+// operator, which is exact-match — a skill tagged "Writing" silently never
+// matched a click on the "writing" button, with no error, just an
+// ever-empty result. Real Postgres, not the SQLite approximation, because
+// the fix (EXISTS + unnest + LOWER(t) = ANY(?)) is exactly the kind of
+// query the SQLite LIKE-based stand-in can't actually verify.
+func TestTagsFilter_CaseInsensitiveOnRealPostgres(t *testing.T) {
+	adminDSN := os.Getenv("TEST_POSTGRES_DSN")
+	if adminDSN == "" {
+		t.Skip("set TEST_POSTGRES_DSN to run the real-Postgres tags filter test")
+	}
+
+	testDSN := createScratchDatabase(t, adminDSN)
+	db, err := gorm.Open(postgres.Open(testDSN), &gorm.Config{PrepareStmt: true})
+	require.NoError(t, err, "open scratch database")
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Exec(`CREATE TABLE users (id BIGSERIAL PRIMARY KEY)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (1)`).Error)
+	require.NoError(t, model.Migrate(db))
+
+	adminSvc := service.NewAdminSkillService(db)
+	skill, err := adminSvc.CreateSkill(service.CreateSkillRequest{
+		Slug: "case-mismatch-skill", Name: "n", Description: "d", Tags: []string{"Writing"},
+	}, 1)
+	require.NoError(t, err, "CreateSkill against real Postgres")
+	require.NoError(t, db.Exec(
+		`UPDATE skills SET status = 'published' WHERE id = ?`, skill.ID,
+	).Error)
+
+	publicSvc := service.NewPublicSkillService(db)
+	resp, err := publicSvc.ListPublishedSkills(service.PublicListRequest{
+		Tags: []string{"writing"},
+	})
+	require.NoError(t, err, "ListPublishedSkills against real Postgres")
+	require.Len(t, resp.Skills, 1,
+		"a skill tagged 'Writing' must match a filter request for 'writing' — tags are free text, the filter list is fixed lowercase")
+	require.Equal(t, "case-mismatch-skill", resp.Skills[0].Slug)
+}
+
 // TestHostedSkillDownload_EndToEndOnRealPostgres closes the one regression
 // claim P11 (Skill Marketplace V2 PRD §15) shipped without a real-database
 // check: "removing the runner from BuildSkillPackage doesn't break
