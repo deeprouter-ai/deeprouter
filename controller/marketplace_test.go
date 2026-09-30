@@ -59,7 +59,6 @@ func setupDownloadControllerTestDB(t *testing.T) *gorm.DB {
 			slug              TEXT UNIQUE NOT NULL,
 			name              TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
-			category          TEXT NOT NULL DEFAULT '',
 			tags              TEXT NOT NULL DEFAULT '{}',
 			status            TEXT NOT NULL DEFAULT 'draft',
 			monetization_type TEXT NOT NULL DEFAULT 'free',
@@ -88,9 +87,9 @@ func setupDownloadControllerTestDB(t *testing.T) *gorm.DB {
 func insertPublishedReferenceSkill(t *testing.T, db *gorm.DB, slug, sourceURL string) {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, listing_type, source_url, created_by)
-		 VALUES (?, ?, ?, ?, 'published', 'reference', ?, ?)`,
-		slug, "Test Skill", "d", "video", sourceURL, 1,
+		`INSERT INTO skills (slug, name, description, status, listing_type, source_url, created_by)
+		 VALUES (?, ?, ?, 'published', 'reference', ?, ?)`,
+		slug, "Test Skill", "d", sourceURL, 1,
 	).Error)
 }
 

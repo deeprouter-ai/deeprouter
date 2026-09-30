@@ -132,6 +132,14 @@ func TestAddReferenceListingColumns_OnTableWithExistingRows(t *testing.T) {
 			Row().Scan(&listingType, &sourceURL))
 	require.Equal(t, "hosted", listingType, "pre-existing row must backfill to hosted, not break NOT NULL")
 	require.Nil(t, sourceURL, "pre-existing row's source_url must stay NULL, not some empty-string default")
+
+	var categoryColumnCount int
+	require.NoError(t,
+		db.Raw(`SELECT count(*) FROM information_schema.columns
+		        WHERE table_name = 'skills' AND column_name = 'category'`).
+			Row().Scan(&categoryColumnCount))
+	require.Zero(t, categoryColumnCount,
+		"dropCategoryColumn must remove category even from a table that had real pre-existing rows")
 }
 
 // TestReferenceListing_EndToEndOnRealPostgres exercises the whole PRD §13
@@ -158,7 +166,7 @@ func TestReferenceListing_EndToEndOnRealPostgres(t *testing.T) {
 
 	adminSvc := service.NewAdminSkillService(db)
 	skill, err := adminSvc.CreateSkill(service.CreateSkillRequest{
-		Slug: "e2e-ref-skill", Name: "n", Description: "d", Category: "video",
+		Slug: "e2e-ref-skill", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
 	}, 1)
 	require.NoError(t, err, "CreateSkill against real Postgres")
@@ -176,14 +184,14 @@ func TestReferenceListing_EndToEndOnRealPostgres(t *testing.T) {
 	// bypasses AdminSkillService entirely must still be refused by the
 	// database itself.
 	err = db.Exec(`
-		INSERT INTO skills (slug, name, description, category, listing_type, source_url, created_by)
-		VALUES ('e2e-bad-ref', 'n', 'd', 'video', 'reference', NULL, 1)
+		INSERT INTO skills (slug, name, description, listing_type, source_url, created_by)
+		VALUES ('e2e-bad-ref', 'n', 'd', 'reference', NULL, 1)
 	`).Error
 	require.Error(t, err, "skills_reference_source_check must reject a reference row with no source_url")
 
 	err = db.Exec(`
-		INSERT INTO skills (slug, name, description, category, listing_type, source_url, monetization_type, price_usd, created_by)
-		VALUES ('e2e-bad-ref-paid', 'n', 'd', 'video', 'reference', 'https://github.com/o/r', 'paid', 5, 1)
+		INSERT INTO skills (slug, name, description, listing_type, source_url, monetization_type, price_usd, created_by)
+		VALUES ('e2e-bad-ref-paid', 'n', 'd', 'reference', 'https://github.com/o/r', 'paid', 5, 1)
 	`).Error
 	require.Error(t, err, "skills_reference_free_check must reject a paid reference row")
 }

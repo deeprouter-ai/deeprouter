@@ -67,6 +67,10 @@ func migrate(db *gorm.DB) error {
 	if err := addReferenceListingColumns(db); err != nil {
 		return err
 	}
+	// Step 1c: PRD §16 — category is superseded by multi-value tags.
+	if err := dropCategoryColumn(db); err != nil {
+		return err
+	}
 	// Step 2: skill_versions (references skills)
 	if err := migrateSkillVersions(db); err != nil {
 		return err
@@ -185,6 +189,16 @@ func addReferenceListingColumns(db *gorm.DB) error {
 		  END IF;
 		END$$`,
 	)
+}
+
+// dropCategoryColumn removes the single-select `category` column now that
+// filtering runs on the multi-value `tags` column instead (Skill Marketplace
+// V2 PRD §16). DROP COLUMN IF EXISTS is idempotent by itself — no separate
+// existence check needed the way ADD COLUMN's sibling constraints require
+// one. Decided as a hard drop, not a soft-deprecate: pre-launch, only a
+// handful of published rows exist.
+func dropCategoryColumn(db *gorm.DB) error {
+	return db.Exec(`ALTER TABLE skills DROP COLUMN IF EXISTS category`).Error
 }
 
 // execEach runs each DDL statement as its own Exec — see the SQLSTATE 42601

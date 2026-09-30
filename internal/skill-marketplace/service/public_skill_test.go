@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"strings"
 	"testing"
 
 	mktsvc "github.com/QuantumNous/new-api/internal/skill-marketplace/service"
@@ -11,16 +12,20 @@ import (
 
 // insertSkillRow inserts a skill with full control over the listing-relevant
 // columns, returning its id. Raw SQL for the same reason as insertSkill.
-func insertSkillRow(t *testing.T, db *gorm.DB, slug, status, category string, featured bool, rank int, createdAt string) int64 {
+// tags is written in the same serialized shape pq.StringArray.Value()
+// produces ({"a","b"}), matching what tagsOverlapWhere's SQLite branch
+// expects to LIKE against.
+func insertSkillRow(t *testing.T, db *gorm.DB, slug, status string, tags []string, featured bool, rank int, createdAt string) int64 {
 	t.Helper()
 	f := 0
 	if featured {
 		f = 1
 	}
+	serialized := `{"` + strings.Join(tags, `","`) + `"}`
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, featured_flag, featured_rank, created_by, created_at)
+		`INSERT INTO skills (slug, name, description, tags, status, featured_flag, featured_rank, created_by, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-		slug, "Name "+slug, "Description "+slug, category, status, f, rank, createdAt,
+		slug, "Name "+slug, "Description "+slug, serialized, status, f, rank, createdAt,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -39,12 +44,12 @@ func TestListPublishedSkills_FeaturedFirstThenCreatedDesc(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "old-plain", "published", "code", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "new-plain", "published", "code", false, 0, "2026-03-01 00:00:00")
-	insertSkillRow(t, db, "feat-rank2", "published", "code", true, 2, "2026-02-01 00:00:00")
-	insertSkillRow(t, db, "feat-rank1", "published", "code", true, 1, "2026-01-15 00:00:00")
+	insertSkillRow(t, db, "old-plain", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "new-plain", "published", []string{"code"}, false, 0, "2026-03-01 00:00:00")
+	insertSkillRow(t, db, "feat-rank2", "published", []string{"code"}, true, 2, "2026-02-01 00:00:00")
+	insertSkillRow(t, db, "feat-rank1", "published", []string{"code"}, true, 1, "2026-01-15 00:00:00")
 	// A stale rank on a non-featured skill must not reorder the plain group.
-	insertSkillRow(t, db, "stale-rank", "published", "code", false, 5, "2026-02-15 00:00:00")
+	insertSkillRow(t, db, "stale-rank", "published", []string{"code"}, false, 5, "2026-02-15 00:00:00")
 
 	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{})
 	require.NoError(t, err)
@@ -58,9 +63,9 @@ func TestListPublishedSkills_ExcludesDraftAndDeprecated(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "pub", "published", "code", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "dra", "draft", "code", false, 0, "2026-01-02 00:00:00")
-	insertSkillRow(t, db, "dep", "deprecated", "code", false, 0, "2026-01-03 00:00:00")
+	insertSkillRow(t, db, "pub", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "dra", "draft", []string{"code"}, false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "dep", "deprecated", []string{"code"}, false, 0, "2026-01-03 00:00:00")
 
 	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{})
 	require.NoError(t, err)
@@ -72,9 +77,9 @@ func TestListPublishedSkills_Pagination(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "s1", "published", "code", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "s2", "published", "code", false, 0, "2026-01-02 00:00:00")
-	insertSkillRow(t, db, "s3", "published", "code", false, 0, "2026-01-03 00:00:00")
+	insertSkillRow(t, db, "s1", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "s2", "published", []string{"code"}, false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "s3", "published", []string{"code"}, false, 0, "2026-01-03 00:00:00")
 
 	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Page: 2, Limit: 2})
 	require.NoError(t, err)
@@ -93,26 +98,41 @@ func TestListPublishedSkills_LimitClampedTo100(t *testing.T) {
 	assert.Equal(t, 100, resp.Limit)
 }
 
-func TestListPublishedSkills_CategoryFilter(t *testing.T) {
+func TestListPublishedSkills_TagsFilter(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "w1", "published", "writing", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "c1", "published", "code", false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "w1", "published", []string{"writing"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "c1", "published", []string{"code"}, false, 0, "2026-01-02 00:00:00")
 
-	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Category: "writing"})
+	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Tags: []string{"writing"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"w1"}, listSlugs(resp))
+}
+
+// Selecting multiple tags is OR, not AND (Skill Marketplace V2 PRD §16.2) —
+// a skill matching any one of them is returned.
+func TestListPublishedSkills_TagsFilter_ORSemantics(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewPublicSkillService(db)
+
+	insertSkillRow(t, db, "w1", "published", []string{"writing"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "c1", "published", []string{"code"}, false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "r1", "published", []string{"research"}, false, 0, "2026-01-03 00:00:00")
+
+	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Tags: []string{"writing", "code"}})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"w1", "c1"}, listSlugs(resp))
 }
 
 func TestListPublishedSkills_SearchIsCaseInsensitive(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	id := insertSkillRow(t, db, "review", "published", "code", false, 0, "2026-01-01 00:00:00")
+	id := insertSkillRow(t, db, "review", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 	require.NoError(t, db.Exec(
 		`UPDATE skills SET name = 'Code Review Expert', description = 'Reviews pull requests' WHERE id = ?`, id).Error)
-	insertSkillRow(t, db, "other", "published", "code", false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "other", "published", []string{"code"}, false, 0, "2026-01-02 00:00:00")
 
 	// Matches name, any case.
 	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Q: "cOdE rEvIeW"})
@@ -125,11 +145,26 @@ func TestListPublishedSkills_SearchIsCaseInsensitive(t *testing.T) {
 	assert.Equal(t, []string{"review"}, listSlugs(resp))
 }
 
+// A tag outside the frontend's fixed filter list must still be reachable by
+// search (Skill Marketplace V2 PRD §16.2) — otherwise it is unreachable
+// entirely: not clickable in the filter, not findable by keyword either.
+func TestListPublishedSkills_SearchMatchesTags(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewPublicSkillService(db)
+
+	insertSkillRow(t, db, "niche", "published", []string{"unlisted-niche-tag"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "other", "published", []string{"code"}, false, 0, "2026-01-02 00:00:00")
+
+	resp, err := svc.ListPublishedSkills(mktsvc.PublicListRequest{Q: "unlisted-niche-tag"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"niche"}, listSlugs(resp))
+}
+
 func TestListPublishedSkills_IncludesActiveVersionString(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	skillID := insertSkillRow(t, db, "versioned", "published", "code", false, 0, "2026-01-01 00:00:00")
+	skillID := insertSkillRow(t, db, "versioned", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 	versionID := insertVersion(t, db, skillID, "1.2.0", "active")
 	require.NoError(t, db.Exec(`UPDATE skills SET active_version_id = ? WHERE id = ?`, versionID, skillID).Error)
 
@@ -145,8 +180,8 @@ func TestGetSkillBySlug_PublishedAndDeprecatedReturn(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "pub", "published", "code", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "dep", "deprecated", "code", false, 0, "2026-01-02 00:00:00")
+	insertSkillRow(t, db, "pub", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "dep", "deprecated", []string{"code"}, false, 0, "2026-01-02 00:00:00")
 
 	detail, err := svc.GetSkillBySlug("pub")
 	require.NoError(t, err)
@@ -161,7 +196,7 @@ func TestGetSkillBySlug_DraftAndUnknownAreNotFound(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	insertSkillRow(t, db, "dra", "draft", "code", false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "dra", "draft", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 
 	_, err := svc.GetSkillBySlug("dra")
 	assert.ErrorIs(t, err, mktsvc.ErrSkillNotAvailable)
@@ -174,7 +209,7 @@ func TestGetSkillBySlug_CarriesVersionAndChangelog(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewPublicSkillService(db)
 
-	skillID := insertSkillRow(t, db, "detailed", "published", "code", false, 0, "2026-01-01 00:00:00")
+	skillID := insertSkillRow(t, db, "detailed", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 	versionID := insertVersion(t, db, skillID, "2.0.0", "active")
 	require.NoError(t, db.Exec(`UPDATE skill_versions SET changelog = 'Big rewrite' WHERE id = ?`, versionID).Error)
 	require.NoError(t, db.Exec(`UPDATE skills SET active_version_id = ? WHERE id = ?`, versionID, skillID).Error)

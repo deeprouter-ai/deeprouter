@@ -48,7 +48,6 @@ func setupMarketplaceControllerTestDB(t *testing.T) *gorm.DB {
 			slug              TEXT UNIQUE NOT NULL,
 			name              TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
-			category          TEXT NOT NULL DEFAULT '',
 			tags              TEXT NOT NULL DEFAULT '{}',
 			status            TEXT NOT NULL DEFAULT 'draft',
 			monetization_type TEXT NOT NULL DEFAULT 'free',
@@ -105,8 +104,8 @@ func setupMarketplaceControllerTestDB(t *testing.T) *gorm.DB {
 func insertTestSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
-		slug, "Test Skill", "d", "code", status, 1,
+		`INSERT INTO skills (slug, name, description, status, created_by) VALUES (?, ?, ?, ?, ?)`,
+		slug, "Test Skill", "d", status, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -122,9 +121,9 @@ func insertTestSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 func insertTestReferenceSkill(t *testing.T, db *gorm.DB, slug, status, sourceURL string) int64 {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, listing_type, source_url, created_by)
-		 VALUES (?, ?, ?, ?, ?, 'reference', ?, ?)`,
-		slug, "Test Skill", "d", "video", status, sourceURL, 1,
+		`INSERT INTO skills (slug, name, description, status, listing_type, source_url, created_by)
+		 VALUES (?, ?, ?, ?, 'reference', ?, ?)`,
+		slug, "Test Skill", "d", status, sourceURL, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -291,7 +290,7 @@ func TestAdminCreateSkill_InvalidJSON_Returns400(t *testing.T) {
 func TestAdminCreateSkill_DuplicateSlug_Returns409(t *testing.T) {
 	db := setupMarketplaceControllerTestDB(t)
 	insertTestSkill(t, db, "dup-slug", "draft")
-	req := mktsvc.CreateSkillRequest{Slug: "dup-slug", Name: "n", Description: "d", Category: "c"}
+	req := mktsvc.CreateSkillRequest{Slug: "dup-slug", Name: "n", Description: "d"}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
 
 	AdminCreateSkill(ctx)
@@ -302,7 +301,7 @@ func TestAdminCreateSkill_DuplicateSlug_Returns409(t *testing.T) {
 
 func TestAdminCreateSkill_Success_Returns200(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
-	req := mktsvc.CreateSkillRequest{Slug: "new-skill", Name: "n", Description: "d", Category: "c"}
+	req := mktsvc.CreateSkillRequest{Slug: "new-skill", Name: "n", Description: "d"}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
 
 	AdminCreateSkill(ctx)
@@ -313,7 +312,7 @@ func TestAdminCreateSkill_Success_Returns200(t *testing.T) {
 
 func TestAdminCreateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
-	req := mktsvc.CreateSkillRequest{Slug: "Not Valid", Name: "n", Description: "d", Category: "c"}
+	req := mktsvc.CreateSkillRequest{Slug: "Not Valid", Name: "n", Description: "d"}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
 
 	AdminCreateSkill(ctx)
@@ -324,7 +323,7 @@ func TestAdminCreateSkill_InvalidSlugFormat_Returns400(t *testing.T) {
 func TestAdminCreateSkill_PaidWithZeroPrice_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "paid-zero", Name: "n", Description: "d", Category: "c",
+		Slug: "paid-zero", Name: "n", Description: "d",
 		MonetizationType: "paid", PriceUSD: 0,
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
@@ -346,7 +345,7 @@ func TestAdminCreateSkill_PaidWithZeroPrice_Returns400(t *testing.T) {
 func TestAdminCreateSkill_Reference_MissingSourceURL_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "ref-no-url", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-no-url", Name: "n", Description: "d",
 		ListingType: "reference",
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
@@ -360,7 +359,7 @@ func TestAdminCreateSkill_Reference_MissingSourceURL_Returns400(t *testing.T) {
 func TestAdminCreateSkill_Reference_InvalidSourceURLFormat_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "ref-bad-url", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-bad-url", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "not-a-url",
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
@@ -374,7 +373,7 @@ func TestAdminCreateSkill_Reference_InvalidSourceURLFormat_Returns400(t *testing
 func TestAdminCreateSkill_Reference_Paid_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "ref-paid", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-paid", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "https://github.com/o/r",
 		MonetizationType: "paid", PriceUSD: 5,
 	}
@@ -389,7 +388,7 @@ func TestAdminCreateSkill_Reference_Paid_Returns400(t *testing.T) {
 func TestAdminCreateSkill_Hosted_WithSourceURL_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "hosted-with-url", Name: "n", Description: "d", Category: "c",
+		Slug: "hosted-with-url", Name: "n", Description: "d",
 		SourceURL: "https://github.com/o/r",
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
@@ -403,7 +402,7 @@ func TestAdminCreateSkill_Hosted_WithSourceURL_Returns400(t *testing.T) {
 func TestAdminCreateSkill_InvalidListingType_Returns400(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "bogus-type", Name: "n", Description: "d", Category: "c",
+		Slug: "bogus-type", Name: "n", Description: "d",
 		ListingType: "bogus",
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
@@ -417,7 +416,7 @@ func TestAdminCreateSkill_InvalidListingType_Returns400(t *testing.T) {
 func TestAdminCreateSkill_Reference_Success_Returns200(t *testing.T) {
 	setupMarketplaceControllerTestDB(t)
 	req := mktsvc.CreateSkillRequest{
-		Slug: "ref-ok", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-ok", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "https://github.com/o/r",
 	}
 	ctx, recorder := marketplaceContext(t, http.MethodPost, req, nil)
