@@ -179,7 +179,6 @@ export function SkillDetailPage({ slug }: { slug: string }) {
               </div>
 
               <div className='mt-3 flex flex-wrap items-center gap-2'>
-                <Badge variant='secondary'>{skill.category}</Badge>
                 {/* PRD §13: a reference listing is always free (enforced by
                     skills_reference_free_check) — showing a price badge for
                     something with no purchase flow would be noise at best. */}
@@ -193,8 +192,14 @@ export function SkillDetailPage({ slug }: { slug: string }) {
                     v{skill.version}
                   </Badge>
                 )}
+                {/* PRD §16: clicking a tag jumps back to the marketplace list
+                    with that tag preselected as a filter. */}
                 {skill.tags.map((tag) => (
-                  <Badge key={tag} variant='ghost'>
+                  <Badge
+                    key={tag}
+                    variant='ghost'
+                    render={<Link to='/marketplace' search={{ tags: [tag] }} />}
+                  >
                     {tag}
                   </Badge>
                 ))}

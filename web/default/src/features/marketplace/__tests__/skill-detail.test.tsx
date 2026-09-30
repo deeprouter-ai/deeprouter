@@ -105,7 +105,6 @@ function makeSkill(
     slug: 'test-skill',
     name: 'Test Skill',
     description: 'Does things.',
-    category: 'video',
     tags: [],
     status: 'published',
     monetization_type: 'free',

@@ -53,7 +53,6 @@ function makeSkill(overrides: Partial<SkillSummary>): SkillSummary {
     slug: 'featured-skill',
     name: 'Featured Skill',
     description: '',
-    category: 'code',
     tags: [],
     status: 'published',
     monetization_type: 'free',
