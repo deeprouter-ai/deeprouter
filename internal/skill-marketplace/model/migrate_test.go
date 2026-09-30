@@ -196,6 +196,60 @@ func TestReferenceListing_EndToEndOnRealPostgres(t *testing.T) {
 	require.Error(t, err, "skills_reference_free_check must reject a paid reference row")
 }
 
+// TestTagsFilter_ORSemanticsOnRealPostgres exercises the actual `&&` array
+// overlap operator (Skill Marketplace V2 PRD §16) against a real Postgres
+// tags text[] column — the service package's own tests only ever run this
+// filter through the SQLite LIKE-based approximation in tags_filter.go,
+// which proves the branch logic but says nothing about whether `&&` itself
+// does what the code assumes on the database it actually runs on.
+func TestTagsFilter_ORSemanticsOnRealPostgres(t *testing.T) {
+	adminDSN := os.Getenv("TEST_POSTGRES_DSN")
+	if adminDSN == "" {
+		t.Skip("set TEST_POSTGRES_DSN to run the real-Postgres tags filter test")
+	}
+
+	testDSN := createScratchDatabase(t, adminDSN)
+	db, err := gorm.Open(postgres.Open(testDSN), &gorm.Config{PrepareStmt: true})
+	require.NoError(t, err, "open scratch database")
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Exec(`CREATE TABLE users (id BIGSERIAL PRIMARY KEY)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (1)`).Error)
+	require.NoError(t, model.Migrate(db))
+
+	adminSvc := service.NewAdminSkillService(db)
+	makePublished := func(slug string, tags []string) {
+		skill, err := adminSvc.CreateSkill(service.CreateSkillRequest{
+			Slug: slug, Name: slug, Description: "d", Tags: tags,
+		}, 1)
+		require.NoError(t, err, "CreateSkill against real Postgres")
+		// A skill needs an active version to publish; skip that ceremony
+		// and flip status directly — this test is about the tags filter,
+		// not the publish state machine (already covered elsewhere).
+		require.NoError(t, db.Exec(
+			`UPDATE skills SET status = 'published' WHERE id = ?`, skill.ID,
+		).Error)
+	}
+	makePublished("writing-only", []string{"writing"})
+	makePublished("code-only", []string{"code"})
+	makePublished("neither", []string{"research"})
+
+	publicSvc := service.NewPublicSkillService(db)
+	resp, err := publicSvc.ListPublishedSkills(service.PublicListRequest{
+		Tags: []string{"writing", "code"},
+	})
+	require.NoError(t, err, "ListPublishedSkills against real Postgres")
+
+	var slugs []string
+	for _, s := range resp.Skills {
+		slugs = append(slugs, s.Slug)
+	}
+	require.ElementsMatch(t, []string{"writing-only", "code-only"}, slugs,
+		"&& must match a skill with ANY requested tag (OR), and must not also return a skill with neither")
+}
+
 // createScratchDatabase opens the admin DSN's own (maintenance) database,
 // creates a uniquely-named database for this test run, and registers
 // cleanup to drop it — so this test never touches whatever database the
