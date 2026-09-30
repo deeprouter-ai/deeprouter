@@ -1,6 +1,9 @@
 package model_test
 
 import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -248,6 +251,69 @@ func TestTagsFilter_ORSemanticsOnRealPostgres(t *testing.T) {
 	}
 	require.ElementsMatch(t, []string{"writing-only", "code-only"}, slugs,
 		"&& must match a skill with ANY requested tag (OR), and must not also return a skill with neither")
+}
+
+// TestHostedSkillDownload_EndToEndOnRealPostgres closes the one regression
+// claim P11 (Skill Marketplace V2 PRD §15) shipped without a real-database
+// check: "removing the runner from BuildSkillPackage doesn't break
+// downloading an existing hosted skill." That claim rested on "download.go
+// itself was never touched" plus the SQLite-backed unit suite — this runs
+// the actual create → upload version → activate (where BuildSkillPackage
+// runs) → publish → download path against real Postgres, including
+// unzipping what comes back.
+func TestHostedSkillDownload_EndToEndOnRealPostgres(t *testing.T) {
+	adminDSN := os.Getenv("TEST_POSTGRES_DSN")
+	if adminDSN == "" {
+		t.Skip("set TEST_POSTGRES_DSN to run the real-Postgres download test")
+	}
+
+	testDSN := createScratchDatabase(t, adminDSN)
+	db, err := gorm.Open(postgres.Open(testDSN), &gorm.Config{PrepareStmt: true})
+	require.NoError(t, err, "open scratch database")
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	require.NoError(t, db.Exec(`CREATE TABLE users (id BIGSERIAL PRIMARY KEY)`).Error)
+	require.NoError(t, db.Exec(`INSERT INTO users (id) VALUES (1)`).Error)
+	require.NoError(t, model.Migrate(db))
+
+	adminSvc := service.NewAdminSkillService(db)
+	versionSvc := service.NewAdminVersionService(db)
+	downloadSvc := service.NewDownloadService(db, func() float64 { return 500_000 })
+
+	skill, err := adminSvc.CreateSkill(service.CreateSkillRequest{
+		Slug: "e2e-hosted-skill", Name: "n", Description: "d", Tags: []string{"code"},
+	}, 1)
+	require.NoError(t, err, "CreateSkill against real Postgres")
+
+	version, err := versionSvc.UploadVersion(skill.ID, service.UploadVersionRequest{
+		Version:        "1.0.0",
+		SkillMDContent: "# E2E Hosted Skill\n\nDoes things.",
+		ManifestJSON:   json.RawMessage(`{"slug":"e2e-hosted-skill","version":"1.0.0"}`),
+	}, 1)
+	require.NoError(t, err, "UploadVersion against real Postgres")
+
+	_, err = versionSvc.ActivateVersion(skill.ID, version.ID, 1)
+	require.NoError(t, err, "ActivateVersion against real Postgres — this is where P11's BuildSkillPackage() runs")
+
+	_, err = adminSvc.PublishSkill(skill.ID, 1)
+	require.NoError(t, err, "PublishSkill against real Postgres")
+
+	result, err := downloadSvc.Download(1, "e2e-hosted-skill")
+	require.NoError(t, err, "Download against real Postgres — this is P11's regression surface")
+	require.False(t, result.PurchaseMade, "a free skill must never create a purchase")
+
+	zr, err := zip.NewReader(bytes.NewReader(result.Zip), int64(len(result.Zip)))
+	require.NoError(t, err, "downloaded bytes must be a valid ZIP")
+	var names []string
+	for _, f := range zr.File {
+		names = append(names, f.Name)
+	}
+	require.ElementsMatch(t,
+		[]string{"e2e-hosted-skill/SKILL.md", "e2e-hosted-skill/manifest.json", "e2e-hosted-skill/README.md"},
+		names,
+		"P11: a real activation's downloaded ZIP must be exactly the 3 post-runner-removal files")
 }
 
 // createScratchDatabase opens the admin DSN's own (maintenance) database,
