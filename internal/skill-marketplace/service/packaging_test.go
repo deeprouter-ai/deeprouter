@@ -21,9 +21,7 @@ func testSkillAndVersion() (*model.Skill, *model.SkillVersion) {
 		SkillMDContent: "# Code Review Expert\n\nReviews code for style issues.",
 		ManifestJSON: json.RawMessage(`{
 			"slug": "code-review-expert",
-			"version": "1.0.0",
-			"requires_deeprouter_key": true,
-			"deeprouter_routing_endpoint": "https://deeprouter.co/v1/routing/chat/completions"
+			"version": "1.0.0"
 		}`),
 	}
 	return skill, version
@@ -68,12 +66,7 @@ func TestBuildSkillPackage_Success(t *testing.T) {
 		t.Fatalf("SKILL.md content mismatch")
 	}
 
-	runner := readZipFile(t, zr, root+"runtime/deeprouter_skill_runner.py")
-	if !strings.Contains(runner, deepRouterRoutingEndpoint) {
-		t.Fatalf("packaged runner does not contain the DR routing endpoint")
-	}
-
-	readme := readZipFile(t, zr, root+"runtime/README.md")
+	readme := readZipFile(t, zr, root+"README.md")
 	if !strings.Contains(readme, skill.Slug) {
 		t.Fatalf("packaged README does not have the slug substituted in")
 	}
@@ -94,6 +87,15 @@ func TestBuildSkillPackage_Success(t *testing.T) {
 	}
 	if manifest["slug"] != skill.Slug {
 		t.Fatalf("manifest.json lost the Admin-supplied slug field")
+	}
+
+	if len(zr.File) != 3 {
+		t.Fatalf("expected exactly 3 files in the ZIP (SKILL.md, manifest.json, README.md), got %d", len(zr.File))
+	}
+	for _, f := range zr.File {
+		if strings.HasPrefix(f.Name, root+"runtime/") {
+			t.Fatalf("ZIP still contains a runtime/ entry: %s", f.Name)
+		}
 	}
 }
 
@@ -150,40 +152,9 @@ func TestValidateSkillPackageSecurity_ScansAllProvidedPieces(t *testing.T) {
 	err := validateSkillPackageSecurity(
 		"clean SKILL.md content",
 		`{"slug": "demo"}`,
-		"clean runner content",
 		"README with a leak: sk-abcdefghijklmnopqrstuvwx1234",
 	)
 	if err == nil {
 		t.Fatalf("expected error when any provided piece contains a key pattern")
-	}
-}
-
-func TestValidateSkillPackageRuntimeDependency(t *testing.T) {
-	cases := []struct {
-		name    string
-		content string
-		wantErr bool
-	}{
-		{
-			name:    "calls DR routing endpoint",
-			content: `DEEPROUTER_ROUTING_URL = "https://deeprouter.co/v1/routing/chat/completions"`,
-			wantErr: false,
-		},
-		{
-			name:    "calls a different provider",
-			content: `requests.post("https://api.openai.com/v1/chat/completions")`,
-			wantErr: true,
-		},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			err := validateSkillPackageRuntimeDependency(c.content)
-			if c.wantErr && err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if !c.wantErr && err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
-		})
 	}
 }

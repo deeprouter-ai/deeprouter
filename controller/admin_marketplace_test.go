@@ -754,7 +754,7 @@ func TestAdminListVersions_Success_Returns200(t *testing.T) {
 // ── AdminUploadVersion ───────────────────────────────────────────────────────
 
 func validTestManifest(slug, version string) json.RawMessage {
-	return json.RawMessage(`{"slug":"` + slug + `","version":"` + version + `","requires_deeprouter_key":true,"deeprouter_routing_endpoint":"https://deeprouter.co/v1/routing/chat/completions"}`)
+	return json.RawMessage(`{"slug":"` + slug + `","version":"` + version + `"}`)
 }
 
 func TestAdminUploadVersion_InvalidJSON_Returns400(t *testing.T) {
