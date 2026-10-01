@@ -34,17 +34,12 @@ How to invoke this skill and what input it expects.
 Description of the expected output format and structure.
 `
 
-export const DEEPROUTER_ROUTING_ENDPOINT =
-  'https://deeprouter.co/v1/routing/chat/completions'
-
 // PRD §9 stage-1 required fields, prefilled with this skill's slug/version.
 export function manifestTemplate(slug: string, version: string): string {
   return JSON.stringify(
     {
       slug,
       version,
-      requires_deeprouter_key: true,
-      deeprouter_routing_endpoint: DEEPROUTER_ROUTING_ENDPOINT,
     },
     null,
     2

@@ -42,7 +42,6 @@ func TestSkill_TagsRoundTripThroughRealPostgres(t *testing.T) {
 			Slug:        "empty-tags-skill",
 			Name:        "Empty Tags Skill",
 			Description: "d",
-			Category:    "code",
 			Tags:        pq.StringArray{},
 			CreatedBy:   1,
 		}
@@ -59,7 +58,6 @@ func TestSkill_TagsRoundTripThroughRealPostgres(t *testing.T) {
 			Slug:        "tagged-skill",
 			Name:        "Tagged Skill",
 			Description: "d",
-			Category:    "code",
 			Tags:        pq.StringArray{"code", "review"},
 			CreatedBy:   1,
 		}

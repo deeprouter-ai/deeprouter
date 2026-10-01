@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/internal/skill-marketplace/model"
@@ -33,7 +34,6 @@ func setupDB(t *testing.T) *gorm.DB {
 			tags              TEXT NOT NULL DEFAULT '{}',
 			name              TEXT NOT NULL DEFAULT '',
 			description       TEXT NOT NULL DEFAULT '',
-			category          TEXT NOT NULL DEFAULT '',
 			status            TEXT NOT NULL DEFAULT 'draft',
 			monetization_type TEXT NOT NULL DEFAULT 'free',
 			price_usd         REAL NOT NULL DEFAULT 0,
@@ -100,8 +100,8 @@ func setupDB(t *testing.T) *gorm.DB {
 func insertSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
-		slug, "Test Skill", "Test Description", "test", status, 1,
+		`INSERT INTO skills (slug, name, description, status, created_by) VALUES (?, ?, ?, ?, ?)`,
+		slug, "Test Skill", "Test Description", status, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -111,9 +111,9 @@ func insertSkill(t *testing.T, db *gorm.DB, slug, status string) int64 {
 func insertReferenceSkill(t *testing.T, db *gorm.DB, slug, status, sourceURL string) int64 {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, listing_type, source_url, created_by)
-		 VALUES (?, ?, ?, ?, ?, 'reference', ?, ?)`,
-		slug, "Test Skill", "Test Description", "test", status, sourceURL, 1,
+		`INSERT INTO skills (slug, name, description, status, listing_type, source_url, created_by)
+		 VALUES (?, ?, ?, ?, 'reference', ?, ?)`,
+		slug, "Test Skill", "Test Description", status, sourceURL, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -133,15 +133,19 @@ func logCount(t *testing.T, db *gorm.DB, skillID int64, action string) int64 {
 // ── ListSkills ────────────────────────────────────────────────────────────────
 //
 // Never tested before this: it's the query the list page actually runs on
-// every load — status filter, category filter, pagination and the
+// every load — status filter, tags filter, pagination and the
 // active_version join — and none of it had a single dedicated test. The
 // controller test only checks Total==1 on an unfiltered call.
 
-func insertSkillWithCategory(t *testing.T, db *gorm.DB, slug, status, category string) int64 {
+// insertSkillWithTags writes tags in the same serialized shape
+// pq.StringArray.Value() produces ({"a","b"}), matching what
+// tagsOverlapWhere's SQLite branch expects to LIKE against.
+func insertSkillWithTags(t *testing.T, db *gorm.DB, slug, status string, tags []string) int64 {
 	t.Helper()
+	serialized := `{"` + strings.Join(tags, `","`) + `"}`
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
-		slug, "Test Skill", "d", category, status, 1,
+		`INSERT INTO skills (slug, name, description, tags, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
+		slug, "Test Skill", "d", serialized, status, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -161,27 +165,59 @@ func TestListSkills_FiltersByStatus(t *testing.T) {
 	assert.Equal(t, "published-one", resp.Skills[0].Slug)
 }
 
-func TestListSkills_FiltersByCategory(t *testing.T) {
+func TestListSkills_FiltersByTags(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)
-	insertSkillWithCategory(t, db, "writing-skill", "draft", "writing")
-	insertSkillWithCategory(t, db, "code-skill", "draft", "code")
+	insertSkillWithTags(t, db, "writing-skill", "draft", []string{"writing"})
+	insertSkillWithTags(t, db, "code-skill", "draft", []string{"code"})
 
-	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Category: "code", Page: 1, PageSize: 20})
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Tags: []string{"code"}, Page: 1, PageSize: 20})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resp.Total)
 	require.Len(t, resp.Skills, 1)
 	assert.Equal(t, "code-skill", resp.Skills[0].Slug)
 }
 
-func TestListSkills_StatusAndCategoryCombine(t *testing.T) {
+// A skill matching any one of the requested tags is returned (OR semantics,
+// Skill Marketplace V2 PRD §16.2) — not only a skill matching all of them.
+func TestListSkills_FiltersByTags_ORSemantics(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)
-	insertSkillWithCategory(t, db, "match", "published", "code")
-	insertSkillWithCategory(t, db, "wrong-status", "draft", "code")
-	insertSkillWithCategory(t, db, "wrong-category", "published", "writing")
+	insertSkillWithTags(t, db, "writing-only", "draft", []string{"writing"})
+	insertSkillWithTags(t, db, "code-only", "draft", []string{"code"})
+	insertSkillWithTags(t, db, "neither", "draft", []string{"research"})
 
-	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Status: "published", Category: "code", Page: 1, PageSize: 20})
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Tags: []string{"writing", "code"}, Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), resp.Total)
+	slugs := []string{resp.Skills[0].Slug, resp.Skills[1].Slug}
+	assert.ElementsMatch(t, []string{"writing-only", "code-only"}, slugs)
+}
+
+// See the identical case on the public listing side
+// (TestListPublishedSkills_TagsFilter_CaseInsensitive) for why this matters:
+// tags are free text, the filter buttons always send their fixed lowercase
+// value.
+func TestListSkills_FiltersByTags_CaseInsensitive(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillWithTags(t, db, "writing-skill", "draft", []string{"Writing"})
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Tags: []string{"writing"}, Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), resp.Total)
+	require.Len(t, resp.Skills, 1)
+	assert.Equal(t, "writing-skill", resp.Skills[0].Slug)
+}
+
+func TestListSkills_StatusAndTagsCombine(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+	insertSkillWithTags(t, db, "match", "published", []string{"code"})
+	insertSkillWithTags(t, db, "wrong-status", "draft", []string{"code"})
+	insertSkillWithTags(t, db, "wrong-tag", "published", []string{"writing"})
+
+	resp, err := svc.ListSkills(mktsvc.ListSkillsRequest{Status: "published", Tags: []string{"code"}, Page: 1, PageSize: 20})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resp.Total)
 	require.Len(t, resp.Skills, 1)
@@ -267,8 +303,8 @@ func TestListSkills_EmptyWhenNoSkills(t *testing.T) {
 func insertSkillNamed(t *testing.T, db *gorm.DB, slug, name, status string) int64 {
 	t.Helper()
 	require.NoError(t, db.Exec(
-		`INSERT INTO skills (slug, name, description, category, status, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
-		slug, name, "d", "test", status, 1,
+		`INSERT INTO skills (slug, name, description, status, created_by) VALUES (?, ?, ?, ?, ?)`,
+		slug, name, "d", status, 1,
 	).Error)
 	var id int64
 	require.NoError(t, db.Raw(`SELECT last_insert_rowid()`).Scan(&id).Error)
@@ -350,7 +386,6 @@ func TestCreateSkill_Success(t *testing.T) {
 		Slug:             "new-skill",
 		Name:             "New Skill",
 		Description:      "Does things",
-		Category:         "code",
 		Tags:             []string{"code", "review"},
 		MonetizationType: "paid",
 		PriceUSD:         4.99,
@@ -367,7 +402,7 @@ func TestCreateSkill_NilTags_StoresAsEmptyNotNil(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "no-tags-skill", Name: "n", Description: "d", Category: "c",
+		Slug: "no-tags-skill", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 	// This is the exact shape of the bug the P5 walkthrough hit: a nil
@@ -386,7 +421,7 @@ func TestCreateSkill_EmptyMonetizationType_DefaultsToFree(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "default-monetization", Name: "n", Description: "d", Category: "c",
+		Slug: "default-monetization", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 	assert.Equal(t, "free", skill.MonetizationType)
@@ -396,7 +431,7 @@ func TestCreateSkill_DuplicateSlug_ReturnsErrSlugTaken(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)
 
-	req := mktsvc.CreateSkillRequest{Slug: "dup-slug", Name: "n", Description: "d", Category: "c"}
+	req := mktsvc.CreateSkillRequest{Slug: "dup-slug", Name: "n", Description: "d"}
 	_, err := svc.CreateSkill(req, 1)
 	require.NoError(t, err)
 
@@ -414,7 +449,7 @@ func TestCreateSkill_InvalidSlugFormat_Rejected(t *testing.T) {
 
 	for _, bad := range []string{"Has Spaces", "UPPERCASE", "trailing-", "-leading", "double--hyphen", ""} {
 		_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-			Slug: bad, Name: "n", Description: "d", Category: "c",
+			Slug: bad, Name: "n", Description: "d",
 		}, 1)
 		require.ErrorIsf(t, err, mktsvc.ErrInvalidSlugFormat, "slug %q should have been rejected", bad)
 	}
@@ -429,7 +464,7 @@ func TestCreateSkill_InvalidMonetizationType_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "bad-monetization", Name: "n", Description: "d", Category: "c",
+		Slug: "bad-monetization", Name: "n", Description: "d",
 		MonetizationType: "subscription",
 	}, 1)
 	require.ErrorIs(t, err, mktsvc.ErrInvalidMonetizationType)
@@ -440,7 +475,7 @@ func TestCreateSkill_PaidWithZeroPrice_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "paid-zero-price", Name: "n", Description: "d", Category: "c",
+		Slug: "paid-zero-price", Name: "n", Description: "d",
 		MonetizationType: "paid", PriceUSD: 0,
 	}, 1)
 	require.ErrorIs(t, err, mktsvc.ErrPriceRequiredForPaid)
@@ -453,7 +488,7 @@ func TestCreateSkill_EmptyListingType_DefaultsToHosted(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "default-listing-type", Name: "n", Description: "d", Category: "c",
+		Slug: "default-listing-type", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 	assert.Equal(t, model.SkillListingTypeHosted, skill.ListingType)
@@ -465,7 +500,7 @@ func TestCreateSkill_InvalidListingType_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "bad-listing-type", Name: "n", Description: "d", Category: "c",
+		Slug: "bad-listing-type", Name: "n", Description: "d",
 		ListingType: "hosted-and-reference",
 	}, 1)
 	require.ErrorIs(t, err, mktsvc.ErrInvalidListingType)
@@ -476,7 +511,7 @@ func TestCreateSkill_Reference_Success(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "ref-skill", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-skill", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
 	}, 1)
 	require.NoError(t, err)
@@ -491,7 +526,7 @@ func TestCreateSkill_Reference_MissingSourceURL_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "ref-no-url", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-no-url", Name: "n", Description: "d",
 		ListingType: "reference",
 	}, 1)
 	require.ErrorIs(t, err, mktsvc.ErrSourceURLRequired)
@@ -510,7 +545,7 @@ func TestCreateSkill_Reference_InvalidSourceURLFormat_Rejected(t *testing.T) {
 		"://missing-scheme.com",
 	} {
 		_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-			Slug: "ref-bad-url", Name: "n", Description: "d", Category: "video",
+			Slug: "ref-bad-url", Name: "n", Description: "d",
 			ListingType: "reference", SourceURL: bad,
 		}, 1)
 		require.ErrorIsf(t, err, mktsvc.ErrInvalidSourceURLFormat, "source_url %q should have been rejected", bad)
@@ -529,7 +564,7 @@ func TestCreateSkill_Reference_AcceptsHTTPAndNonGitHubHosts(t *testing.T) {
 		"https://gitlab.com/owner/repo",
 	} {
 		skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-			Slug: fmt.Sprintf("ref-ok-url-%d", i), Name: "n", Description: "d", Category: "video",
+			Slug: fmt.Sprintf("ref-ok-url-%d", i), Name: "n", Description: "d",
 			ListingType: "reference", SourceURL: ok,
 		}, 1)
 		require.NoErrorf(t, err, "source_url %q should have been accepted", ok)
@@ -543,7 +578,7 @@ func TestCreateSkill_Reference_Paid_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "ref-paid", Name: "n", Description: "d", Category: "video",
+		Slug: "ref-paid", Name: "n", Description: "d",
 		ListingType: "reference", SourceURL: "https://github.com/owner/repo",
 		MonetizationType: "paid", PriceUSD: 5,
 	}, 1)
@@ -555,7 +590,7 @@ func TestCreateSkill_Hosted_SourceURLProvided_Rejected(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "hosted-with-url", Name: "n", Description: "d", Category: "c",
+		Slug: "hosted-with-url", Name: "n", Description: "d",
 		SourceURL: "https://github.com/owner/repo",
 	}, 1)
 	require.ErrorIs(t, err, mktsvc.ErrSourceURLOnHostedSkill)
@@ -568,7 +603,7 @@ func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "partial-update", Name: "Old Name", Description: "Old Description", Category: "old-cat",
+		Slug: "partial-update", Name: "Old Name", Description: "Old Description",
 	}, 1)
 	require.NoError(t, err)
 
@@ -576,7 +611,6 @@ func TestUpdateSkill_PartialUpdate_LeavesOtherFieldsAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "New Name", updated.Name)
 	assert.Equal(t, "Old Description", updated.Description)
-	assert.Equal(t, "old-cat", updated.Category)
 }
 
 func TestUpdateSkill_TagsReplaced(t *testing.T) {
@@ -584,7 +618,7 @@ func TestUpdateSkill_TagsReplaced(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "tags-update", Name: "n", Description: "d", Category: "c", Tags: []string{"old"},
+		Slug: "tags-update", Name: "n", Description: "d", Tags: []string{"old"},
 	}, 1)
 	require.NoError(t, err)
 
@@ -600,7 +634,7 @@ func TestUpdateSkill_PriceUSDPointer_NilLeavesPriceUnchanged(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "price-unchanged", Name: "n", Description: "d", Category: "c",
+		Slug: "price-unchanged", Name: "n", Description: "d",
 		MonetizationType: "paid", PriceUSD: 9.99,
 	}, 1)
 	require.NoError(t, err)
@@ -618,7 +652,7 @@ func TestUpdateSkill_SlugChangesWhileDraft(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "old-slug", Name: "n", Description: "d", Category: "c",
+		Slug: "old-slug", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 
@@ -654,7 +688,7 @@ func TestUpdateSkill_SlugInvalidFormat_RejectedEvenInDraft(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "valid-slug", Name: "n", Description: "d", Category: "c",
+		Slug: "valid-slug", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 
@@ -667,11 +701,11 @@ func TestUpdateSkill_SlugDuplicate_ReturnsErrSlugTaken(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	_, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "taken-slug", Name: "n", Description: "d", Category: "c",
+		Slug: "taken-slug", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "other-slug", Name: "n", Description: "d", Category: "c",
+		Slug: "other-slug", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 
@@ -756,7 +790,7 @@ func TestUpdateSkill_DoesNotWriteAuditLog(t *testing.T) {
 	svc := mktsvc.NewAdminSkillService(db)
 
 	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
-		Slug: "no-log-on-update", Name: "n", Description: "d", Category: "c",
+		Slug: "no-log-on-update", Name: "n", Description: "d",
 	}, 1)
 	require.NoError(t, err)
 

@@ -37,7 +37,6 @@ function makeSkill(overrides: Partial<MarketplaceSkill>): MarketplaceSkill {
     slug: 'test-skill',
     name: 'Test Skill',
     description: 'Does things.',
-    category: 'video',
     tags: [],
     status: 'published',
     monetization_type: 'free',
@@ -74,5 +73,11 @@ describe('SkillCard', () => {
       />
     )
     expect(screen.getByText('$4.99')).toBeInTheDocument()
+  })
+
+  it('renders each tag as its own badge', () => {
+    render(<SkillCard skill={makeSkill({ tags: ['writing', 'review'] })} />)
+    expect(screen.getByText('writing')).toBeInTheDocument()
+    expect(screen.getByText('review')).toBeInTheDocument()
   })
 })

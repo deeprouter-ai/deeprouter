@@ -41,7 +41,16 @@ export const marketplaceQueryKeys = {
 export async function fetchMarketplaceSkills(
   params: MarketplaceListParams
 ): Promise<MarketplaceListData> {
-  const res = await api.get('/api/skills', { params })
+  // axios's default array serialization is tags[]=a&tags[]=b (bracket
+  // notation); Gin's `form:"tags"` binding on a []string field only
+  // recognizes the repeated-key form tags=a&tags=b with no brackets. Without
+  // this, the backend silently sees an empty Tags slice and the filter is a
+  // no-op — found by clicking the filter in a browser, not by any of the
+  // curl/unit-test verification, which always built the query string by hand.
+  const res = await api.get('/api/skills', {
+    params,
+    paramsSerializer: { indexes: null },
+  })
   return res.data.data as MarketplaceListData
 }
 
@@ -75,9 +84,8 @@ export async function downloadMarketplaceSkill(slug: string): Promise<void> {
       >
     )
   } catch (error) {
-    const resp = (
-      error as { response?: { status?: number; data?: unknown } }
-    ).response
+    const resp = (error as { response?: { status?: number; data?: unknown } })
+      .response
     throw await extractDownloadError(resp?.status, resp?.data)
   }
   const filename = filenameFromContentDisposition(

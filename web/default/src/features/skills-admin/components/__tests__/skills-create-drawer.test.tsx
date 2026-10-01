@@ -54,7 +54,6 @@ async function fillRequiredFields() {
   await userEvent.type(screen.getByLabelText('Name'), 'Code Review Expert')
   await userEvent.type(screen.getByLabelText('Slug'), 'code-review-expert')
   await userEvent.type(screen.getByLabelText('Description'), 'Reviews code.')
-  await userEvent.type(screen.getByLabelText('Category'), 'code')
 }
 
 describe('SkillsCreateDrawer', () => {
