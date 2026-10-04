@@ -355,7 +355,9 @@ export function ChannelTestDialog({
               <div className='flex flex-col gap-1 text-xs'>
                 <StatusBadge
                   label={
-                    connectionOnly
+                    currentRow?.type === 54 ||
+                    (currentRow?.type === 35 &&
+                      /^(MiniMax-H|[TIS]2V-)/i.test(model.trim()))
                       ? t('Connected — model generation not tested')
                       : 'Success'
                   }

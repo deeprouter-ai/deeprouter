@@ -103,6 +103,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
       'https://platform.minimax.io/user-center/basic-information/interface-key',
     description: '对话 / MiniMax-M3 · M2.7 · M2（国际站，OpenAI 兼容）',
   },
+
   {
     id: 'qwen',
     name: 'Qwen 通义千问 · 对话',

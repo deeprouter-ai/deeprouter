@@ -234,8 +234,12 @@ export function detectAdvancedMode(
   apiKey: ApiKey,
   userDefaultGroup: string
 ): boolean {
-  if (apiKey.model_limits_enabled) return true
-  if (apiKey.model_limits && apiKey.model_limits.length > 0) return true
+  // Purpose-bound keys get their model grants from the backend. Those
+  // generated grants alone must not turn Simple editing into Advanced.
+  if (!apiKey.simple_purpose) {
+    if (apiKey.model_limits_enabled) return true
+    if (apiKey.model_limits && apiKey.model_limits.length > 0) return true
+  }
   if (apiKey.allow_ips && apiKey.allow_ips.length > 0) return true
   // group is "non-default" if it's set AND different from the user's group.
   // empty string = use user's group → still Simple.

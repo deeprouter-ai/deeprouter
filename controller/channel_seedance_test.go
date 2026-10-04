@@ -61,3 +61,11 @@ func TestSeedanceChannelTestMissingKey(t *testing.T) {
 	result := testChannel(&model.Channel{Type: constant.ChannelTypeDoubaoVideo}, "", "", false)
 	require.ErrorContains(t, result.localErr, "enabled API key")
 }
+
+func TestSeedanceAndMixedChannelScope(t *testing.T) {
+	mixed := &model.Channel{Type: constant.ChannelTypeMiniMax, Models: "MiniMax-M3,MiniMax-H3"}
+	require.Equal(t, "connection_only", channelTestScope(mixed, "MiniMax-H3"))
+	require.Equal(t, "model_request", channelTestScope(mixed, "MiniMax-M3"))
+	require.Equal(t, "model_request", channelTestScope(nil))
+	require.Equal(t, "connection_only", channelTestScope(&model.Channel{Type: constant.ChannelTypeDoubaoVideo}, "doubao-seedance-2-5-260628"))
+}

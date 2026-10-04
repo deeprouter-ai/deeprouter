@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -11,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestListModelsMediaKeyCreateUpdateAndDirectory(t *testing.T) {
+func TestMediaKeyCreateUpdateAndDirectory(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Token{}))
 	seedListModelsUser(t, db, 7101, "default", false)
@@ -66,6 +67,18 @@ func TestListModelsMediaKeyCreateUpdateAndDirectory(t *testing.T) {
 	require.True(t, token.ModelLimitsEnabled)
 	require.Empty(t, token.Group)
 	require.False(t, token.CrossGroupRetry)
+	var created struct {
+		ID  int    `json:"id"`
+		Key string `json:"key"`
+	}
+	require.NoError(t, common.Unmarshal(decodeAPIResponse(t, recorder).Data, &created))
+	require.Equal(t, token.Id, created.ID)
+	require.Equal(t, token.GetFullKey(), created.Key)
+	require.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
+	readCtx, readRecorder := newAuthenticatedContext(t, http.MethodGet, "/api/token/"+strconv.Itoa(token.Id), nil, 7101)
+	readCtx.Params = append(readCtx.Params, struct{ Key, Value string }{Key: "id", Value: strconv.Itoa(token.Id)})
+	GetToken(readCtx)
+	require.NotContains(t, readRecorder.Body.String(), token.GetFullKey())
 	// Listing and relay permissions agree on these exact models.
 	ctx, recorder = newAuthenticatedContext(t, http.MethodGet, "/v1/models", nil, 7101)
 	ctx.Set(string(constant.ContextKeyTokenModelLimitEnabled), true)
@@ -82,7 +95,7 @@ func TestListModelsMediaKeyCreateUpdateAndDirectory(t *testing.T) {
 	require.Equal(t, "eleven_multilingual_v2", token.ModelLimits)
 }
 
-func TestListModelsMediaKeyEmptyCatalogFailsClosed(t *testing.T) {
+func TestMediaKeyEmptyCatalogFailsClosed(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Token{}))
 	seedListModelsUser(t, db, 7102, "empty", false)
