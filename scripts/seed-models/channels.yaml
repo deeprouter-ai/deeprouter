@@ -209,12 +209,11 @@ channels:
     enabled: true
     key_env: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com
-    test_model: deepseek-v4-flash
+    test_model: deepseek-v4-pro
     tag: deepseek
     # deepseek-chat / deepseek-reasoner 已于 2026-07-24 下线，不再种子化。
     models:
       - deepseek-v4-pro
-      - deepseek-v4-flash
 
   - name: Moonshot Kimi 月之暗面
     type: 25
@@ -489,12 +488,4 @@ channels:
       - suno_music
       - suno_lyrics
 
-  - name: Sora 视频
-    type: 55
-    enabled: false        # 默认关
-    key_env: SORA_API_KEY
-    test_model: sora-2
-    tag: sora
-    models:
-      - sora-2
-      - sora-2-pro
+  # Sora 视频（type 55）：OpenAI 已于 2026-09-24 停服 sora-2 / sora-2-pro，不再种子化。

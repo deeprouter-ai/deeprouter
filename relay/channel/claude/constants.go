@@ -56,29 +56,6 @@ var ModelList = []string{
 	"claude-opus-4-5-20251101-thinking",
 	"claude-sonnet-4-5-20250929",
 	"claude-sonnet-4-5-20250929-thinking",
-	"claude-opus-4-1-20250805",
-	"claude-opus-4-1-20250805-thinking",
-	"claude-opus-4-20250514",
-	"claude-opus-4-20250514-thinking",
-	"claude-sonnet-4-20250514",
-	"claude-sonnet-4-20250514-thinking",
-
-	// ── Retired upstream (kept for back-compat with existing channel configs;
-	//    Anthropic returns 404 for these) ──
-	"claude-3-7-sonnet-20250219",
-	"claude-3-7-sonnet-20250219-thinking",
-	"claude-3-5-sonnet-20241022",
-	"claude-3-5-sonnet-20240620",
-	"claude-3-5-haiku-20241022",
-	"claude-3-opus-20240229",
-	"claude-3-sonnet-20240229",
-	"claude-3-haiku-20240307",
-	// Anthropic "-latest" rolling aliases (Claude 3 era only — the 4.x/5.x
-	// generations dropped the -latest suffix in favour of bare IDs)
-	"claude-3-5-haiku-latest",
-	"claude-3-5-sonnet-latest",
-	"claude-3-opus-latest",
-	"claude-3-7-sonnet-latest",
 }
 
 var ChannelName = "claude"
