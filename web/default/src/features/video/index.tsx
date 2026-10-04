@@ -103,17 +103,13 @@ export function VideoPage() {
     void loadKeys()
   }, [loadKeys])
 
-  // No model picker: every prompt embeds the cheapest model
-  // (DEFAULT_VIDEO_MODEL), and the in-prompt menu teaches the alternatives —
-  // switching is a sentence to the AI, not a page control.
-  const model = DEFAULT_VIDEO_MODEL
-
-  // A video key must be able to call EVERY model the prompt teaches (AC-G):
-  // one that passes only some would break the moment the user switches by
-  // voice. The one-click purpose key qualifies by construction.
+  // A key qualifies if it can call AT LEAST ONE video model (AC-G). It used to
+  // require all three, which broke the moment the backend started granting only
+  // the models an account actually has enabled (internal/keypurpose): a key on
+  // an account without a MiniMax channel is perfectly usable, and demanding the
+  // full set hid it from this page entirely.
   const videoKeys = useMemo(
-    () =>
-      keys.filter((k) => VIDEO_MODELS.every((m) => keyPermitsModel(k, m.id))),
+    () => keys.filter((k) => VIDEO_MODELS.some((m) => keyPermitsModel(k, m.id))),
     [keys]
   )
 
@@ -124,6 +120,16 @@ export function VideoPage() {
     () => videoKeys.find((k) => k.id === selectedKeyId) ?? videoKeys[0] ?? null,
     [videoKeys, selectedKeyId]
   )
+
+  // What the prompt may teach: only models THIS key can call, cheapest first.
+  // The page still shows no picker — the first one is the default and the rest
+  // are the in-prompt menu the user switches to by talking to the AI.
+  const allowedModels = useMemo(
+    () =>
+      apiKey ? VIDEO_MODELS.filter((m) => keyPermitsModel(apiKey, m.id)) : [],
+    [apiKey]
+  )
+  const model = allowedModels[0] ?? DEFAULT_VIDEO_MODEL
 
   // Mint a one-time redeem link for the bound key. The tools list only
   // matters to someone who *runs* the redeemed script; the prompt has the
@@ -180,9 +186,13 @@ export function VideoPage() {
   const prompt = useMemo(
     () =>
       scriptUrl
-        ? buildVideoPrompt({ scriptUrl, model, language: promptLanguage })
+        ? buildVideoPrompt({
+            scriptUrl,
+            models: allowedModels,
+            language: promptLanguage,
+          })
         : '',
-    [scriptUrl, model, promptLanguage]
+    [scriptUrl, allowedModels, promptLanguage]
   )
 
   const handleCopy = async () => {
@@ -198,7 +208,7 @@ export function VideoPage() {
         setScriptUrl(fresh)
         text = buildVideoPrompt({
           scriptUrl: fresh,
-          model,
+          models: allowedModels,
           language: promptLanguage,
         })
       }

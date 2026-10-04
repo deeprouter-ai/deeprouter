@@ -28,8 +28,8 @@ import {
 const SCRIPT_URL = 'https://deeprouter.example/i/tok_abc123'
 const LANGUAGES: PromptLanguage[] = ['zh', 'en']
 
-function build(language: PromptLanguage, model = DEFAULT_VIDEO_MODEL) {
-  return buildVideoPrompt({ scriptUrl: SCRIPT_URL, model, language })
+function build(language: PromptLanguage, models = VIDEO_MODELS) {
+  return buildVideoPrompt({ scriptUrl: SCRIPT_URL, models, language })
 }
 
 describe('buildVideoPrompt (both languages)', () => {
@@ -121,10 +121,14 @@ describe('buildVideoPrompt (both languages)', () => {
     expect(en).toContain('pasted once')
   })
 
-  it('uses the chosen model for the default and the test run', () => {
+  it('the first permitted model is the default and the test run', () => {
     for (const language of LANGUAGES) {
       for (const model of VIDEO_MODELS) {
-        const p = buildVideoPrompt({ scriptUrl: SCRIPT_URL, model, language })
+        const p = buildVideoPrompt({
+          scriptUrl: SCRIPT_URL,
+          models: [model],
+          language,
+        })
         if (language === 'zh') {
           expect(p).toContain(`默认用 ${model.id}`)
         } else {
@@ -135,7 +139,38 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
-  it('lists every menu model inside the prompt with a price', () => {
+  it('the menu lists only the models the key may call', () => {
+    // A key is granted exactly the video models its account has enabled
+    // (internal/keypurpose). Teaching the AI about a model this key cannot
+    // call produces a 403 the moment the user switches to it by voice.
+    const [cheapest, mid] = VIDEO_MODELS
+    for (const language of LANGUAGES) {
+      const limited = buildVideoPrompt({
+        scriptUrl: SCRIPT_URL,
+        models: [mid],
+        language,
+      })
+      expect(limited).toContain(mid.id)
+      expect(limited).not.toContain(cheapest.id)
+      expect(limited).toContain(mid.menuLine[language])
+    }
+  })
+
+  it('defaults to the cheapest permitted model, not a hardcoded one', () => {
+    // VIDEO_MODELS is ordered cheapest-first and the caller passes the
+    // permitted subset, so models[0] is the cheapest this key can run.
+    expect(DEFAULT_VIDEO_MODEL.id).toBe('MiniMax-H3')
+    const withoutH3 = VIDEO_MODELS.filter((m) => m.id !== 'MiniMax-H3')
+    const p = buildVideoPrompt({
+      scriptUrl: SCRIPT_URL,
+      models: withoutH3,
+      language: 'zh',
+    })
+    expect(p).toContain(`默认用 ${withoutH3[0].id}`)
+    expect(p).not.toContain('MiniMax-H3')
+  })
+
+  it('lists every model inside the prompt when all are permitted', () => {
     // The in-prompt alternatives table and the page's model menu must not
     // drift apart: an agent asked to switch models should only pick ones the
     // page also prices.
@@ -147,10 +182,13 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
-  it('every model option carries a test-run line in both languages', () => {
+  it('every model option carries a test-run and menu line in both languages', () => {
     for (const model of VIDEO_MODELS) {
       expect(model.testRun.zh.length).toBeGreaterThan(0)
       expect(model.testRun.en.length).toBeGreaterThan(0)
+      // The menu line names the model, so the AI can switch to it by id.
+      expect(model.menuLine.zh).toContain(model.id)
+      expect(model.menuLine.en).toContain(model.id)
     }
   })
 

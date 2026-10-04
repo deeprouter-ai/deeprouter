@@ -20,19 +20,24 @@ For commercial licensing, please contact support@quantumnous.com
 export type PromptLanguage = 'zh' | 'en'
 
 /**
- * One model the video flow can use. The page no longer renders a model menu —
- * the in-prompt menu (hardcoded in the templates below, prices from the Video
- * First Wave PRD §4 = the gateway's seeded price table) is where users learn
- * the alternatives; they switch by telling the AI. `testRun` is embedded into
- * the prompt text, so it carries both languages itself instead of going
- * through i18next.
+ * One model the video flow can write instructions for. The page renders no
+ * model menu — the menu lives inside the prompt (`menuLine`, prices from the
+ * Video First Wave PRD §4 = the gateway's seeded price table) and users switch
+ * by telling the AI. Both strings carry their own languages instead of going
+ * through i18next, because they are embedded in the prompt text.
  */
 export interface VideoModelOption {
   id: string
   /** The verification-run line inside the prompt: params + expected cost. */
   testRun: Record<PromptLanguage, string>
+  /** The alternatives-menu line written into the project-memory rules. */
+  menuLine: Record<PromptLanguage, string>
 }
 
+// 🔴 Ordered cheapest first. A key is only granted the video models the
+// account actually has enabled (internal/keypurpose), so the caller filters
+// this list down to what the bound key may call and the first survivor becomes
+// the default — never a hardcoded one the key would get a 403 on.
 export const VIDEO_MODELS: VideoModelOption[] = [
   {
     id: 'MiniMax-H3',
@@ -40,12 +45,9 @@ export const VIDEO_MODELS: VideoModelOption[] = [
       zh: '6 秒、768P（约 $0.48）',
       en: '6 seconds, 768P (≈ $0.48)',
     },
-  },
-  {
-    id: 'doubao-seedance-2-5-260628',
-    testRun: {
-      zh: '默认档（约 $5.4，此模型单条较贵）',
-      en: 'default settings (≈ $5.4 — this model is pricey per clip)',
+    menuLine: {
+      zh: 'MiniMax-H3：4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效',
+      en: 'MiniMax-H3: 4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included',
     },
   },
   {
@@ -54,13 +56,24 @@ export const VIDEO_MODELS: VideoModelOption[] = [
       zh: '默认档（约 $1.0）',
       en: 'default settings (≈ $1.0)',
     },
+    menuLine: {
+      zh: 'doubao-seedance-2-0-260128：5 秒 1080p，约 $1.0/条',
+      en: 'doubao-seedance-2-0-260128: 5 s 1080p, ≈ $1.0/clip',
+    },
+  },
+  {
+    id: 'doubao-seedance-2-5-260628',
+    testRun: {
+      zh: '默认档（约 $5.4，此模型单条较贵）',
+      en: 'default settings (≈ $5.4 — this model is pricey per clip)',
+    },
+    menuLine: {
+      zh: 'doubao-seedance-2-5-260628：最长 30 秒、4K、同步音轨，约 $5.4/条',
+      en: 'doubao-seedance-2-5-260628: up to 30 s, 4K, synced audio, ≈ $5.4/clip',
+    },
   },
 ]
 
-// 🔴 The default is deliberately the CHEAPEST run (H3 at 768P: a 6-second
-// test ≈ $0.48; Seedance is $1.0–5.4 per clip) — decided 2026-10-04. The page
-// offers no picker anymore, so this is what every prompt embeds for both the
-// test clip and the project-memory default line.
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
 
 /**
@@ -79,17 +92,33 @@ export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
 export function buildVideoPrompt(options: {
   /** Full redeem URL (`{base}/i/{token}`) minted for the current user. */
   scriptUrl: string
-  model: VideoModelOption
+  /**
+   * The models the bound key may actually call, cheapest first. The first one
+   * becomes the default and the test run; the rest are the in-prompt menu.
+   * Empty falls back to the full list, which only happens with no key bound.
+   */
+  models: VideoModelOption[]
   language: PromptLanguage
 }): string {
-  const { scriptUrl, model, language } = options
+  const { scriptUrl, language } = options
+  const models = options.models.length > 0 ? options.models : VIDEO_MODELS
   return language === 'zh'
-    ? buildZhPrompt(scriptUrl, model)
-    : buildEnPrompt(scriptUrl, model)
+    ? buildZhPrompt(scriptUrl, models)
+    : buildEnPrompt(scriptUrl, models)
 }
 
 // buildZhPrompt renders the Chinese prompt (UI locale zh).
-function buildZhPrompt(scriptUrl: string, model: VideoModelOption): string {
+function buildZhPrompt(
+  scriptUrl: string,
+  models: VideoModelOption[]
+): string {
+  const model = models[0]
+  const menu = models.map((m) => `- ${m.menuLine.zh}`).join('\n')
+  // `size` is MiniMax-only; naming it for a key that cannot call MiniMax
+  // invites the agent to send a field the chosen model rejects.
+  const sizeNote = models.some((m) => m.id === 'MiniMax-H3')
+    ? `；\"size\"（仅 MiniMax-H3，"768P" 或 "2K"）`
+    : ''
   return `请严格按下面三步，为当前项目配置「用 DeepRouter 生成视频」的能力。除这些步骤外不要做其他改动。
 前提：这三步必须在用户的电脑上、当前项目目录里执行。如果你无法读写用户电脑上的文件（比如你是网页版 AI，没有终端），不要执行任何步骤，直接告诉用户：请在电脑上打开 Claude Code 或 Codex 这类 AI 编程工具，把这段话粘贴进去。
 
@@ -110,15 +139,13 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 当用户要求生成视频时，按以下流程执行。凭证从 .env 读取 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY，所有请求都带 Header「Authorization: Bearer {DEEPROUTER_API_KEY}」。
 1. 提交：POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<模型>","prompt":"<用户的描述，翻成英文效果更好>"}
-   可选字段：\"duration\"（秒）；\"size\"（仅 MiniMax-H3，"768P" 或 "2K"）。响应里的 id 即任务号。
+   可选字段：\"duration\"（秒）${sizeNote}。响应里的 id 即任务号。
 2. 轮询：每 10 秒 GET {DEEPROUTER_BASE_URL}/v1/video/generations/{任务号}，
    status 为 "completed" 即完成；为 "failed" 则把错误信息告诉用户并停止。
 3. 下载：GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}/content，存为 videos/<日期时间>.mp4。
 4. 交付：尝试用系统默认播放器打开（Windows 用 start，macOS 用 open，Linux 用 xdg-open）；无论是否打开成功，都必须输出文件的绝对路径。
-可选模型与大约花费（生成前先告诉用户本次预计花多少）：
-- MiniMax-H3：4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效
-- doubao-seedance-2-5-260628：最长 30 秒、4K、同步音轨，约 $5.4/条
-- doubao-seedance-2-0-260128：5 秒 1080p，约 $1.0/条
+本密钥可用的模型与大约花费（生成前先告诉用户本次预计花多少；不在此列的模型本密钥调不了，不要试）：
+${menu}
 默认用 ${model.id}。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
@@ -129,7 +156,15 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 }
 
 // buildEnPrompt renders the English prompt (any non-zh UI locale).
-function buildEnPrompt(scriptUrl: string, model: VideoModelOption): string {
+function buildEnPrompt(
+  scriptUrl: string,
+  models: VideoModelOption[]
+): string {
+  const model = models[0]
+  const menu = models.map((m) => `- ${m.menuLine.en}`).join('\n')
+  const sizeNote = models.some((m) => m.id === 'MiniMax-H3')
+    ? `; \"size\" (MiniMax-H3 only, "768P" or "2K")`
+    : ''
   return `Follow these three steps exactly to set up "video generation via DeepRouter" for the current project. Do not make any other changes.
 Precondition: these steps must run on the user's computer, inside the current project directory. If you cannot read or write files on the user's machine (for example, you are a web-based AI with no terminal), do not run any step — tell the user to open an AI coding tool on their computer (Claude Code or Codex) and paste this text there.
 
@@ -150,15 +185,13 @@ Write the following rules verbatim into the project memory file — CLAUDE.md fo
 When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY from .env; every request carries the header "Authorization: Bearer {DEEPROUTER_API_KEY}".
 1. Submit: POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<model>","prompt":"<the user's description>"}
-   Optional fields: \"duration\" (seconds); \"size\" (MiniMax-H3 only, "768P" or "2K"). The id in the response is the task id.
+   Optional fields: \"duration\" (seconds)${sizeNote}. The id in the response is the task id.
 2. Poll: GET {DEEPROUTER_BASE_URL}/v1/video/generations/{task id} every 10 seconds.
    Status "completed" means done; on "failed", tell the user the error message and stop.
 3. Download: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id}/content and save it as videos/<timestamp>.mp4.
 4. Deliver: try to open it with the system default player (start on Windows, open on macOS, xdg-open on Linux); whether or not that works, always print the file's absolute path.
-Available models and approximate cost (tell the user the expected cost before generating):
-- MiniMax-H3: 4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included
-- doubao-seedance-2-5-260628: up to 30 s, 4K, synced audio, ≈ $5.4/clip
-- doubao-seedance-2-0-260128: 5 s 1080p, ≈ $1.0/clip
+Models this key can use and their approximate cost (tell the user the expected cost before generating; anything not listed here this key cannot call, so do not try):
+${menu}
 Default model: ${model.id}.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 

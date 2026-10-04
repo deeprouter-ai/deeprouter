@@ -209,10 +209,10 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
     )
   })
 
-  it('excludes a key that passes only some video models', async () => {
-    // Whitelisted for H3 only: the prompt teaches switching to Seedance by
-    // voice, so binding this key would break on the first switch. Strictly
-    // all-or-nothing keeps the promise "a video key runs every video model".
+  it('accepts a key granted only some video models, and scopes the prompt to them', async () => {
+    // The backend grants exactly the video models the account has enabled
+    // (internal/keypurpose), so a one-model key is normal — not broken. It
+    // used to be filtered out entirely, hiding a key the user had just made.
     mockGetApiKeys.mockResolvedValue(
       keysResponse([
         key({
@@ -226,8 +226,37 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
 
     render(<VideoPage />)
 
-    expect(await screen.findByText(/No video key yet/)).toBeInTheDocument()
-    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+    expect(await screen.findByText('h3-only key')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(51, ['claude-code'])
+    )
+    // The prompt may only teach the model this key can actually call.
+    const prompt = await screen.findByText(/MiniMax-H3/)
+    expect(prompt.textContent).not.toContain('doubao-seedance')
+  })
+
+  it('defaults the prompt to the cheapest model the key may call', async () => {
+    // No MiniMax channel on the account → the key carries Seedance only. The
+    // prompt must not keep pointing at MiniMax-H3, which would 403.
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 52,
+          name: 'seedance key',
+          model_limits_enabled: true,
+          model_limits: 'doubao-seedance-2-0-260128,doubao-seedance-2-5-260628',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    const prompt = await screen.findByText(/doubao-seedance-2-0-260128/)
+    expect(prompt.textContent).not.toContain('MiniMax-H3')
+    // Cheapest of the two leads: 2-0 ($1.0) before 2-5 ($5.4).
+    expect(prompt.textContent).toContain(
+      'Default model: doubao-seedance-2-0-260128'
+    )
   })
 
   it('one-click create: posts the Simple video purpose, then binds the new key', async () => {
