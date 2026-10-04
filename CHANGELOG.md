@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-10-04
+
+- **修复:8 个下拉菜单项挂在不存在的 onSelect 上,点击静默无效**(@sam 本地删渠道时发现):
+  - 根因:这批菜单项写的是 Radix 的 `onSelect`,而本仓下拉是 Base UI 包装(`Menu.Item` 只有 `onClick`/`closeOnClick`)——处理函数从未被调用,且 React 对未知 prop 不报错,全程零线索。同菜单其他项用 `onClick` 都正常,"只坏一项"的形态冒烟测试抓不到。
+  - 波及 5 文件 8 项,全是开弹窗类动作:渠道行**删除**(被报)、渠道页「清理停用」、模型元数据删除、**用户管理的绑定/订阅/重置 Passkey/重置 2FA 四项**、AI 输入框添加附件。统一改 `onClick`;cmdk CommandItem、日历、BrandChip 的合法 onSelect 未动。
+  - 新增渠道行菜单回归测试 2 个(点删除必弹确认框、确认后按 id 删除),驱动 Base UI 菜单的手法照抄 skills-admin 既有测试。前端 168 测试全绿。
+
+- **Quick Import 预置表补齐视频页在售模型**(Video First Wave P6 / PRD v0.9.4 AC-F):
+  - 管理员「模型」页的 Quick Import 预置目录(`model-presets.ts`)video 分组原只有 seedance 2.0/veo/kling——视频页在卖的 **MiniMax-H3 与 seedance 2.5 缺席**,生产补"模型名片"时无法一键导入。补两条(规格照抄既有条目)。
+  - 新增漂移测试:遍历视频页 VIDEO_MODELS,断言每个都在 MODEL_PRESETS 里——下次上新视频模型漏预置会直接红。前端 166 测试全绿。
+  - 注:元数据缺失不影响可调性与计价(P5 验证实测:零元数据的 MiniMax-H3 照常 $0.13 挂价),本条纯运营体验收尾。
+
+- **修复:可自填下拉(ComboboxInput)一打开就被当前值预过滤**(@sam 本地建 MiniMax 渠道时踩到):
+  - 症状:新建渠道的「类型」下拉"拉到智谱就没了"——默认值 1 在聚焦时被灌进输入框并当作搜索词,列表只剩编号含 "1" 的 9 个渠道(21/51/10/12/13/16…),且输入框显示裸数字而非渠道名。skill 分类、支付方式、颜色预设三处共用此组件,同病。
+  - 修法(`components/ui/combobox-input.tsx`):聚焦仍灌入现值(可自填字段保留就地编辑)但**全选文本**(首键即替换);新增 hasTyped——**没敲过键之前不过滤**,打开永远全量。四个调用点零改动。
+  - 新增组件测试 5 个(全量可见还原、关闭态显示名称、打字过滤+选中回写、自填就地编辑、非自填空搜索),`test-utils/setup.ts` 补 jsdom 缺的 `scrollIntoView` no-op shim。前端 165 测试全绿。
+
+- **Simple 建 key 的「视频生成」用途接上真模型**（Video First Wave P5 / PRD v0.9.3 AC-E,老板生产实测发现):
+  - 症状:建 key 选「🎬 视频生成」用途,得到的 key **一个视频模型都调不了**——白名单还是上线前占位(`veo-*/sora*/runway*`,平台无渠道),真上线的 MiniMax-H3/Seedance 反被挡;`deeprouter-video` 别名解析到不存在的 `veo-3`;价目文案是人民币假数(违反美元计价铁律)。
+  - 修复(`setting/alias_setting/seed/aliases.yaml`,`go:embed` 注册表,随部署生效):白名单 → `MiniMax-H3` + `doubao-seedance-*`;auto 别名 → `MiniMax-H3`;文案 → 「约 $0.5 生成一段 6 秒短片(768P)」/ 「$0.48 – 5.4 / clip」,与视频页口径一致;`recommended_brand` 残留清空。前端兜底副本(`api-key-purposes-fallback.ts` video 条目)同步。
+  - 回归测试 2 个(占位绝迹+真模型在列+视频页三模型逐个过 MatchModelLimit 语义+别名解析;美元计价守卫),`alias_setting` 包首次接进 `unit-test.yml` + `airbotix-internal.yml`(path filter)双门。
+  - 残留(另卡再议):chat/coding/image/voice 四张用途卡价目仍是 ¥ 假数,voice 白名单未对真渠道。
+
 ## 2026-09-29
 
 - **可下载的安装器：Windows 双击即可，全程不必打开终端**（One-Click Setup PRD §11，卡 P5；老板 2026-09-12 拍板 D4/D5/D6）：

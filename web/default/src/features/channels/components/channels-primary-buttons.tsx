@@ -210,11 +210,10 @@ export function ChannelsPrimaryButtons() {
 
             <DropdownMenuSeparator />
 
+            {/* onClick, not onSelect — Base UI's Menu.Item has no onSelect
+                prop; an onSelect handler silently never fires. */}
             <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault()
-                setShowDeleteDialog(true)
-              }}
+              onClick={() => setShowDeleteDialog(true)}
               className='text-destructive focus:text-destructive'
             >
               {t('Delete All Disabled')}

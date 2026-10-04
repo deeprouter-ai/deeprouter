@@ -106,12 +106,10 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
 
         <DropdownMenuSeparator />
 
-        {/* Delete */}
+        {/* Delete. onClick, not onSelect — Base UI's Menu.Item has no
+            onSelect prop; an onSelect handler silently never fires. */}
         <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            setDeleteConfirmOpen(true)
-          }}
+          onClick={() => setDeleteConfirmOpen(true)}
           className='text-destructive focus:text-destructive'
         >
           {t('Delete')}
