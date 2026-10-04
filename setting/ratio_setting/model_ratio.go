@@ -389,6 +389,14 @@ var defaultModelRatio = map[string]float64{
 	"MiniMax-M2":             0.15, // $0.3/$1.2 per 1M
 	"MiniMax-M2.7":           0.15, // $0.3/$1.2 per 1M
 	"MiniMax-M2.7-highspeed": 0.3,  // $0.6/$2.4 per 1M
+	// MiniMax TTS: USD per million billed input characters (2026-10-04).
+	// Ratios use the same /2 conversion as text-token pricing.
+	"speech-2.8-hd":    50,
+	"speech-2.8-turbo": 30,
+	"speech-2.6-hd":    50,
+	"speech-2.6-turbo": 30,
+	"speech-02-hd":     50,
+	"speech-02-turbo":  30,
 	// Mistral (input, USD per 1K tokens)
 	"mistral-large-latest":  0.0005 * USD,  // $0.5/$1.5 per 1M (was $2/$6 — stale aggregator price)
 	"mistral-medium-latest": 0.0015 * USD,  // Medium 3.5: $1.5/$7.5 per 1M
@@ -554,6 +562,7 @@ var defaultModelPrice = map[string]float64{
 	// row together with hailuo/constants.go H3RatePerSecond* (a test in that
 	// package pins them equal).
 	"MiniMax-H3": 0.13,
+	"image-01":   0.0035, // MiniMax official USD per image (2026-10-04)
 	// v1 Hailuo models: flat per call (their query API reports no usage, so
 	// per-call is the only mechanism). ⚠️ ESTIMATES from public per-clip tier
 	// prices, rounded to the high side per the Seedance convention above —

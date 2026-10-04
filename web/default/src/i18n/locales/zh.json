@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Video / 视频": "视频",
+    "Manual configuration": "手动配置",
+    "Connected — model generation not tested": "连接正常，未验证模型生成",
+    "Checks the video task API and key without generating a paid video. Model access and generation are not tested.": "检查视频任务接口和密钥，不生成付费视频。此测试不验证模型权限或生成结果。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",

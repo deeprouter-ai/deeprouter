@@ -28,7 +28,7 @@ backend. Operators can always expand a channel's model list afterwards via the
 edit form or "detect upstream models".
 */
 
-export type ProviderModality = 'chat' | 'image' | 'embedding'
+export type ProviderModality = 'chat' | 'video' | 'image' | 'embedding'
 
 export type ProviderPreset = {
   id: string
@@ -88,6 +88,20 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     testModel: 'deepseek-flash',
     docsUrl: 'https://platform.deepseek.com/api_keys',
     description: '对话 / DeepSeek V4.1 Flash · V4 Pro',
+  },
+  {
+    id: 'minimax-chat',
+    name: 'MiniMax · 对话',
+    // The official OpenAI-compatible API uses /v1/chat/completions; type 35
+    // still uses MiniMax's legacy /v1/text/chatcompletion_v2 endpoint.
+    type: 1,
+    modality: 'chat',
+    models: 'MiniMax-M3,MiniMax-M2.7,MiniMax-M2',
+    testModel: 'MiniMax-M2',
+    baseUrl: 'https://api.minimax.io',
+    docsUrl:
+      'https://platform.minimax.io/user-center/basic-information/interface-key',
+    description: '对话 / MiniMax-M3 · M2.7 · M2（国际站，OpenAI 兼容）',
   },
   {
     id: 'qwen',
@@ -155,7 +169,33 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     docsUrl: 'https://console.mistral.ai/api-keys',
     description: '对话 / Medium 3.5 · Small 4 · Large 3 · Codestral',
   },
+  {
+    id: 'minimax-video',
+    name: 'MiniMax · 海螺视频',
+    type: 35,
+    modality: 'video',
+    models:
+      'MiniMax-H3,MiniMax-Hailuo-2.3,MiniMax-Hailuo-2.3-Fast,MiniMax-Hailuo-02',
+    testModel: 'MiniMax-H3',
+    baseUrl: 'https://api.minimax.io',
+    docsUrl:
+      'https://platform.minimax.io/user-center/basic-information/interface-key',
+    description:
+      '视频 / H3 · 海螺 2.3 / Fast / 02（国际站；旧型号价格为估值，请核对）',
+  },
   // ── Image ───────────────────────────────────────────────────────────────
+  {
+    id: 'minimax-image',
+    name: 'MiniMax · 画图',
+    type: 35,
+    modality: 'image',
+    models: 'image-01',
+    testModel: 'image-01',
+    baseUrl: 'https://api.minimax.io',
+    docsUrl:
+      'https://platform.minimax.io/user-center/basic-information/interface-key',
+    description: '画图 / image-01（国际站）',
+  },
   {
     id: 'openai-image',
     name: 'OpenAI · 画图',
@@ -171,6 +211,19 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
       '画图 / gpt-image-2.5 flare · sunburst · gpt-image-2（走 /v1/images/generations）',
   },
   // ── Embeddings & Audio ────────────────────────────────────────────────────
+  {
+    id: 'minimax-audio',
+    name: 'MiniMax · 语音合成',
+    type: 35,
+    modality: 'embedding',
+    models:
+      'speech-2.8-hd,speech-2.8-turbo,speech-2.6-hd,speech-2.6-turbo,speech-02-hd,speech-02-turbo',
+    testModel: 'speech-2.8-turbo',
+    baseUrl: 'https://api.minimax.io',
+    docsUrl:
+      'https://platform.minimax.io/user-center/basic-information/interface-key',
+    description: '语音 / Speech 2.8 · 2.6 · 02，HD / Turbo（国际站）',
+  },
   {
     id: 'openai-embed',
     name: 'OpenAI · 向量 / 语音',

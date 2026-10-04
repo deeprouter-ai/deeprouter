@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Video / 视频": "Video",
+    "Manual configuration": "Manual configuration",
+    "Connected — model generation not tested": "Connected — model generation not tested",
+    "Checks the video task API and key without generating a paid video. Model access and generation are not tested.": "Checks the video task API and key without generating a paid video. Model access and generation are not tested.",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
