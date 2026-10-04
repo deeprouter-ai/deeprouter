@@ -20,21 +20,15 @@ For commercial licensing, please contact support@quantumnous.com
 export type PromptLanguage = 'zh' | 'en'
 
 /**
- * One entry of the model menu on the video page; also drives the model line
- * and the test-run cost inside the paste-prompt.
- *
- * Prices are the per-clip figures from the Video First Wave PRD §4 — the same
- * numbers P1 seeded into the gateway's price table (margin pending PRD Q3, so
- * recalibrate here when that lands). `traits` / `price` are English i18n
- * source strings; zh lives in the locale file like every other UI string.
- * `testRun` is embedded into the prompt text, so it carries both languages
- * itself instead of going through i18next.
+ * One model the video flow can use. The page no longer renders a model menu —
+ * the in-prompt menu (hardcoded in the templates below, prices from the Video
+ * First Wave PRD §4 = the gateway's seeded price table) is where users learn
+ * the alternatives; they switch by telling the AI. `testRun` is embedded into
+ * the prompt text, so it carries both languages itself instead of going
+ * through i18next.
  */
 export interface VideoModelOption {
   id: string
-  name: string
-  traits: string
-  price: string
   /** The verification-run line inside the prompt: params + expected cost. */
   testRun: Record<PromptLanguage, string>
 }
@@ -42,9 +36,6 @@ export interface VideoModelOption {
 export const VIDEO_MODELS: VideoModelOption[] = [
   {
     id: 'MiniMax-H3',
-    name: 'MiniMax-H3',
-    traits: '4–15 s · up to 2K · sound included',
-    price: '6 s ≈ $0.48 (768P) / $0.78 (2K)',
     testRun: {
       zh: '6 秒、768P（约 $0.48）',
       en: '6 seconds, 768P (≈ $0.48)',
@@ -52,9 +43,6 @@ export const VIDEO_MODELS: VideoModelOption[] = [
   },
   {
     id: 'doubao-seedance-2-5-260628',
-    name: 'Seedance 2.5',
-    traits: 'up to 30 s · 4K · synced sound',
-    price: '≈ $5.4 / clip',
     testRun: {
       zh: '默认档（约 $5.4，此模型单条较贵）',
       en: 'default settings (≈ $5.4 — this model is pricey per clip)',
@@ -62,9 +50,6 @@ export const VIDEO_MODELS: VideoModelOption[] = [
   },
   {
     id: 'doubao-seedance-2-0-260128',
-    name: 'Seedance 2.0',
-    traits: '5 s · 1080p',
-    price: '≈ $1.0 / clip',
     testRun: {
       zh: '默认档（约 $1.0）',
       en: 'default settings (≈ $1.0)',
@@ -72,11 +57,16 @@ export const VIDEO_MODELS: VideoModelOption[] = [
   },
 ]
 
+// 🔴 The default is deliberately the CHEAPEST run (H3 at 768P: a 6-second
+// test ≈ $0.48; Seedance is $1.0–5.4 per clip) — decided 2026-10-04. The page
+// offers no picker anymore, so this is what every prompt embeds for both the
+// test clip and the project-memory default line.
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
 
 /**
  * Build the paste-prompt: one block of text a student pastes into Claude Code
- * or Codex, which then configures itself and runs a first clip.
+ * or Codex, which then configures itself and offers a first clip (the test
+ * run costs real money, so the agent must ask before spending).
  *
  * Three layers per the PRD §5 B1 design — credential (one-time token URL,
  * never the key itself), method (submit → poll → download → open player /
@@ -101,12 +91,14 @@ export function buildVideoPrompt(options: {
 // buildZhPrompt renders the Chinese prompt (UI locale zh).
 function buildZhPrompt(scriptUrl: string, model: VideoModelOption): string {
   return `请严格按下面三步，为当前项目配置「用 DeepRouter 生成视频」的能力。除这些步骤外不要做其他改动。
+前提：这三步必须在用户的电脑上、当前项目目录里执行。如果你无法读写用户电脑上的文件（比如你是网页版 AI，没有终端），不要执行任何步骤，直接告诉用户：请在电脑上打开 Claude Code 或 Codex 这类 AI 编程工具，把这段话粘贴进去。
 
 【第 1 步：取得凭证】
-用 GET 请求这个地址（30 分钟内有效，只能用一次）：
-${scriptUrl}
-返回的是一段脚本文本，从中读出两个变量的值（都在引号里）：DR_BASE_URL（服务器地址）和 DR_API_KEY（调用密钥）。
-把它们写入本项目根目录的 .env 文件：
+用 GET 请求这个地址（30 分钟内有效，只能成功取用一次）：
+${scriptUrl}?format=env
+响应是几行 KEY='VALUE' 形式的纯文本，读出 DR_BASE_URL（服务器地址）和 DR_API_KEY（调用密钥）的值。
+如果响应里出现 DR_ERROR、或找不到这两个变量，说明链接已失效：停下来，请用户回视频生成页重新复制一份（每次复制都是新链接），不要反复重试旧地址。
+把两个值写入本项目根目录的 .env 文件：
 DEEPROUTER_BASE_URL=<DR_BASE_URL 的值>
 DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 并确认 .env 已在 .gitignore 里（没有就加上）。密钥明文不得出现在任何输出、日志或记忆文件中。
@@ -130,21 +122,23 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 默认用 ${model.id}。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
-【第 3 步：立刻验证一次】
-按上面的流程，用模型 ${model.id} 生成一条测试视频，参数用 ${model.testRun.zh}，提示词自拟（比如"海边日出，海浪拍打礁石"），完成后打开播放器或输出文件路径。
+【第 3 步：验证一次（可选，这一步会花钱）】
+先问用户要不要立刻生成一条测试视频来验证配置——参数用 ${model.testRun.zh}，把预计花费说清楚。用户同意才执行：按上面的流程，用模型 ${model.id}，提示词自拟（比如"海边日出，海浪拍打礁石"），完成后打开播放器或输出文件路径。用户不想花这笔钱就跳过，配置本身已经完成，不受影响。
 
-三步都完成后向用户报告：配置写进了哪些文件、测试视频存在哪里，并提醒：以后在这个项目里直接说「生成视频」就可以了。`
+最后向用户报告：配置写进了哪些文件、测试视频存在哪里（如果生成了），并讲清楚：这段话只需要在最开始粘贴这一次，以后在这个项目里直接说「生成视频」就行，不需要再跑这段配置。`
 }
 
 // buildEnPrompt renders the English prompt (any non-zh UI locale).
 function buildEnPrompt(scriptUrl: string, model: VideoModelOption): string {
   return `Follow these three steps exactly to set up "video generation via DeepRouter" for the current project. Do not make any other changes.
+Precondition: these steps must run on the user's computer, inside the current project directory. If you cannot read or write files on the user's machine (for example, you are a web-based AI with no terminal), do not run any step — tell the user to open an AI coding tool on their computer (Claude Code or Codex) and paste this text there.
 
 [Step 1: Get the credential]
-Send a GET request to this URL (valid for 30 minutes, single use):
-${scriptUrl}
-The response is a script text. Read two variable values out of it (both quoted): DR_BASE_URL (the server address) and DR_API_KEY (the API key).
-Write them into a .env file at the project root:
+Send a GET request to this URL (valid for 30 minutes, works once):
+${scriptUrl}?format=env
+The response is a few lines of plain text in KEY='VALUE' form. Read the values of DR_BASE_URL (the server address) and DR_API_KEY (the API key).
+If the response contains DR_ERROR, or those two variables are missing, the link is dead: stop and ask the user to go back to the video page and copy a fresh prompt (every copy carries a new link). Do not retry the old URL.
+Write the two values into a .env file at the project root:
 DEEPROUTER_BASE_URL=<value of DR_BASE_URL>
 DEEPROUTER_API_KEY=<value of DR_API_KEY>
 Make sure .env is listed in .gitignore (add it if missing). The key must never appear in plain text in any output, log, or memory file.
@@ -168,8 +162,8 @@ Available models and approximate cost (tell the user the expected cost before ge
 Default model: ${model.id}.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 
-[Step 3: Verify right now]
-Using the flow above, generate one test clip with model ${model.id}, parameters: ${model.testRun.en}. Pick any prompt you like (e.g. "sunrise over the sea, waves hitting the rocks"). When it finishes, open the player or print the file path.
+[Step 3: Verify once (optional — this step costs money)]
+First ask the user whether to generate one test clip now to verify the setup — parameters: ${model.testRun.en} — and spell out the expected cost. Only proceed if they agree: use the flow above with model ${model.id}, pick any prompt you like (e.g. "sunrise over the sea, waves hitting the rocks"), and when it finishes, open the player or print the file path. If they would rather not spend it, skip this step — the setup is already complete.
 
-When all three steps are done, report to the user: which files were configured, where the test clip is saved, and that from now on they can simply say "generate a video" in this project.`
+Finally, report to the user: which files were configured, where the test clip is saved (if one was made), and make this clear: this text only needs to be pasted once, at the very beginning — from now on they can simply say "generate a video" in this project; there is no need to run this setup again.`
 }

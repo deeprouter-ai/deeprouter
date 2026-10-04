@@ -3,18 +3,23 @@ Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
 import type { ReactNode } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiKey } from '@/features/keys/types'
 import { VideoPage } from '../index'
 
 const mockGetApiKeys = vi.hoisted(() => vi.fn())
 const mockIssueConnectToken = vi.hoisted(() => vi.fn())
+const mockCreateApiKey = vi.hoisted(() => vi.fn())
 
 vi.mock('@/features/keys/api', () => ({
   getApiKeys: mockGetApiKeys,
   issueConnectToken: mockIssueConnectToken,
+  createApiKey: mockCreateApiKey,
+}))
+
+vi.mock('@/hooks/use-status', () => ({
+  useStatus: () => ({ status: { default_use_auto_group: false } }),
 }))
 
 vi.mock('react-i18next', () => ({
@@ -37,41 +42,6 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => (
     <a href='/keys'>{children}</a>
   ),
-}))
-
-// The themed Select stands in as a native one: what this file tests is which
-// key the token is minted for, not how the popup is drawn.
-vi.mock('@/components/ui/select', () => ({
-  Select: ({
-    items,
-    value,
-    onValueChange,
-  }: {
-    items: { value: string; label: string; capable?: boolean }[]
-    value: string
-    onValueChange: (v: string) => void
-  }) => (
-    <select
-      aria-label='Key to set up'
-      value={value}
-      onChange={(e) => onValueChange(e.target.value)}
-    >
-      {items.map((item) => (
-        <option
-          key={item.value}
-          value={item.value}
-          disabled={item.capable === false}
-        >
-          {item.label}
-        </option>
-      ))}
-    </select>
-  ),
-  SelectTrigger: () => null,
-  SelectValue: () => null,
-  SelectContent: () => null,
-  SelectGroup: () => null,
-  SelectItem: () => null,
 }))
 
 function key(
@@ -108,7 +78,7 @@ function keysResponse(items: ApiKey[]) {
   }
 }
 
-describe('VideoPage — which key the prompt configures', () => {
+describe('VideoPage — the video-key panel and the prompt it feeds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIssueConnectToken.mockImplementation((id: number) =>
@@ -122,7 +92,7 @@ describe('VideoPage — which key the prompt configures', () => {
     )
   })
 
-  it('states the key name when there is only one, without a control', async () => {
+  it('lists the single video key, marks it in use, and mints for it', async () => {
     mockGetApiKeys.mockResolvedValue(
       keysResponse([key({ id: 7, name: 'my key' })])
     )
@@ -130,36 +100,51 @@ describe('VideoPage — which key the prompt configures', () => {
     render(<VideoPage />)
 
     expect(await screen.findByText('my key')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Key to set up')).not.toBeInTheDocument()
+    expect(screen.getByText('Selected')).toBeInTheDocument()
+    // One key = nothing to switch, so the switching caveat stays hidden.
+    expect(screen.queryByText(/Switching rows only changes/)).toBeNull()
     await waitFor(() =>
       expect(mockIssueConnectToken).toHaveBeenCalledWith(7, ['claude-code'])
     )
   })
 
-  it('offers a picker with several keys and re-mints for the one chosen', async () => {
+  it('selecting a row does not mint; the copy binds the selected key (429 fix)', async () => {
+    // Minting is a CriticalRateLimit endpoint (20 / 20 min). Binding it to row
+    // selection burned the budget in a few clicks → 429 (measured 2026-10-04).
+    // So the page mints ONE preview link, selection mints nothing, and the copy
+    // mints for whichever key is selected.
     mockGetApiKeys.mockResolvedValue(
       keysResponse([
         key({ id: 11, name: 'newest key' }),
         key({ id: 12, name: 'older key' }),
       ])
     )
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
 
     render(<VideoPage />)
 
-    const select =
-      await screen.findByLabelText<HTMLSelectElement>('Key to set up')
-    // Newest-first list, newest is the default — and the prompt must carry its token.
-    expect(select.value).toBe('11')
+    // One preview link for the default (newest) key — and only one.
     expect(await screen.findByText(/tok_key11/)).toBeInTheDocument()
+    expect(mockIssueConnectToken).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByText(/Switching rows only changes future copies/)
+    ).toBeInTheDocument()
 
-    await userEvent.selectOptions(select, '12')
+    // Selecting another row must NOT mint.
+    fireEvent.click(screen.getByRole('button', { name: 'older key' }))
+    expect(mockIssueConnectToken).toHaveBeenCalledTimes(1)
 
+    // The copy is where the selected key is bound.
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
     await waitFor(() =>
-      expect(mockIssueConnectToken).toHaveBeenLastCalledWith(12, [
-        'claude-code',
-      ])
+      expect(mockIssueConnectToken).toHaveBeenLastCalledWith(12, ['claude-code'])
     )
-    expect(await screen.findByText(/tok_key12/)).toBeInTheDocument()
+    const copied = writeText.mock.calls[0][0] as string
+    expect(copied).toContain('/i/tok_key12?format=env')
   })
 
   it('never offers a disabled key', async () => {
@@ -172,7 +157,6 @@ describe('VideoPage — which key the prompt configures', () => {
 
     render(<VideoPage />)
 
-    // One enabled key left, so no picker — and the one named is the enabled one.
     expect(await screen.findByText('live key')).toBeInTheDocument()
     expect(screen.queryByText('disabled key')).not.toBeInTheDocument()
     await waitFor(() =>
@@ -180,7 +164,7 @@ describe('VideoPage — which key the prompt configures', () => {
     )
   })
 
-  it('refuses a chat-limited key: guidance instead of a doomed binding', async () => {
+  it('hides chat-limited keys: empty panel, no doomed binding', async () => {
     // AC-G regression: this key used to bind silently and the project 403'd
     // on its very first generation, deep inside the agent's flow.
     mockGetApiKeys.mockResolvedValue(
@@ -197,12 +181,15 @@ describe('VideoPage — which key the prompt configures', () => {
     render(<VideoPage />)
 
     expect(
-      await screen.findByText(/None of your keys can run video models/)
+      await screen.findByText(/No video key yet/)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Create a video key above first/)
     ).toBeInTheDocument()
     expect(mockIssueConnectToken).not.toHaveBeenCalled()
   })
 
-  it('binds a video-purpose whitelisted key without any warning', async () => {
+  it('lists a video-purpose whitelisted key (it passes every video model)', async () => {
     mockGetApiKeys.mockResolvedValue(
       keysResponse([
         key({
@@ -220,39 +207,12 @@ describe('VideoPage — which key the prompt configures', () => {
     await waitFor(() =>
       expect(mockIssueConnectToken).toHaveBeenCalledWith(32, ['claude-code'])
     )
-    expect(
-      screen.queryByText(/None of your keys can run video models/)
-    ).not.toBeInTheDocument()
   })
 
-  it('offers incapable keys disabled and binds the first capable one', async () => {
-    mockGetApiKeys.mockResolvedValue(
-      keysResponse([
-        key({
-          id: 41,
-          name: 'chat key',
-          model_limits_enabled: true,
-          model_limits: 'gpt-4o',
-        }),
-        key({ id: 42, name: 'open key' }),
-      ])
-    )
-
-    render(<VideoPage />)
-
-    const select =
-      await screen.findByLabelText<HTMLSelectElement>('Key to set up')
-    expect(select.value).toBe('42')
-    expect(screen.getByRole('option', { name: /chat key/ })).toBeDisabled()
-    await waitFor(() =>
-      expect(mockIssueConnectToken).toHaveBeenCalledWith(42, ['claude-code'])
-    )
-  })
-
-  it('re-evaluates capability when the model changes', async () => {
-    // Whitelisted for H3 only: fine on the default model, unusable the
-    // moment the user picks Seedance — the page must say so, not mint a
-    // token that configures a 403.
+  it('excludes a key that passes only some video models', async () => {
+    // Whitelisted for H3 only: the prompt teaches switching to Seedance by
+    // voice, so binding this key would break on the first switch. Strictly
+    // all-or-nothing keeps the promise "a video key runs every video model".
     mockGetApiKeys.mockResolvedValue(
       keysResponse([
         key({
@@ -266,14 +226,75 @@ describe('VideoPage — which key the prompt configures', () => {
 
     render(<VideoPage />)
 
-    await waitFor(() =>
-      expect(mockIssueConnectToken).toHaveBeenCalledWith(51, ['claude-code'])
+    expect(await screen.findByText(/No video key yet/)).toBeInTheDocument()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('one-click create: posts the Simple video purpose, then binds the new key', async () => {
+    mockGetApiKeys
+      .mockResolvedValueOnce(keysResponse([]))
+      .mockResolvedValue(
+        keysResponse([key({ id: 99, name: 'my-video-key' })])
+      )
+    mockCreateApiKey.mockResolvedValue({
+      success: true,
+      data: { id: 99, key: 'raw-key' },
+    })
+
+    render(<VideoPage />)
+    expect(await screen.findByText(/No video key yet/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Create a video key/ }))
+
+    await waitFor(() => expect(mockCreateApiKey).toHaveBeenCalledTimes(1))
+    // The payload mirrors the keys drawer: purpose set, whitelist left to the
+    // backend, auto-name from the purpose.
+    expect(mockCreateApiKey).toHaveBeenCalledWith(
+      expect.objectContaining({
+        simple_purpose: 'video',
+        model_limits_enabled: false,
+        model_limits: '',
+        name: 'my-video-key',
+      })
     )
+    expect(await screen.findByText('my-video-key')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(99, ['claude-code'])
+    )
+  })
 
-    await userEvent.click(screen.getByRole('button', { name: /Seedance 2\.5/ }))
+  it('re-mints the one-time link on every copy, so a second paste still works', async () => {
+    // The link is one-shot: the first fetch consumes it by design, so copying
+    // the same text twice used to hand out a dead URL (measured 2026-10-04 —
+    // the agent's own fetch burned it and every retry hit the error stub).
+    let mint = 0
+    mockIssueConnectToken.mockImplementation(() => {
+      mint += 1
+      return Promise.resolve({
+        success: true,
+        data: {
+          base_url: 'https://deeprouter.example/',
+          script_path: `/i/tok_mint${mint}`,
+        },
+      })
+    })
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([key({ id: 61, name: 'my key' })])
+    )
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
 
-    expect(
-      await screen.findByText(/None of your keys can run video models/)
-    ).toBeInTheDocument()
+    render(<VideoPage />)
+    expect(await screen.findByText(/tok_mint1/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    const copied = writeText.mock.calls[0][0] as string
+    expect(copied).toContain('/i/tok_mint2?format=env')
+    expect(copied).not.toContain('tok_mint1')
   })
 })

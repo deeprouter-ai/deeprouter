@@ -51,6 +51,32 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
+  it('credential fetch: uses the UA-independent env form with a failure branch', () => {
+    // ?format=env is the fix for the Windows wall of 2026-10-04: the script
+    // form renames the variables per shell ($DrApiKey under PowerShell), so
+    // an agent fetching with irm held the key under a name it was never told.
+    // The env form is identical for every client.
+    for (const language of LANGUAGES) {
+      const prompt = build(language)
+      expect(prompt).toContain(`${SCRIPT_URL}?format=env`)
+      // Dead link = DR_ERROR line; the agent must stop and send the user
+      // back for a fresh copy, never retry the burned URL.
+      expect(prompt).toContain('DR_ERROR')
+    }
+    expect(build('zh')).toContain('重新复制')
+    expect(build('en')).toContain('copy a fresh prompt')
+  })
+
+  it('environment guard: refuses to run off the user’s machine', () => {
+    // Pasted into a web AI with no terminal (measured on claude.ai threads,
+    // 2026-10-04), the old prompt half-executed and died mid-flow; it must
+    // bail out with guidance instead.
+    expect(build('zh')).toContain('用户的电脑上')
+    expect(build('zh')).toContain('网页版 AI')
+    expect(build('en')).toContain("user's computer")
+    expect(build('en')).toContain('web-based AI')
+  })
+
   it('method layer: teaches submit → poll → download → open/print-path', () => {
     for (const language of LANGUAGES) {
       const prompt = build(language)
@@ -79,6 +105,20 @@ describe('buildVideoPrompt (both languages)', () => {
     // a fresh session without guessing what was written where.
     expect(build('zh')).toContain('若用户要求移除视频配置')
     expect(build('en')).toContain('asks to remove the video setup')
+  })
+
+  it('test run is opt-in (it costs money) and the prompt says it runs once', () => {
+    // The verification clip spends the user's balance, so the agent must ask
+    // with the price on the table instead of just generating — and the user
+    // must leave knowing this text is pasted once, not before every video.
+    const zh = build('zh')
+    expect(zh).toContain('可选')
+    expect(zh).toContain('先问用户')
+    expect(zh).toContain('只需要在最开始粘贴这一次')
+    const en = build('en')
+    expect(en).toContain('optional')
+    expect(en).toContain('ask the user')
+    expect(en).toContain('pasted once')
   })
 
   it('uses the chosen model for the default and the test run', () => {

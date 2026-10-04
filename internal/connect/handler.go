@@ -73,6 +73,13 @@ func IssueToken(c *gin.Context) {
 // has no session. The token is the credential, it dies on this call, and it
 // only ever names one user's own key.
 func RedeemScript(c *gin.Context) {
+	// ?format=env is the machine-readable variant for AI agents (the video
+	// page's paste-prompt): same one-time redeem, but the response is bare
+	// KEY='VALUE' lines and identical for every User-Agent. The script
+	// variants below are UA-dependent and spell the variables differently
+	// per shell — an agent told to look for one spelling cannot survive that.
+	wantEnv := c.Query("format") == "env"
+
 	grant, err := Redeem(c.Param("token"))
 	if err != nil {
 		// A dead token must still SPEAK. The audience is a human terminal, but
@@ -80,6 +87,10 @@ func RedeemScript(c *gin.Context) {
 		// nothing, and any non-2xx status makes curl's -f discard the body
 		// entirely. Both were measured live - the user saw nothing at all.
 		// So: HTTP 200, per-platform echo lines, exit 1 (PRD 6).
+		if wantEnv {
+			c.String(http.StatusOK, RenderDeadTokenEnv())
+			return
+		}
 		c.String(http.StatusOK, RenderDeadTokenScript(
 			PlatformFromUserAgent(c.GetHeader("User-Agent")),
 			"This setup command is no longer valid.",
@@ -91,10 +102,20 @@ func RedeemScript(c *gin.Context) {
 	key, err := model.GetTokenByIds(grant.TokenID, grant.UserID)
 	if err != nil || key == nil {
 		// Same transport constraints as the dead-token stub above.
+		if wantEnv {
+			c.String(http.StatusOK, RenderDeadTokenEnv())
+			return
+		}
 		c.String(http.StatusOK, RenderDeadTokenScript(
 			PlatformFromUserAgent(c.GetHeader("User-Agent")),
 			"The key this command was made for no longer exists.",
 			"Open your API keys page and copy a fresh command."))
+		return
+	}
+
+	c.Header("Cache-Control", "no-store")
+	if wantEnv {
+		c.String(http.StatusOK, RenderEnv(system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
 		return
 	}
 
@@ -103,7 +124,6 @@ func RedeemScript(c *gin.Context) {
 	// the line holding the key is one of them.
 	platform := PlatformFromUserAgent(c.Request.UserAgent())
 
-	c.Header("Cache-Control", "no-store")
 	c.String(http.StatusOK, RenderScript(platform, system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
 }
 
