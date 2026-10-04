@@ -84,6 +84,10 @@ jobs:
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
           go test ./relay/channel/task/doubao/ -count=1 -timeout 60s
           go test ./relay/channel/task/hailuo/ -count=1 -timeout 60s
+          # Simple-mode purpose registry: the video whitelist/alias must keep
+          # pointing at sellable models (Video First Wave AC-E — the veo/sora
+          # placeholder bug made every Simple video key unusable).
+          go test ./setting/alias_setting/ -count=1 -timeout 60s
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.
