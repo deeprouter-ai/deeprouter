@@ -52,6 +52,12 @@ export function ComboboxInput({
   const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
   const [searchValue, setSearchValue] = React.useState('')
+  // Whether the user has typed since the dropdown opened. The current value is
+  // seeded into the input on focus so free-text fields stay editable in place,
+  // but it must NOT act as a filter: with the channel-type field's value "1"
+  // it silently narrowed the list to the nine types whose id contains a "1",
+  // which read as "most providers are missing" (2026-10-04).
+  const [hasTyped, setHasTyped] = React.useState(false)
   const [highlightedIndex, setHighlightedIndex] = React.useState(-1)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -63,14 +69,14 @@ export function ComboboxInput({
   const displayValue = open ? searchValue : (selectedOption?.label ?? value)
 
   const filteredOptions = React.useMemo(() => {
-    if (!searchValue.trim()) return options
+    if (!hasTyped || !searchValue.trim()) return options
     const search = searchValue.toLowerCase().trim()
     return options.filter(
       (option) =>
         option.label.toLowerCase().includes(search) ||
         option.value.toLowerCase().includes(search)
     )
-  }, [options, searchValue])
+  }, [options, searchValue, hasTyped])
 
   // Reset highlight when filtered options change
   React.useEffect(() => {
@@ -170,6 +176,7 @@ export function ComboboxInput({
         onChange={(e) => {
           const nextValue = e.target.value
           setSearchValue(nextValue)
+          setHasTyped(true)
           if (allowCustomValue) {
             onValueChange(nextValue)
           }
@@ -177,7 +184,12 @@ export function ComboboxInput({
         }}
         onFocus={() => {
           setSearchValue(allowCustomValue ? value : '')
+          setHasTyped(false)
           setOpen(true)
+          // Select the seeded text so the first keystroke replaces it instead
+          // of appending ("1" + "m" must become "m", not "1m"). rAF because
+          // some browsers reset the selection right after the focus event.
+          requestAnimationFrame(() => inputRef.current?.select())
         }}
         onKeyDown={handleKeyDown}
         className={cn('pr-9', className)}

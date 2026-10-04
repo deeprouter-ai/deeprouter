@@ -103,7 +103,7 @@ function buildZhPrompt(scriptUrl: string, model: VideoModelOption): string {
   return `请严格按下面三步，为当前项目配置「用 DeepRouter 生成视频」的能力。除这些步骤外不要做其他改动。
 
 【第 1 步：取得凭证】
-用 GET 请求这个地址（15 分钟内有效，只能用一次）：
+用 GET 请求这个地址（30 分钟内有效，只能用一次）：
 ${scriptUrl}
 返回的是一段脚本文本，从中读出两个变量的值（都在引号里）：DR_BASE_URL（服务器地址）和 DR_API_KEY（调用密钥）。
 把它们写入本项目根目录的 .env 文件：
@@ -141,7 +141,7 @@ function buildEnPrompt(scriptUrl: string, model: VideoModelOption): string {
   return `Follow these three steps exactly to set up "video generation via DeepRouter" for the current project. Do not make any other changes.
 
 [Step 1: Get the credential]
-Send a GET request to this URL (valid for 15 minutes, single use):
+Send a GET request to this URL (valid for 30 minutes, single use):
 ${scriptUrl}
 The response is a script text. Read two variable values out of it (both quoted): DR_BASE_URL (the server address) and DR_API_KEY (the API key).
 Write them into a .env file at the project root:

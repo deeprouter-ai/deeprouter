@@ -3,6 +3,43 @@
 ## 2026-10-04
 
 - 补齐 2026-08/09 新模型并按官方价修正价格（2026-10-04 核对）。新增：`gpt-6-luna`（$0.10/$0.50）、`claude-opus-5-5`（$4/$20）、`claude-sonnet-5-5`（$2/$10）、`claude-fable-5-1`（$10/$50）、`gemini-3.8-flash`、`gemini-3.5-flash-lite`、`gemini-embedding-2`、`grok-4.7`、`deepseek-flash`（V4.1，DeepSeek 渠道测试模型改为它）、Mistral 带日期型号（`mistral-medium-2604` / `small-2603` / `large-2512` / `codestral-2508`）、`qwen3.8-flash` / `qwen3-coder-flash` / `qwen3-vl-plus`、`glm-5.3-flash` / `flashx`、`doubao-seed-2-1-pro/turbo-260628`、`MiniMax-M2.7-highspeed`；同步各服务商模型列表、种子渠道和两个快速导入。修正：`gpt-5.6`/`-sol` $5/$30→$4/$20（输出 5×）、`gpt-5.6-cyber` 估价→$12.5/$75、`claude-sonnet-5` $3/$15→$2/$10、`MiniMax-M3` $0.6/$2.4→$0.3/$1.2、`deepseek-v4-pro` $0.435/$0.87→$1.32/$3.96（此前少收约 3 倍）、`mistral-medium/small-latest` 改为 Medium 3.5 / Small 4 官方价并修正输出倍率、`qwen3.7-max/plus/flash` 估价改为官方价、`glm-5.3` 标注已核实。
+- 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
+
+- 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+
+
+
+- **修复:建 key 成功弹窗从未弹出过——AddToken 不返回 key**(@sam 验证 P7 弹窗时发现):
+  - 前端"密钥只显示一次"成功弹窗(simple-advanced PRD §4.2)的开门条件是 `result.data.key`,而后端 `AddToken` 成功响应只有 `{success:true}`——**弹窗自交付起就是死代码**,所有人建完 key 只见过兜底 toast(老板"建完 key 然后呢"体感的又一块拼图;P7 的 video 分流也被这扇门挡着)。
+  - 修复:`AddToken` 成功响应补 `data: {id, key}`(裸 key 与存储一致,创建时返回一次是行业惯例;该函数本就是 fork 已动过的);前端抽屉按密钥页同款口径给显示值加 `sk-` 前缀。
+  - Go 回归测试 `TestAddTokenReturnsCreatedKey`(响应必带 key 且与库中行一致)接进双门 controller 过滤器;本地真机复验:接口已返回 48 位 key。讽刺备注:列表/搜索"不泄漏 key"早有测试,创建"该给 key"从没人测。
+
+- **视频 key 全链路闭环:视频页只绑"调得动视频"的 key,建 key 成功弹窗按用途分流**(Video First Wave P7 / PRD v0.9.5 AC-G,老板"搞不懂怎么用"反馈的可落地部分):
+  - **视频页按模型能力判定密钥**:新增前端镜像网关 MatchModelLimit 语义的 `keyPermitsModel`(精确+尾部 `*`);被限在聊天模型的 Simple key 不再能被绑定(以前配完项目首次生成才 403,错误埋在 agent 流程深处)——不合格的 key 禁用+标注「(不含视频模型)」而非隐藏,切模型联动重判(用户原选在换回时恢复),一把合格的都没有时引导去建「视频生成」用途密钥。P2 那条泛泛的"限模型"警告删除(视频用途 key 本来就限模型,合格即不吓人)。
+  - **成功弹窗 video 分支**:保留"密钥只显示一次"复制框,撤掉 Base URL/模型名/自检/Setup guide 聊天剧本(自检走 deeprouter-auto 聊天调用,与视频白名单语义不符),换成一句话+「去视频生成页」主按钮——老板建完视频 key 后掉进的"然后呢"空洞就是这里。
+  - 测试:能力判定纯函数 4 个、视频页新增 4 场景(聊天 key 拒绑+引导、视频 key 无警告绑定、混合禁用标注、切模型重判)、成功弹窗双分支 2 个;i18n 新增 5 对。前端 177 测试全绿。
+
+- **修复:8 个下拉菜单项挂在不存在的 onSelect 上,点击静默无效**(@sam 本地删渠道时发现):
+  - 根因:这批菜单项写的是 Radix 的 `onSelect`,而本仓下拉是 Base UI 包装(`Menu.Item` 只有 `onClick`/`closeOnClick`)——处理函数从未被调用,且 React 对未知 prop 不报错,全程零线索。同菜单其他项用 `onClick` 都正常,"只坏一项"的形态冒烟测试抓不到。
+  - 波及 5 文件 8 项,全是开弹窗类动作:渠道行**删除**(被报)、渠道页「清理停用」、模型元数据删除、**用户管理的绑定/订阅/重置 Passkey/重置 2FA 四项**、AI 输入框添加附件。统一改 `onClick`;cmdk CommandItem、日历、BrandChip 的合法 onSelect 未动。
+  - 新增渠道行菜单回归测试 2 个(点删除必弹确认框、确认后按 id 删除),驱动 Base UI 菜单的手法照抄 skills-admin 既有测试。前端 168 测试全绿。
+
+- **Quick Import 预置表补齐视频页在售模型**(Video First Wave P6 / PRD v0.9.4 AC-F):
+  - 管理员「模型」页的 Quick Import 预置目录(`model-presets.ts`)video 分组原只有 seedance 2.0/veo/kling——视频页在卖的 **MiniMax-H3 与 seedance 2.5 缺席**,生产补"模型名片"时无法一键导入。补两条(规格照抄既有条目)。
+  - 新增漂移测试:遍历视频页 VIDEO_MODELS,断言每个都在 MODEL_PRESETS 里——下次上新视频模型漏预置会直接红。前端 166 测试全绿。
+  - 注:元数据缺失不影响可调性与计价(P5 验证实测:零元数据的 MiniMax-H3 照常 $0.13 挂价),本条纯运营体验收尾。
+
+- **修复:可自填下拉(ComboboxInput)一打开就被当前值预过滤**(@sam 本地建 MiniMax 渠道时踩到):
+  - 症状:新建渠道的「类型」下拉"拉到智谱就没了"——默认值 1 在聚焦时被灌进输入框并当作搜索词,列表只剩编号含 "1" 的 9 个渠道(21/51/10/12/13/16…),且输入框显示裸数字而非渠道名。skill 分类、支付方式、颜色预设三处共用此组件,同病。
+  - 修法(`components/ui/combobox-input.tsx`):聚焦仍灌入现值(可自填字段保留就地编辑)但**全选文本**(首键即替换);新增 hasTyped——**没敲过键之前不过滤**,打开永远全量。四个调用点零改动。
+  - 新增组件测试 5 个(全量可见还原、关闭态显示名称、打字过滤+选中回写、自填就地编辑、非自填空搜索),`test-utils/setup.ts` 补 jsdom 缺的 `scrollIntoView` no-op shim。前端 165 测试全绿。
+
+- **Simple 建 key 的「视频生成」用途接上真模型**（Video First Wave P5 / PRD v0.9.3 AC-E,老板生产实测发现):
+  - 症状:建 key 选「🎬 视频生成」用途,得到的 key **一个视频模型都调不了**——白名单还是上线前占位(`veo-*/sora*/runway*`,平台无渠道),真上线的 MiniMax-H3/Seedance 反被挡;`deeprouter-video` 别名解析到不存在的 `veo-3`;价目文案是人民币假数(违反美元计价铁律)。
+  - 修复(`setting/alias_setting/seed/aliases.yaml`,`go:embed` 注册表,随部署生效):白名单 → `MiniMax-H3` + `doubao-seedance-*`;auto 别名 → `MiniMax-H3`;文案 → 「约 $0.5 生成一段 6 秒短片(768P)」/ 「$0.48 – 5.4 / clip」,与视频页口径一致;`recommended_brand` 残留清空。前端兜底副本(`api-key-purposes-fallback.ts` video 条目)同步。
+  - 回归测试 2 个(占位绝迹+真模型在列+视频页三模型逐个过 MatchModelLimit 语义+别名解析;美元计价守卫),`alias_setting` 包首次接进 `unit-test.yml` + `airbotix-internal.yml`(path filter)双门。
+  - 残留(另卡再议):chat/coding/image/voice 四张用途卡价目仍是 ¥ 假数,voice 白名单未对真渠道。
+
 - 清理已下线模型：从各服务商默认模型列表、种子渠道和两个快速导入中删除 OpenAI `dall-e-2/3`、`o3-deep-research`、`sora-2/-pro`（9-24 停服，种子里的 Sora 渠道一并移除），Anthropic Claude 3.x / `claude-opus-4` / `claude-sonnet-4` / `claude-opus-4-1`，Google `gemini-2.0-flash*`、`gemini-3-pro-preview`、`gemini-2.5-flash-image`、预览版图片模型、`imagen-4.0-*`、`veo-2.0/3.0`，DeepSeek `deepseek-chat`/`deepseek-reasoner`/`deepseek-v4-flash`（DeepSeek 渠道测试模型改为 `deepseek-v4-pro`）。价格表保留以便已配置渠道的历史计费；AWS Bedrock / Vertex / 火山方舟托管的同名模型下线时间不同，未改动。
 - 快速导入预设更新到各家最新已定价型号：Claude Opus 5 / Sonnet 5 / Fable 5、Gemini 3.7 Flash / 3.1 Pro Preview、Qwen 3.8 Max / 3.7、GLM-5.3、Grok 4.6、Kimi K3 / K2.7 Code、豆包 Seed 2.0 Mini、DeepSeek V4，OpenAI 对话预设加入 GPT-5.6 Luna 并改为测试模型；模型快速导入同步补齐，已下线的 `claude-3-5-haiku-latest` 换成 Haiku 4.5，测试模型改成各家当前便宜型号。新增 `TestQuickImportPresetModelsArePriced`：渠道快速导入里任何模型（含 testModel）没有价格即 CI 失败，避免导入后一调用就报「价格未配置」。
 - 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
@@ -18,6 +55,47 @@
 - 优化添加渠道默认流程：主按钮先打开供应商快速导入预设，弹窗保留“手动配置”入口。
 - 修复 Seedream 渠道自动测试端点与请求类型不一致：统一使用图片请求，2048x2048 测试尺寸并关闭图片测试流式校验；覆盖 4 个型号及显式端点选择。
 - 修复 Seedance 视频渠道连接测试：用只读任务列表检查鉴权和连通性，支持渠道代理与启用密钥；标明未验证模型生成，避免批量测试产生付费视频。新增实际测试入口的错误响应回归覆盖。
+
+## 2026-09-29
+
+- **可下载的安装器：Windows 双击即可，全程不必打开终端**（One-Click Setup PRD §11，卡 P5；老板 2026-09-12 拍板 D4/D5/D6）：
+  - 新增 `GET /d/:token/deeprouter-setup.cmd` 与 `…/deeprouter-setup.sh`。两个文件都只是**包装**：Windows 那份是 `@echo off` + 现有的 `irm <base>/i/<TOKEN> | iex` + 结尾驻留；mac/Linux 那份是一行 `curl -fsSL … | sh`，用户下载后敲 `bash ~/Downloads/deeprouter-setup.sh`（`bash <文件>` 不经 LaunchServices，Gatekeeper 全程不参与，所以这条路零成本）。安装逻辑没有第二份拷贝 —— 它们取的就是一行命令取的那个脚本，`templates/` 的每次修正都自动覆盖下载形态。
+  - 🔴 **`pause` 写在包装层，不写进 `setup.ps1`**。它在 PowerShell 退出之后才执行、也不看退出码，因此**成功与失败都停留**（最需要读报告的恰是出错那次；自己弹出来的窗口否则会在脚本结束的瞬间消失，带走整份逐工具报告）；同时一行命令那条老路**零 diff** —— 终端用户不会突然多出一个「按任意键」。
+  - 🔴 **下载不消耗令牌**：`Redeem()` 是 claim 即销毁，下载若走它，用户下到手的文件一双击就报「已失效」。该端点完全不碰 grant store，只校验令牌形状（这也是防止任意路径参数进入生成文件的那道闸），未知/已用的令牌照样下发文件 —— 到期这件事交给 `/i/:token` 用会说话的脚本讲。
+  - 🔴 **文件里永远只有一次性令牌，没有明文 key**（PRD §11.4）。躺在 Downloads 里的旧文件因此是死物：被同步、备份、转发都不构成泄露。
+  - 令牌有效期 **15 → 30 分钟**（`GrantTTL`，D4）：下载 → 在 Downloads 里找到它 → 双击，比复制粘贴慢得多。同一套设施，一行命令那条路一并受益。「15 分钟」这句话散在 9 处（含密钥页文案、视频页会被复制进 AI 工具的话术、令牌失效时回给终端的那句），已逐处改齐，i18n 双语词条随之更新。
+  - 三个 `.cmd` 特有的坑记在代码注释里：CRLF（纯 LF 的批处理症状像脚本损坏）、`%` 需 doubling（否则被当批处理变量吃掉）、文件内容**必须全英文**（`.cmd` 按控制台 OEM 代码页读，中文在默认中文 Windows 上是乱码；`setup.ps1` 的报告本来也是英文）。结尾用 `pause >nul` 配自写的 `Press any key to close this window.`，因为系统自带的 pause 提示说的是「继续」，会让人以为后面还有步骤。
+  - 新增 `internal/connect/installer_test.go` 8 个测试（不消耗令牌、pause 必须是最后一条指令、无 `sk-`/`DR_API_KEY`、attachment 响应头、垃圾路径 404、未知令牌照样下发、TTL=30min），`internal/connect` 整包与 `router` smoke test 全绿。
+  - 真机双击验证是 P7。
+
+- **macOS 签名安装包 `.pkg`：无凭据可完成的一半**（卡 P8；D6 排期 2026-09-29 落定，签名凭据由老板自填 CI secrets、真机验证由老板做）：
+  - 新增 `internal/connect/macos-pkg/`（postinstall + build.sh + 完成页 + README）与 `.github/workflows/macos-pkg.yml`：macOS runner 构建（公开仓库免费），六个 secrets 就位时自动导证书 → `productsign` → `notarytool` 公证 → `stapler` 盖章;缺失时产未签名测试件且**流水线不红**。私钥全程不经任何人的手（`rules/deployment-and-secrets.md` 同款纪律）。
+  - 🔴 **签名把包体冻住,所以每人不同的东西全在文件名里**：`deeprouter-setup-<令牌>-<host[_port]>.pkg`。实例地址也进文件名 —— 这是对 PRD §11.7 的一处补全（原文只解决了令牌；而硬编码默认地址被 §0.1 F2 明令禁止）。解析按第一个 `-` 切（令牌字母表不含 `-`,host 自己可以含,`deep-router.com` 实测在列）;端口用 `_` 拼（`:` 进不了 macOS 文件名）;loopback → http,其余 https;容忍浏览器重命名 `xxx (1).pkg` 与中文路径。
+  - 网关侧:`/d/:token/:file` 认下 pkg 文件名（精确换名形态与裸名都收,Content-Disposition 一律答换名形态 —— 它就是数据通道）,从 `DEEPROUTER_PKG_FILE` 读产物、按当次令牌换名下发,**不消耗令牌**;未配置 → 404,功能暗置直到产物接入部署。
+  - 🔴 postinstall **先取到临时文件再执行,不用 `curl | sh`**：管道形态下网络失败会喂给 sh 一段空输入、以 0 退出 —— 图形安装器会把一次彻底失败显示成「安装成功」。报告写 `~/Library/Logs/deeprouter-setup.log`,完成页（中英双语）指明位置;退出码沿用 setup.sh 的实测语义（全军覆没才非零）,安装器的成功/失败面板与事实对齐。
+  - 打包走 `pkgbuild --nopayload` + 用户域（`enable_currentUserHome`）,这是不弹管理员密码的关键;用户域对 nopayload 包的支持历来多变 —— 正是留给老板真机验证的那一步,回退方案（最小 payload 落 `~/.deeprouter/`）已记在卡上。
+  - 测试:Go 侧 3 个（换名规则、下发不消耗令牌+错配令牌 404、无产物暗置）+ sh 侧 1 个（postinstall 解析:双向 round-trip、连字符 host、端口、`(1)` 重命名、四种坏名字都响亮拒绝）。
+  - **同日下午,原「等签名件再切」的第 7 步提前落地**（@sam 拍板:老板已持有签名资格,要求推上线后直接可用）:
+    - 密钥页从合并的「下载 macOS / Linux 版」拆成三颗按钮（Windows `.cmd` / **macOS `.pkg`** / Linux `.sh`,按访问者系统定主按钮）。macOS 按钮由页面**自行构造换名文件名**（与 Go 侧 `PkgFileName` 互为镜像）、fetch 字节、以该名保存——忽略 Content-Disposition 的客户端存下的名字就是数据通道本身;签名件未上线时端点 404 → toast 说明并**自动回退下发 `.sh`**（同一枚未消耗令牌）。
+    - `deploy.yml` 新增 `pkg` job:**签名凭据就位才构建**,签名+公证后把产物 stage 进构建上下文;未签名**永不上传**（Gatekeeper 会拦,比暗置更糟）。deploy job `needs+always`,pkg 失败不阻塞生产部署。`Dockerfile` COPY `internal/connect/macos-pkg/dist/`（平时仅 `.gitkeep`）并默认 `DEEPROUTER_PKG_FILE`。链条:**老板填 secrets → 下一次合并 → 镜像自带签名件 → 端点即活 → 按钮即通**;没填则一切照旧（端点暗置、按钮回退）。
+    - 组件测试 6 个全绿（新增 macOS 换名下载与 404 回退两条）,typecheck/prettier/i18n sync 干净。
+  - **命令区块降级为折叠兜底**（@sam 同日再拍板）:第 2 步标题「开始配置 —— 两条路任选一条」→「下载并安装」,原常开的「或者复制一条命令贴进终端」整块（两条命令 + 30 分钟提示 + Windows cmd 警告）收进 `<details>`,标题「**安装不成功?用终端命令试试看**」——对目标人群下载就是主路,常开的命令块读起来像还有第二件事要做;折叠后只在该出现的时刻出现,终端用户展开即用,内容与行为零改动。
+  - **修复:令牌签发烧穿限流,429 却回「请重试」**（@sam 实测:新建 key 后点下载报「文件准备失败」;dev 日志确认 `POST /api/connect/token` 全 429——`CriticalRateLimit` 20 次/20 分钟/IP,而页面打开即签、每勾一下重签、每次下载再签,来回试一下午当场烧穿）。修法全在前端,限流策略不动:①**按需签发**——打开页面 0 次,展开「安装不成功?」命令区才签(开着且勾选变了才重签),每次下载各签各的;②撤销命令与签发解耦(undo 无需令牌,改读 status 的 `server_address`,「想撤销安装?」不再等签发才出现);③429 专属文案「请求太频繁 —— 等一分钟再试」——对限流,「重试」恰是反向建议。组件测试 6→7 全绿(新增零签发/每次下载各一枚/429 文案三条);⚠️ 测试的 i18n mock 必须给稳定引用的 `t`,否则 effect 依赖里的新函数会把一次签发测成两次。
+
+- **密钥页给出下载入口**（卡 P6）：
+  - 一键配置的第 2 步从「打开终端，粘贴那一行」变成**两条路任选一条** —— 下载块在上（按访问者系统排序，检测到的那颗是主按钮），原来的命令区块在下、**行为零改动**。
+  - Windows 按钮下方**在点击之前**就写明会出现「发布者未知」提示、点「运行」即可：那个弹窗必然出现（我们没有代码签名），而非技术用户对它的默认反应是关掉并放弃；预先说了，同一个弹窗就变成「和说的一样」。两种弹窗（普通安全警告 / SmartScreen）都可能出现，文案同时给出两个按钮名。
+  - 🔴 **点下载时重新签发令牌**：页面上的令牌是打开页面时签的、活 30 分钟，读完整段再点下载的人会拿到一个只剩十来分钟的文件，而文件本身看不出这件事 —— 那种「下载来就说过期」几乎无法复现。现在计时从文件到手开始；页面上原有的命令仍可用（旧令牌不撤销，自己过期）。
+  - 🔴 **mac/Linux 按钮下方不印 `bash ~/Downloads/…`**（老板 2026-09-29 拍板）：下载这条路承诺的就是不碰终端，按钮底下放一行终端命令自相矛盾，而签名安装包的成本拦路已消除，那行迟早被 `.pkg` 取代。⚠️ 在 `.pkg` 落地前这是一个**已知缺口**：下载的 `.sh` 双击不会运行，指引只剩文件头部注释；mac/Linux 当前的完整路径是「复制一条命令」（PRD §11.3 已记）。
+  - 「想先看看这个脚本？」改名为「想撤销安装？」，块内顺序改成撤销命令在前、GitHub 模板链接在后。
+  - 新增 `features/keys/components/__tests__/api-keys-one-click-card.test.tsx` 4 个测试（未点击时警告已在页面上、两个平台按钮与命令区块并存、点下载会再签一次令牌且指向 `/d/<新令牌>/…`、mac/Linux 按钮下方没有终端那一行）。i18n 新增 en/zh 各 8 条，`i18n:sync` missing 0 / extras 0。
+
+## 2026-09-28
+
+- **视频页明示并可切换「配置的是哪把 key」**（Video First Wave P2 eval 反馈,@sam 提出):
+  - 原先话术里的一次性令牌**默默绑定第一把启用的 key**,页面不显示是哪把——手上有多把 key 的用户,事后只能翻项目 `.env` 比对或查调用记录才知道。现在:只有一把时页面直接写出密钥名;有多把时给选择器(复用密钥页 2026-08-28 那次同因同修的写法与既有词条 `Key to set up` / `(limited to some models)`,i18n 零新增),切换即按新 key 重新签发令牌,话术同步更新。
+  - 只列**启用**的 key(用停用的 key 配好工具,只会在几天后从工具里回一个 401);选中的 key 若限了模型,页面就地提示——否则会以"生成失败"的形态出现在 agent 流程深处。
+  - 新增组件测试 `features/video/__tests__/video-page.test.tsx`(4 个:单 key 只写名字不给控件、多 key 默认最新且切换后按新 id 重签、停用 key 不出现在可选项、限模型 key 有提示),video 目录 10 个测试全绿;tsc / prettier / copyright 干净。存量 lint 两处(effect 内 setState、模板里的转义引号)在 main 上就有,未动。
 
 ## 2026-09-16
 

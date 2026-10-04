@@ -1,0 +1,5 @@
+# Build outputs of build.sh land here; only these two files are tracked.
+# deploy.yml stages the CI-signed pkg into this dir right before docker build.
+*
+!.gitignore
+!.gitkeep

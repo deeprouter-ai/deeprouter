@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMediaKeyCreateUpdateAndDirectory(t *testing.T) {
+func TestListModelsMediaKeyCreateUpdateAndDirectory(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Token{}))
 	seedListModelsUser(t, db, 7101, "default", false)
@@ -82,7 +82,7 @@ func TestMediaKeyCreateUpdateAndDirectory(t *testing.T) {
 	require.Equal(t, "eleven_multilingual_v2", token.ModelLimits)
 }
 
-func TestMediaKeyEmptyCatalogFailsClosed(t *testing.T) {
+func TestListModelsMediaKeyEmptyCatalogFailsClosed(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.Token{}))
 	seedListModelsUser(t, db, 7102, "empty", false)

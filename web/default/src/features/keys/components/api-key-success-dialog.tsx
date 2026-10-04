@@ -81,7 +81,16 @@ export function ApiKeySuccessDialog({
             warning={t('Only shown once. Copy and store it securely.')}
           />
           {media ? (
-            <MediaKeySetup apiKey={apiKey} purpose={purpose!} />
+            <>
+              {purpose === 'video' && (
+                <Button
+                  size='sm'
+                  variant='outline'
+                  render={<a href='/video'>{t('Go to Make videos →')}</a>}
+                />
+              )}
+              <MediaKeySetup apiKey={apiKey} purpose={purpose!} />
+            </>
           ) : (
             <>
               <CopyField label={t('Base URL')} value={baseUrl} />

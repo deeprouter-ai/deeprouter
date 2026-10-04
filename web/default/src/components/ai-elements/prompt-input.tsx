@@ -407,13 +407,9 @@ export const PromptInputActionAddAttachments = ({
   const attachments = usePromptInputAttachments()
 
   return (
-    <DropdownMenuItem
-      {...props}
-      onSelect={(e) => {
-        e.preventDefault()
-        attachments.openFileDialog()
-      }}
-    >
+    // onClick, not onSelect — Base UI's Menu.Item has no onSelect prop; an
+    // onSelect handler silently never fires.
+    <DropdownMenuItem {...props} onClick={() => attachments.openFileDialog()}>
       <ImageIcon className='mr-2 size-4' /> {resolvedLabel}
     </DropdownMenuItem>
   )

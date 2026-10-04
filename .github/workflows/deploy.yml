@@ -46,10 +46,89 @@ env:
   INSTANCE_TAG: deeprouter
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  # Signed macOS installer for the /d/:token download (PRD §11.7, card P8).
+  # Builds ONLY when the signing secrets exist, and uploads ONLY the signed
+  # artifact — an unsigned pkg must never reach production, Gatekeeper would
+  # block it on double-click, which is worse than the endpoint answering 404
+  # (the key page falls back to the .sh with a toast while dark).
+  # PR-side twin of these build steps: macos-pkg.yml.
+  pkg:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Decide whether signing is configured
+        id: creds
+        env:
+          CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing credentials - production ships without the macOS pkg (endpoint stays dark)."
+          fi
+
+      - name: Import the signing certificate
+        if: steps.creds.outputs.signing == 'true'
+        env:
+          CERT_P12: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          set -eu
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 900 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/productsign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN"
+
+      - name: Build, sign, notarize
+        if: steps.creds.outputs.signing == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          DR_NOTARY_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          DR_NOTARY_ISSUER: ${{ secrets.ASC_API_ISSUER_ID }}
+          DR_PKG_VERSION: "1.0.${{ github.run_number }}"
+        run: |
+          set -eu
+          echo "$ASC_KEY_P8" | base64 -d > "$RUNNER_TEMP/asc-key.p8"
+          export DR_NOTARY_KEY_FILE="$RUNNER_TEMP/asc-key.p8"
+          DR_SIGN_IDENTITY=$(security find-identity -v | sed -n 's/.*"\(Developer ID Installer: .*\)"/\1/p' | head -1)
+          [ -n "$DR_SIGN_IDENTITY" ] || { echo "::error::cert imported but no Developer ID Installer identity found"; exit 1; }
+          export DR_SIGN_IDENTITY
+          sh internal/connect/macos-pkg/build.sh dist
+          # PRD §11.4: no plaintext key may ever land in a downloadable file.
+          ! grep -R "sk-" internal/connect/macos-pkg/dist --include="*.pkg" 2>/dev/null
+
+      - uses: actions/upload-artifact@v4
+        if: steps.creds.outputs.signing == 'true'
+        with:
+          name: signed-macos-pkg
+          path: internal/connect/macos-pkg/dist/deeprouter-setup.pkg
+          if-no-files-found: error
+
+  deploy:
+    runs-on: ubuntu-latest
+    # A pkg failure must not block production deploys — the endpoint just
+    # stays dark and the page falls back to the .sh.
+    needs: [pkg]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage the signed macOS installer into the build context
+        # No artifact (secrets unfilled, or the pkg job failed) → this step
+        # fails, the dir keeps only .gitkeep, and the image ships dark.
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: signed-macos-pkg
+          path: internal/connect/macos-pkg/dist/
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4

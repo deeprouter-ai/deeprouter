@@ -149,6 +149,89 @@ func TestGetPurposeSummaryLocalizes(t *testing.T) {
 	}
 }
 
+// TestVideoPurposeMatchesLiveModels pins the video purpose to the models the
+// video page actually sells (Video First Wave PRD v0.9.3, AC-E). The bug it
+// guards against: the whitelist pointing at models with no channel (the
+// veo/sora/runway pre-launch placeholders) made every Simple-mode video key
+// unable to call any live video model.
+func TestVideoPurposeMatchesLiveModels(t *testing.T) {
+	mustInit(t)
+
+	list, ok := ModelWhitelistForToken("video", "", "")
+	if !ok {
+		t.Fatal("expected video whitelist to be non-empty")
+	}
+	for _, dead := range []string{"veo-*", "sora*", "runway*"} {
+		if containsPattern(list, dead) {
+			t.Errorf("video whitelist still carries placeholder %q: %v", dead, list)
+		}
+	}
+	if !containsPattern(list, "MiniMax-H3") {
+		t.Errorf("video whitelist missing MiniMax-H3: %v", list)
+	}
+	if !containsPattern(list, "doubao-seedance-*") {
+		t.Errorf("video whitelist missing doubao-seedance-*: %v", list)
+	}
+	if !containsPattern(list, "deeprouter-video") {
+		t.Errorf("video whitelist must keep the deeprouter-video virtual alias: %v", list)
+	}
+
+	// Every model the video page offers must pass the whitelist under
+	// model.MatchModelLimit's exact-then-trailing-* semantics (mirrored
+	// locally — importing model/ from setting/ would be a cycle).
+	pageModels := []string{
+		"MiniMax-H3",
+		"doubao-seedance-2-5-260628",
+		"doubao-seedance-2-0-260128",
+	}
+	for _, m := range pageModels {
+		if !matchByLimitSemantics(list, m) {
+			t.Errorf("video-page model %q not permitted by video whitelist %v", m, list)
+		}
+	}
+
+	// deeprouter-video (and plain purpose=video auto) must resolve to the
+	// video page's default model, not a placeholder.
+	if got := ResolveAlias("video", "auto"); got != "MiniMax-H3" {
+		t.Errorf("video+auto → %q, want MiniMax-H3", got)
+	}
+}
+
+// TestVideoPurposeCardIsUSDPriced guards the card copy: DeepRouter pricing is
+// USD-denominated, and the video card must not regress to the pre-launch RMB
+// placeholder figures.
+func TestVideoPurposeCardIsUSDPriced(t *testing.T) {
+	mustInit(t)
+
+	for _, lang := range []string{"en", "zh-CN"} {
+		for _, card := range GetPurposeSummary(lang) {
+			if card.ID != "video" {
+				continue
+			}
+			if strings.Contains(card.HumanEstimate, "¥") || strings.Contains(card.PriceRange, "¥") {
+				t.Errorf("[%s] video card still RMB-priced: %q / %q", lang, card.HumanEstimate, card.PriceRange)
+			}
+			if !strings.Contains(card.HumanEstimate, "$") || !strings.Contains(card.PriceRange, "$") {
+				t.Errorf("[%s] video card not USD-priced: %q / %q", lang, card.HumanEstimate, card.PriceRange)
+			}
+		}
+	}
+}
+
+// matchByLimitSemantics mirrors model.MatchModelLimit: exact first, then any
+// entry ending in "*" as a prefix match.
+func matchByLimitSemantics(list []string, modelName string) bool {
+	for _, entry := range list {
+		if entry == modelName {
+			return true
+		}
+		if strings.HasSuffix(entry, "*") && strings.HasPrefix(modelName, strings.TrimSuffix(entry, "*")) {
+			return true
+		}
+	}
+	return false
+}
+
 func containsPattern(list []string, pattern string) bool {
 	for _, p := range list {
 		if p == pattern {
