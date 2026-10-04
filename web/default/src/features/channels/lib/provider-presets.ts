@@ -50,10 +50,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     name: 'OpenAI · 对话',
     type: 1,
     modality: 'chat',
-    models: 'gpt-5.5,gpt-5,gpt-4o,gpt-4o-mini',
+    models: 'gpt-6.1-sol,gpt-6-astra,gpt-5.6,gpt-5.5,gpt-4o-mini',
     testModel: 'gpt-4o-mini',
     docsUrl: 'https://platform.openai.com/api-keys',
-    description: '对话 / GPT-5 · gpt-4o · gpt-4o-mini',
+    description: '对话 / GPT-6.1 Sol · GPT-6 Astra · GPT-5.6 · gpt-4o-mini',
   },
   {
     id: 'anthropic',
@@ -153,12 +153,13 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     name: 'OpenAI · 画图',
     type: 1,
     modality: 'image',
-    // gpt-image-1 + dall-e-3 are real and priced. Newer image models (e.g.
-    // gpt-image-2) — add via "detect upstream models" once your account has them.
-    models: 'gpt-image-1,dall-e-3',
-    testModel: 'gpt-image-1',
+    // dall-e-* was retired by OpenAI on 2026-05-12. gpt-image-2.5-flare
+    // (2026-09-08) is the recommended default; all four are priced.
+    models: 'gpt-image-2.5-flare,gpt-image-2.5-sunburst,gpt-image-2,gpt-image-1',
+    testModel: 'gpt-image-2',
     docsUrl: 'https://platform.openai.com/api-keys',
-    description: '画图 / gpt-image-1 · dall-e-3（走 /v1/images/generations）',
+    description:
+      '画图 / gpt-image-2.5 flare · sunburst · gpt-image-2（走 /v1/images/generations）',
   },
   // ── Embeddings & Audio ────────────────────────────────────────────────────
   {

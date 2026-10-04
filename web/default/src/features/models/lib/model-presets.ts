@@ -31,8 +31,23 @@ export interface ModelPreset {
 export const MODEL_PRESETS: ModelPreset[] = [
   // ── Chat / Text Completion (default-grade) ───────────────────────────
   {
+    model_name: 'gpt-6.1-sol',
+    description:
+      'OpenAI GPT-6.1 Sol (2026-09-29) — near-Astra coding and agents at one-fifth the price, 1M context.',
+    group: 'reasoning',
+    tags: ['reasoning', 'thinking', 'tools', 'coding'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'gpt-6-astra',
+    description: 'OpenAI GPT-6 Astra — flagship for the hardest reasoning work.',
+    group: 'reasoning',
+    tags: ['reasoning', 'thinking', 'tools'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'gpt-5.5',
-    description: 'OpenAI GPT-5.5 — flagship reasoning + chat.',
+    description: 'OpenAI GPT-5.5 — previous-gen reasoning + chat.',
     group: 'reasoning',
     tags: ['reasoning', 'thinking', 'tools'],
     endpoints: 'chat',
@@ -159,9 +174,25 @@ export const MODEL_PRESETS: ModelPreset[] = [
 
   // ── Image Generation ─────────────────────────────────────────────────
   {
+    model_name: 'gpt-image-2.5-flare',
+    description:
+      'OpenAI default image model (2026-09-08) — better quality and editing than gpt-image-2 at half the latency.',
+    group: 'image',
+    tags: ['image', 'edit', 'fast'],
+    endpoints: 'image',
+  },
+  {
+    model_name: 'gpt-image-2.5-sunburst',
+    description:
+      'OpenAI precision image model (2026-09-08) — detailed creative work, slower generation.',
+    group: 'image',
+    tags: ['image', 'precision'],
+    endpoints: 'image',
+  },
+  {
     model_name: 'gpt-image-2',
     description:
-      'OpenAI flagship image model (2026-04-21) — built-in reasoning + 4K.',
+      'OpenAI previous-gen image model (2026-04-21) — built-in reasoning + 4K.',
     group: 'image',
     tags: ['image', 'reasoning', '4k'],
     endpoints: 'image',

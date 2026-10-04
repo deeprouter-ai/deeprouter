@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-04
+
+- 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
+- 新增 OpenAI 最新模型：GPT-6 系列 `gpt-6-astra`（$10/$50）、`gpt-6-sol`（$2/$10）、`gpt-6.1-sol`（$2/$10，缓存 $0.10，2026-09-29 发布），输出统一 5× 计价；图片模型 `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`（2026-09-08，沿用 gpt-image-2 的 token 价）。gpt-6 复用 gpt-5 的推理参数规则（`max_tokens`→`max_completion_tokens`、去掉 temperature/top_p、system→developer），否则上游 400。同步种子渠道、渠道/模型快速导入预设；儿童模式白名单加入 gpt-image-2.5；OpenAI 画图预设移除已下线的 `dall-e-3`。
+
 ## 2026-09-16
 
 - **视频页两处修正**（Video First Wave P2 eval 反馈,@sam 本地实测提出):
