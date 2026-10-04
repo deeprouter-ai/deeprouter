@@ -48,21 +48,21 @@ type sqliteColumnInfo struct {
 }
 
 type legacyToken struct {
-	Id                 int            `gorm:"primaryKey"`
-	UserId             int            `gorm:"index"`
-	Key                string         `gorm:"column:key;type:char(48);uniqueIndex"`
-	Status             int            `gorm:"default:1"`
-	Name               string         `gorm:"index"`
-	CreatedTime        int64          `gorm:"bigint"`
-	AccessedTime       int64          `gorm:"bigint"`
-	ExpiredTime        int64          `gorm:"bigint;default:-1"`
-	RemainQuota        int            `gorm:"default:0"`
+	Id                 int    `gorm:"primaryKey"`
+	UserId             int    `gorm:"index"`
+	Key                string `gorm:"column:key;type:char(48);uniqueIndex"`
+	Status             int    `gorm:"default:1"`
+	Name               string `gorm:"index"`
+	CreatedTime        int64  `gorm:"bigint"`
+	AccessedTime       int64  `gorm:"bigint"`
+	ExpiredTime        int64  `gorm:"bigint;default:-1"`
+	RemainQuota        int    `gorm:"default:0"`
 	UnlimitedQuota     bool
 	ModelLimitsEnabled bool
-	ModelLimits        string         `gorm:"type:text"`
-	AllowIps           *string        `gorm:"default:''"`
-	UsedQuota          int            `gorm:"default:0"`
-	Group              string         `gorm:"column:group;default:''"`
+	ModelLimits        string  `gorm:"type:text"`
+	AllowIps           *string `gorm:"default:''"`
+	UsedQuota          int     `gorm:"default:0"`
+	Group              string  `gorm:"column:group;default:''"`
 	CrossGroupRetry    bool
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 }
@@ -590,5 +590,43 @@ func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {
 	}
 	if strings.Contains(unauthorizedRecorder.Body.String(), token.Key) {
 		t.Fatalf("unauthorized key response leaked raw token key: %s", unauthorizedRecorder.Body.String())
+	}
+}
+
+func TestAddTokenReturnsCreatedKey(t *testing.T) {
+	db := setupTokenControllerTestDB(t)
+
+	// Regression (2026-10-04): AddToken answered {success:true} with no data,
+	// so the frontend's "shown once" success dialog — which gates on
+	// result.data.key — never opened for anyone; every create fell back to
+	// the batch toast. The create response must hand the key over exactly
+	// once, matching the stored row.
+	body := map[string]any{
+		"name":            "created-via-test",
+		"expired_time":    -1,
+		"unlimited_quota": true,
+	}
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/token/", body, 1)
+	AddToken(ctx)
+
+	response := decodeAPIResponse(t, recorder)
+	if !response.Success {
+		t.Fatalf("expected success response, got message: %s", response.Message)
+	}
+
+	var created tokenKeyResponse
+	if err := common.Unmarshal(response.Data, &created); err != nil {
+		t.Fatalf("failed to decode create response data: %v", err)
+	}
+	if created.Key == "" {
+		t.Fatal("create response must carry the raw key — the post-create dialog depends on it")
+	}
+
+	var stored model.Token
+	if err := db.Where("name = ?", "created-via-test").First(&stored).Error; err != nil {
+		t.Fatalf("created token not found in db: %v", err)
+	}
+	if created.Key != stored.Key {
+		t.Fatalf("response key %q does not match stored key %q", created.Key, stored.Key)
 	}
 }

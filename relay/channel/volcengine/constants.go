@@ -1,7 +1,10 @@
 package volcengine
 
 var ModelList = []string{
-	// Doubao Seed 2.0 (current). Ark accepts both the un-dated alias and the
+	// Doubao Seed 2.1 (2026-06-23, dated IDs only)
+	"doubao-seed-2-1-pro-260628",
+	"doubao-seed-2-1-turbo-260628",
+	// Doubao Seed 2.0. Ark accepts both the un-dated alias and the
 	// dated model ID; the dated form is what the console shows.
 	"doubao-seed-2.0-pro",
 	"doubao-seed-2-0-pro-260215",

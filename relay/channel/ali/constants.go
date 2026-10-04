@@ -6,6 +6,9 @@ var ModelList = []string{
 	"qwen3.7-max",
 	"qwen3.7-plus",
 	"qwen3.7-flash",
+	"qwen3.8-flash",
+	"qwen3-coder-flash",
+	"qwen3-vl-plus",
 	"qwen3-max",
 	"qwen3-coder-plus",
 	// multimodal

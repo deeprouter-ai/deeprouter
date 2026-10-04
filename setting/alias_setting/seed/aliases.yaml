@@ -19,8 +19,10 @@
 #
 # TODO_PLATFORM (block public launch):
 #   - Verify per-1K-token price ranges against current upstream pricing.
-#   - Fill video/voice human_estimate strings with real numbers from platform.
-#   - Audit model_whitelist against actually-enabled channels.
+#   - Fill voice human_estimate strings with real numbers from platform
+#     (video done 2026-09-28, Video First Wave AC-E).
+#   - Audit model_whitelist against actually-enabled channels (video done
+#     2026-09-28; the rest still unaudited).
 
 purposes:
   - id: chat
@@ -80,21 +82,23 @@ purposes:
       - stable-diffusion-*
 
   - id: video
-    # TODO_PLATFORM: verify model availability & price before public launch
+    # Video First Wave PRD v0.9.3 / AC-E: whitelist + price copy must track the
+    # models the video page actually sells. Keep in sync with
+    # web/default/src/features/video/lib/prompt-template.ts VIDEO_MODELS and
+    # the frontend fallback (features/keys/lib/api-key-purposes-fallback.ts).
     label_en: "Video generation"
     label_zh: "视频生成"
     icon: "🎬"
     desc_en: "Text-to-video, video edit"
     desc_zh: "文生视频、改视频"
-    human_estimate_en: "≈ ¥50 for 10 short clips"
-    human_estimate_zh: "约 ¥50 生成 10 段短视频"
-    price_range: "¥3 – 10 / clip"
-    recommended_brand: openai
+    human_estimate_en: "≈ $0.5 for a 6-second clip (768P)"
+    human_estimate_zh: "约 $0.5 生成一段 6 秒短片（768P）"
+    price_range: "$0.48 – 5.4 / clip"
+    recommended_brand: ""
     available_brands: []
     model_whitelist:
-      - veo-*
-      - sora*
-      - runway*
+      - MiniMax-H3
+      - doubao-seedance-*
 
   - id: voice
     # TODO_PLATFORM: verify model availability & price before public launch
@@ -202,8 +206,9 @@ aliases:
   # Image
   - { purpose: image,  brand: auto,     target: flux-pro }
   - { purpose: image,  brand: openai,   target: dall-e-3 }
-  # Video (TODO_PLATFORM)
-  - { purpose: video,  brand: auto,     target: veo-3 }
+  # Video (wave 1) — the video page's default model; also what the
+  # deeprouter-video virtual name resolves to.
+  - { purpose: video,  brand: auto,     target: MiniMax-H3 }
   # Voice (TODO_PLATFORM) — default to STT; clients hitting TTS endpoints
   # specify it explicitly via deeprouter-voice-tts virtual alias.
   - { purpose: voice,  brand: auto,     target: whisper-1 }

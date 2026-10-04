@@ -4,8 +4,11 @@
 // Why a token at all, rather than putting the key in the command: the command
 // is meant to be copied, so it lands in clipboards, terminal scrollback,
 // screen recordings and screenshots. What travels through all that is a token
-// that dies after one use or fifteen minutes; the API key itself is injected
+// that dies after one use or thirty minutes; the API key itself is injected
 // server-side at redemption and never appears in a URL.
+//
+// The same token is what the downloadable installers carry (PRD §11), which is
+// why a file left sitting in a Downloads folder is not a credential either.
 package connect
 
 import (
@@ -23,11 +26,17 @@ import (
 
 const (
 	// GrantTTL is how long an issued token stays redeemable (PRD §4.1).
-	GrantTTL = 15 * time.Minute
+	//
+	// Widened from 15 to 30 minutes on 2026-09-12 (PRD §11 decision D4) when the
+	// downloadable installers arrived: download it, find it in Downloads, then
+	// double-click is a much slower path than pasting a command, and 15 minutes
+	// was tight. One TTL serves both forms — the file is only a wrapper around
+	// the same token.
+	GrantTTL = 30 * time.Minute
 
 	// tokenLength is a balance between being readable in a command and being
 	// unguessable. 10 chars of the alphabet below is ~51 bits, and a guess only
-	// has 15 minutes and one shot.
+	// has 30 minutes and one shot.
 	tokenLength = 10
 
 	// Digits and uppercase letters minus the pairs that are hard to tell apart

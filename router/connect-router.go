@@ -13,7 +13,7 @@ import (
 // The two halves authenticate differently on purpose. Issuing requires a logged-in
 // session, because it is the step that decides whose key this is about. Redeeming
 // cannot require one — it runs in the user's terminal via `curl | sh`, which has
-// no session — so there the token IS the credential: single-use, 15 minutes, and
+// no session — so there the token IS the credential: single-use, 30 minutes, and
 // bound to one key that the session already proved belongs to the user.
 //
 // `/i/:token` sits at the root rather than under /api because it has to fit in a
@@ -27,6 +27,13 @@ func SetConnectRouter(router *gin.Engine) {
 	}
 
 	router.GET("/i/:token", middleware.RouteTag("connect"), connect.RedeemScript)
+
+	// The downloadable installers (PRD §11): a file the user double-clicks
+	// instead of pasting a command. It is only a wrapper around the same
+	// /i/:token call, carries a token and never a key, and therefore needs no
+	// session either. The filename sits in the path so that a client ignoring
+	// Content-Disposition still saves something Windows will run.
+	router.GET("/d/:token/:file", middleware.RouteTag("connect"), connect.DownloadInstaller)
 
 	// Undo sits at a fixed address with no token. It reverses only what the
 	// setup run recorded on that machine, so there is no secret to protect —
