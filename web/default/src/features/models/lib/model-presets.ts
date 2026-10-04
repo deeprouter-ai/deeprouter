@@ -40,9 +40,18 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     model_name: 'gpt-6-astra',
-    description: 'OpenAI GPT-6 Astra — flagship for the hardest reasoning work.',
+    description:
+      'OpenAI GPT-6 Astra — flagship for the hardest reasoning work.',
     group: 'reasoning',
     tags: ['reasoning', 'thinking', 'tools'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'gpt-5.6-luna',
+    description:
+      'OpenAI GPT-5.6 Luna — fastest, cheapest GPT-5.6 tier; DeepRouter auto-routing default.',
+    group: 'chat',
+    tags: ['fast', 'cheap', 'tools'],
     endpoints: 'chat',
   },
   {
@@ -67,6 +76,20 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'claude-opus-5',
+    description: 'Anthropic Opus 5 — current flagship reasoning.',
+    group: 'reasoning',
+    tags: ['reasoning', 'thinking', 'long-context'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'claude-sonnet-5',
+    description: 'Anthropic Sonnet 5 — current balanced quality + cost.',
+    group: 'chat',
+    tags: ['tools', 'long-context'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'claude-opus-4-8',
     description: 'Anthropic Opus 4.8 — adaptive thinking, top-tier reasoning.',
     group: 'reasoning',
@@ -88,15 +111,23 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
-    model_name: 'claude-3-5-haiku-latest',
-    description: 'Anthropic Haiku — fastest, cheapest Claude.',
+    model_name: 'claude-haiku-4-5-20251001',
+    description: 'Anthropic Haiku 4.5 — fastest, cheapest Claude.',
     group: 'chat',
     tags: ['cheap', 'fast'],
     endpoints: 'chat',
   },
   {
-    model_name: 'gemini-3.1-pro',
-    description: 'Google Gemini 3.1 Pro — flagship long-context multimodal.',
+    model_name: 'gemini-3.7-flash',
+    description: 'Google Gemini 3.7 Flash — current fast multimodal model.',
+    group: 'chat',
+    tags: ['fast', 'vision', 'multimodal'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'gemini-3.1-pro-preview',
+    description:
+      'Google Gemini 3.1 Pro (preview) — flagship long-context multimodal.',
     group: 'chat',
     tags: ['vision', 'long-context', 'multimodal'],
     endpoints: 'chat',
@@ -123,6 +154,13 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'deepseek-v4-flash',
+    description: 'DeepSeek V4 Flash — fast, cheap V4 tier.',
+    group: 'chat',
+    tags: ['open-source', 'fast', 'cheap'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'deepseek-chat',
     description: 'DeepSeek V4 (chat alias) — open weights, strong code.',
     group: 'chat',
@@ -134,6 +172,21 @@ export const MODEL_PRESETS: ModelPreset[] = [
     description: 'DeepSeek R1 — open-weights reasoning model.',
     group: 'reasoning',
     tags: ['reasoning', 'thinking', 'open-source'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'qwen3.8-max',
+    description:
+      '阿里 Qwen 3.8 Max — current domestic flagship, strong Chinese.',
+    group: 'chat',
+    tags: ['chinese', 'tools'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'qwen3.7-flash',
+    description: '阿里 Qwen 3.7 Flash — fast, cheap Chinese chat.',
+    group: 'chat',
+    tags: ['chinese', 'fast', 'cheap'],
     endpoints: 'chat',
   },
   {
@@ -158,10 +211,38 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
-    model_name: 'kimi-k2-0905-preview',
-    description: 'Moonshot Kimi K2 — agentic + tool use, preview.',
+    model_name: 'kimi-k3',
+    description: 'Moonshot Kimi K3 — current flagship, agentic + tool use.',
     group: 'chat',
-    tags: ['tools', 'preview'],
+    tags: ['chinese', 'tools', 'long-context'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'kimi-k2.7-code',
+    description: 'Moonshot Kimi K2.7 Code — coding-tuned.',
+    group: 'chat',
+    tags: ['coder', 'tools'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'glm-5.3',
+    description: '智谱 GLM-5.3 — current flagship, strong Chinese.',
+    group: 'chat',
+    tags: ['chinese', 'tools'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'grok-4.6',
+    description: 'xAI Grok 4.6 — current flagship.',
+    group: 'chat',
+    tags: ['tools', 'reasoning'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'doubao-seed-2.0-pro',
+    description: 'Doubao Seed 2.0 Pro — Volcengine current flagship.',
+    group: 'chat',
+    tags: ['chinese', 'tools'],
     endpoints: 'chat',
   },
   {
