@@ -29,7 +29,6 @@ import {
   SortAsc,
   RefreshCw,
   ArrowUpFromLine,
-  Sparkles,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -104,18 +103,8 @@ export function ChannelsPrimaryButtons() {
           />
         </div>
 
-        {/* Quick Import (preset providers) */}
-        <Button
-          variant='outline'
-          size='sm'
-          onClick={() => setOpen('quick-import-providers')}
-        >
-          <Sparkles className='h-4 w-4' />
-          <span className='max-sm:hidden'>{t('Quick Import')}</span>
-        </Button>
-
-        {/* Create Channel */}
-        <Button onClick={() => setOpen('create-channel')} size='sm'>
+        {/* Provider presets are the default channel creation flow. */}
+        <Button onClick={() => setOpen('quick-import-providers')} size='sm'>
           <Plus className='h-4 w-4' />
           <span className='max-sm:hidden'>{t('Create Channel')}</span>
           <span className='sm:hidden'>{t('Create')}</span>

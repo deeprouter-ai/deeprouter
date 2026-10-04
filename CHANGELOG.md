@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-10-04
+
+- 修复 Simple Key 编辑模式：用途自动授权的模型集合不再触发 Advanced；手动权限、IP/速率/分组限制仍保留高级编辑。
+
+- 修复 Simple 密钥创建后的引导断点：创建接口向当前用户返回刚创建的 Key 和 ID，禁止响应缓存；增加实际创建、权限快照和后续读取脱敏回归。验收标准见 meta-repo docs/simple-key-acceptance-prd.md。
+
+- 修复混合聊天/视频渠道测试结果的范围标注：按实际所测模型区分连通性与模型请求；补齐 Seedance 重定向、超大响应及错误信息脱敏回归，两个 CI 流程同步执行渠道测试。
+
+- 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
+
+- 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+
+
+- 优化快速导入：支持按厂商展开并勾选部分模型，测试模型自动落在所选范围内；阻止空模型提交，部分导入成功后刷新列表并仅保留失败项待重试，避免重复创建渠道（`quick-import-providers-dialog.tsx`、中英文文案、交互回归测试；meta-repo ElevenLabs PRD 更新）。
+- 新增 MiniMax 多媒体快速导入：独立海螺视频（含 H3）、图片和 Speech 2.8 / 2.6 / 02 语音预设，补充图片及按字符语音定价；修复 TTS 输出格式、默认语速和结算字符数；视频测试改用只读任务列表并标明仅验证连通性。
+
+- 新增 ElevenLabs 全部 TTS 模型目录（v4、v4 Turbo、v3、v3 Conversational、Multilingual v2、Flash v2/v2.5、Turbo v2/v2.5）：补齐语音、Dialogue HTTP 与 WebSocket 单次音频转换和新模型字符计费，拒绝停用 v1；新增协议、错误、取消与计费回归测试。v4 Turbo 上游文档存在矛盾，真实账号验证待完成（`relay/channel/elevenlabs`、渠道预设、`setting/ratio_setting`；meta-repo PRD 更新）。
+
+- 新增 OpenAI 最新模型：GPT-6 系列 `gpt-6-astra`（$10/$50）、`gpt-6-sol`（$2/$10）、`gpt-6.1-sol`（$2/$10，缓存 $0.10，2026-09-29 发布），输出统一 5× 计价；图片模型 `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`（2026-09-08，沿用 gpt-image-2 的 token 价）。gpt-6 复用 gpt-5 的推理参数规则（`max_tokens`→`max_completion_tokens`、去掉 temperature/top_p、system→developer），否则上游 400。同步种子渠道、渠道/模型预设；OpenAI 画图预设移除已下线的 `dall-e-3`。
+
+- 统一渠道测试的图片、语音、embedding、rerank、Responses 端点检测与 DTO，修复 MiniMax 语音/图片和 ElevenLabs 显式端点误测；拒绝未知测试端点及空 HTTP 响应。
+
+- 新增 MiniMax 对话快速导入预设：使用官方国际站 OpenAI 兼容接口和已有定价的 M3 / M2.7 / M2，保留禁用状态及占位密钥；新增 meta-repo `docs/minimax-quick-import-prd.md` 记录范围和验证。
+- 优化添加渠道默认流程：主按钮先打开供应商快速导入预设，弹窗保留“手动配置”入口。
+
+- 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
+
+- 修复 Seedream 渠道自动测试端点与请求类型不一致：统一使用图片请求，2048x2048 测试尺寸并关闭图片测试流式校验；覆盖 4 个型号及显式端点选择。
+
+- 修复 ElevenLabs 默认模型目录与渠道导入预设：移除上游已停用的 `eleven_multilingual_v1`，保留已通过连接测试的三个模型；新增 meta-repo `docs/elevenlabs-model-catalog-prd.md` 记录范围和验证边界。
+
+- 修复 Seedance 视频渠道连接测试：用只读任务列表检查鉴权和连通性，支持渠道代理与启用密钥；标明未验证模型生成，避免批量测试产生付费视频。新增实际测试入口的错误响应回归覆盖。
+
 ## 2026-09-16
 
 - **视频页两处修正**（Video First Wave P2 eval 反馈,@sam 本地实测提出):

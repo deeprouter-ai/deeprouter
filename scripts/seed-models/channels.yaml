@@ -5,7 +5,7 @@
 #   - `key_env` 指向环境变量名；上游 API key 从环境读取，不写在本文件
 #   - `enabled: false` 的 channel 不会被创建/更新
 #   - `name` 是幂等键（同名 channel 会被更新而不是重复创建）
-#   - 模型 `models` 是 new-api 已经内置定价的型号；陌生型号会落到默认 ratio (1.0 = $0.002/1K)
+#   - 模型必须有准确计费配置；未知型号不可依赖默认 ratio（计费测试阻止漏配）
 #   - `type` 数字来自 constant/channel.go 的 ChannelType* 枚举
 
 version: 1
@@ -31,7 +31,11 @@ channels:
     test_model: gpt-5.6-luna
     tag: openai
     models:
-      # GPT-5.6 系列（当前旗舰；gpt-5.6 = gpt-5.6-sol 的别名）
+      # GPT-6 系列（当前旗舰；gpt-6.1-sol 2026-09-29 发布）
+      - gpt-6-astra
+      - gpt-6.1-sol
+      - gpt-6-sol
+      # GPT-5.6 系列（gpt-5.6 = gpt-5.6-sol 的别名）
       - gpt-5.6
       - gpt-5.6-sol
       - gpt-5.6-terra
@@ -56,6 +60,8 @@ channels:
       - gpt-4o-mini
       - chatgpt-4o-latest
       # 多模态生成（dall-e-* 已于 2026-05-12 下线，不再种子化）
+      - gpt-image-2.5-flare
+      - gpt-image-2.5-sunburst
       - gpt-image-2
       - gpt-image-1
       # 语音（实时 / 转写 / TTS）
@@ -492,3 +498,22 @@ channels:
     models:
       - sora-2
       - sora-2-pro
+
+  # TTS only: Music, STT and voice design need their own adapters and billing.
+  - name: ElevenLabs 语音合成
+    type: 58
+    enabled: false        # 凭据和供应商权限验证后启用；不会自动写线上
+    key_env: ELEVENLABS_API_KEY
+    base_url: https://api.elevenlabs.io
+    test_model: eleven_flash_v2_5
+    tag: elevenlabs
+    models:
+      - eleven_v4
+      - eleven_v4_turbo
+      - eleven_v3
+      - eleven_v3_conversational
+      - eleven_multilingual_v2
+      - eleven_flash_v2_5
+      - eleven_flash_v2
+      - eleven_turbo_v2_5
+      - eleven_turbo_v2

@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useIsCasual } from '@/hooks/use-casual'
 import { cn } from '@/lib/utils'
+import { useIsCasual } from '@/hooks/use-casual'
 import type { PurposeSummary, SimplePurposeId } from '../types'
 
 /**
@@ -60,10 +60,7 @@ export function ApiKeyPurposePicker({
     return (
       <div className='grid grid-cols-2 gap-3 lg:grid-cols-3'>
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className='bg-muted/30 h-32 animate-pulse rounded-lg'
-          />
+          <div key={i} className='bg-muted/30 h-32 animate-pulse rounded-lg' />
         ))}
       </div>
     )
@@ -73,14 +70,18 @@ export function ApiKeyPurposePicker({
     <div className='grid grid-cols-2 gap-3 lg:grid-cols-3'>
       {options.map((option) => {
         const selected = option.id === value
+        const unavailable =
+          ['video', 'image', 'voice'].includes(option.id) &&
+          option.available !== true
         return (
           <button
             key={option.id}
             type='button'
+            disabled={unavailable}
             onClick={() => onValueChange(option.id)}
             className={cn(
-              'group relative flex h-full min-h-[7.5rem] flex-col items-start gap-1.5 rounded-lg border bg-background p-3 text-left transition-all',
-              'hover:border-foreground/40 hover:shadow-sm',
+              'group bg-background relative flex h-full min-h-[7.5rem] flex-col items-start gap-1.5 rounded-lg border p-3 text-left transition-all',
+              'hover:border-foreground/40 disabled:cursor-not-allowed disabled:opacity-60',
               selected
                 ? 'border-foreground ring-foreground/15 bg-foreground/[0.025] ring-2'
                 : 'border-border'
@@ -95,12 +96,26 @@ export function ApiKeyPurposePicker({
             <span className='text-2xl leading-none' aria-hidden>
               {option.icon}
             </span>
-            <span className='text-sm font-medium leading-tight'>
+            <span className='text-sm leading-tight font-medium'>
               {option.label}
             </span>
             {option.desc && (
               <span className='text-muted-foreground line-clamp-2 text-xs leading-snug'>
                 {option.desc}
+              </span>
+            )}
+            {['video', 'image', 'voice'].includes(option.id) && (
+              <span className='text-muted-foreground text-xs'>
+                {unavailable
+                  ? t(
+                      option.availability_error ||
+                        option.available === undefined
+                        ? 'Could not load model availability'
+                        : 'No models available for your account'
+                    )
+                  : t('Includes all {{count}} available models', {
+                      count: option.available_models?.length ?? 0,
+                    })}
               </span>
             )}
             {option.human_estimate && (

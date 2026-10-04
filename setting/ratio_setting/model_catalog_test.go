@@ -73,3 +73,32 @@ func TestRefreshedCatalogModelsArePriced(t *testing.T) {
 		}
 	}
 }
+
+// GPT-6 tiers price output at 5x input ($10/$50, $2/$10). Without the gpt-6
+// branch they fall through to the generic gpt- default and bill output at 2x.
+func TestGPT6TiersBillOutputAtFiveX(t *testing.T) {
+	InitRatioSettings()
+
+	for _, name := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"} {
+		if got := GetCompletionRatio(name); got != 5 {
+			t.Errorf("GetCompletionRatio(%q) = %v, want 5", name, got)
+		}
+		if _, found, _ := GetModelRatio(name); !found {
+			t.Errorf("GetModelRatio(%q): no input price configured", name)
+		}
+	}
+}
+
+// gpt-image-2.5 keeps gpt-image-2's token prices.
+func TestGPTImage25PricedLikeGPTImage2(t *testing.T) {
+	InitRatioSettings()
+
+	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		if ratio, found, _ := GetModelRatio(name); !found || ratio != 2.5 {
+			t.Errorf("GetModelRatio(%q) = %v,%v, want 2.5,true", name, ratio, found)
+		}
+		if got := GetCompletionRatio(name); got != 6 {
+			t.Errorf("GetCompletionRatio(%q) = %v, want 6", name, got)
+		}
+	}
+}

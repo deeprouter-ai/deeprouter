@@ -9,7 +9,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
-	"github.com/QuantumNous/new-api/setting/alias_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
@@ -229,31 +228,27 @@ func AddToken(c *gin.Context) {
 		TpmLimit:           token.TpmLimit,
 		MonthlyLimit:       token.MonthlyLimit,
 	}
-	// Simple-mode: derive ModelLimits from the purpose/tier whitelist so the
-	// distribution middleware enforces it automatically. Frontend never sends
-	// model_limits in Simple mode — we own it.
-	if cleanToken.SimplePurpose != "" {
-		if list, ok := alias_setting.ModelWhitelistForToken(
-			cleanToken.SimplePurpose,
-			cleanToken.SimpleBrand,
-			cleanToken.SimplePriceTier,
-		); ok {
-			cleanToken.ModelLimits = alias_setting.ModelWhitelistString(list)
-			cleanToken.ModelLimitsEnabled = true
-		} else {
-			// Ultra tier or unknown purpose → unlimited.
-			cleanToken.ModelLimits = ""
-			cleanToken.ModelLimitsEnabled = false
-		}
+	if err := applySimpleKeyPurpose(&cleanToken); err != nil {
+		common.ApiErrorI18n(c, err.Error())
+		return
 	}
+
 	err = cleanToken.Insert()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	// Reveal only the credential just created for this authenticated owner.
+	// The Simple-mode setup dialog needs it; subsequent reads remain masked.
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data": gin.H{
+			"id":  cleanToken.Id,
+			"key": cleanToken.GetFullKey(),
+		},
 	})
 }
 
@@ -329,21 +324,9 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.RpmLimit = token.RpmLimit
 		cleanToken.TpmLimit = token.TpmLimit
 		cleanToken.MonthlyLimit = token.MonthlyLimit
-		// Re-derive ModelLimits when Simple-mode bindings change. Frontend
-		// owns model_limits in Advanced mode (passes empty SimplePurpose), so
-		// we only override when SimplePurpose is set.
-		if cleanToken.SimplePurpose != "" {
-			if list, ok := alias_setting.ModelWhitelistForToken(
-				cleanToken.SimplePurpose,
-				cleanToken.SimpleBrand,
-				cleanToken.SimplePriceTier,
-			); ok {
-				cleanToken.ModelLimits = alias_setting.ModelWhitelistString(list)
-				cleanToken.ModelLimitsEnabled = true
-			} else {
-				cleanToken.ModelLimits = ""
-				cleanToken.ModelLimitsEnabled = false
-			}
+		if err := applySimpleKeyPurpose(cleanToken); err != nil {
+			common.ApiErrorI18n(c, err.Error())
+			return
 		}
 	}
 	err = cleanToken.Update()

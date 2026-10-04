@@ -322,7 +322,9 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 		}
 
 	}
-	if strings.HasPrefix(info.UpstreamModelName, "o") || strings.HasPrefix(info.UpstreamModelName, "gpt-5") {
+	// gpt-6 is a reasoning family with the same parameter contract as gpt-5.
+	isGPT5Plus := strings.HasPrefix(info.UpstreamModelName, "gpt-5") || strings.HasPrefix(info.UpstreamModelName, "gpt-6")
+	if strings.HasPrefix(info.UpstreamModelName, "o") || isGPT5Plus {
 		if lo.FromPtrOr(request.MaxCompletionTokens, uint(0)) == 0 && lo.FromPtrOr(request.MaxTokens, uint(0)) != 0 {
 			request.MaxCompletionTokens = request.MaxTokens
 			request.MaxTokens = nil
@@ -333,7 +335,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayIn
 		}
 
 		// gpt-5系列模型适配 归零不再支持的参数
-		if strings.HasPrefix(info.UpstreamModelName, "gpt-5") {
+		if isGPT5Plus {
 			request.Temperature = nil
 			request.TopP = nil
 			request.LogProbs = nil

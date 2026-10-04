@@ -49,7 +49,9 @@ var ModelList = []string{
 	"gpt-5.4", "gpt-5.4-2026-03-05",
 	"gpt-5.4-pro", "gpt-5.4-pro-2026-03-05",
 	"gpt-5.5", "gpt-5.5-pro",
-	// GPT-5.6 family (current flagship). "gpt-5.6" is the alias for -sol.
+	// GPT-6 family (current flagship). gpt-6.1-sol released 2026-09-29.
+	"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol",
+	// GPT-5.6 family. "gpt-5.6" is the alias for -sol.
 	"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 	"gpt-5.6-cyber",
 	"daybreak-red-latest", "daybreak-blue-latest",
@@ -75,6 +77,7 @@ var ModelList = []string{
 	"dall-e-2", "dall-e-3", // retired 2026-05-12 by OpenAI; entries kept for back-compat with already-configured channels
 	"gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5",
 	"gpt-image-2", "gpt-image-2-2026-04-21", // current default image model since 2026-04-21 (thinking-mode + 4K)
+	"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", // 2026-09-08; flare is the recommended default
 	"chatgpt-image-latest",
 	"whisper-1",
 	"tts-1", "tts-1-1106", "tts-1-hd", "tts-1-hd-1106",
