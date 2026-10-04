@@ -384,6 +384,15 @@ var defaultModelRatio = map[string]float64{
 	"eleven_multilingual_v1": 0.15,
 	"eleven_turbo_v2_5":      0.075,
 	"eleven_flash_v2_5":      0.05,
+	// Additional TTS models: regular API list prices, USD per 1K characters.
+	// https://elevenlabs.io/pricing/api (2026-10-04); excludes temporary v4 promos.
+	// Existing model ratios above remain operator-compatible bootstrap estimates.
+	"eleven_v4":                0.08 / 1000 * USD,
+	"eleven_v4_turbo":          0.04 / 1000 * USD,
+	"eleven_v3":                0.08 / 1000 * USD,
+	"eleven_v3_conversational": 0.04 / 1000 * USD,
+	"eleven_flash_v2":          0.04 / 1000 * USD,
+	"eleven_turbo_v2":          0.04 / 1000 * USD,
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat": 0.2 / 1000 * USD,
 	// Perplexity Sonar (input, USD per 1M tokens). Note: Perplexity also charges a

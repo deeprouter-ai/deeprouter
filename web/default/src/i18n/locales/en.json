@@ -5118,6 +5118,21 @@
     "A reference listing cannot be paid": "A reference listing cannot be paid",
     "Creates a draft skill that links out to an external repo — no package, no version to upload.": "Creates a draft skill that links out to an external repo — no package, no version to upload.",
     "Set a source URL before publishing": "Set a source URL before publishing",
-    "View on GitHub": "View on GitHub"
+    "View on GitHub": "View on GitHub",
+    "Quick Import Providers": "Quick Import Providers",
+    "Create disabled channel skeletons for common providers in one click. Each channel needs you to fill the real API key + enable it afterwards.": "Create disabled channel skeletons for common providers in one click. Each channel needs you to fill the real API key + enable it afterwards.",
+    "{{n}} of {{total}} selected": "{{n}} of {{total}} selected",
+    "Import {{n}} channel(s)": "Import {{n}} channel(s)",
+    "Pick at least one provider": "Pick at least one provider",
+    "Imported {{n}} provider(s) as disabled channels. Edit each to add the API key.": "Imported {{n}} provider(s) as disabled channels. Edit each to add the API key.",
+    "Imported {{ok}}/{{total}}. Failures:\n{{msgs}}": "Imported {{ok}}/{{total}}. Failures:\n{{msgs}}",
+    "Get key": "Get key",
+    "Chat / 对话": "Chat",
+    "Image / 画图": "Image",
+    "Embeddings & Audio / 向量·语音": "Embeddings & Audio",
+    "Choose models ({{selected}}/{{total}})": "Choose models ({{selected}}/{{total}})",
+    "Models for {{provider}}": "Models for {{provider}}",
+    "Clear models": "Clear models",
+    "Pick at least one model for each selected provider": "Pick at least one model for each selected provider"
   }
 }

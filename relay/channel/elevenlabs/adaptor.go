@@ -1,11 +1,15 @@
 package elevenlabs
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -28,10 +32,22 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		return "", errNotSupported
 	}
 	voiceID := defaultVoiceID
+	modelID := info.UpstreamModelName
+	if modelID == "" {
+		if req, ok := info.Request.(*dto.AudioRequest); ok {
+			modelID = req.Model
+		}
+	}
+	if usesDialogueHTTP(modelID) {
+		return strings.TrimRight(info.ChannelBaseUrl, "/") + "/v1/text-to-dialogue", nil
+	}
+	if usesDialogueWebSocket(modelID) {
+		return dialogueWebSocketURL(info.ChannelBaseUrl, modelID)
+	}
 	if req, ok := info.Request.(*dto.AudioRequest); ok && req.Voice != "" {
 		voiceID = req.Voice
 	}
-	return fmt.Sprintf("%s/v1/text-to-speech/%s", info.ChannelBaseUrl, voiceID), nil
+	return fmt.Sprintf("%s/v1/text-to-speech/%s", strings.TrimRight(info.ChannelBaseUrl, "/"), url.PathEscape(voiceID)), nil
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *relaycommon.RelayInfo) error {
@@ -46,7 +62,20 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
-	return channel.DoApiRequest(a, c, info, requestBody)
+	data, err := io.ReadAll(requestBody)
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		ModelID string `json:"model_id"`
+	}
+	if err := common.Unmarshal(data, &body); err != nil {
+		return nil, err
+	}
+	if usesDialogueWebSocket(body.ModelID) {
+		return a.doDialogueWebSocket(c, info, data)
+	}
+	return channel.DoApiRequest(a, c, info, bytes.NewReader(data))
 }
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.NewAPIError) {

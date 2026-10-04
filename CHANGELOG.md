@@ -4,6 +4,9 @@
 
 - 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
 - 新增 OpenAI 最新模型：GPT-6 系列 `gpt-6-astra`（$10/$50）、`gpt-6-sol`（$2/$10）、`gpt-6.1-sol`（$2/$10，缓存 $0.10，2026-09-29 发布），输出统一 5× 计价；图片模型 `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`（2026-09-08，沿用 gpt-image-2 的 token 价）。gpt-6 复用 gpt-5 的推理参数规则（`max_tokens`→`max_completion_tokens`、去掉 temperature/top_p、system→developer），否则上游 400。同步种子渠道、渠道/模型快速导入预设；儿童模式白名单加入 gpt-image-2.5；OpenAI 画图预设移除已下线的 `dall-e-3`。
+- 优化快速导入：支持按厂商展开并勾选部分模型，测试模型自动落在所选范围内；阻止空模型提交，部分导入成功后刷新列表并仅保留失败项待重试，避免重复创建渠道（`quick-import-providers-dialog.tsx`、中英文文案、交互回归测试；meta-repo ElevenLabs PRD 更新）。
+- 新增 ElevenLabs 全部 TTS 模型目录（v4、v4 Turbo、v3、v3 Conversational、Multilingual v2、Flash v2/v2.5、Turbo v2/v2.5）：补齐语音、Dialogue HTTP 与 WebSocket 单次音频转换和新模型字符计费，拒绝停用 v1；新增协议、错误、取消与计费回归测试。v4 Turbo 上游文档存在矛盾，真实账号验证待完成（`relay/channel/elevenlabs`、渠道预设、`setting/ratio_setting`；meta-repo PRD 更新）。
+- 修复 ElevenLabs 默认模型目录与渠道导入预设：移除上游已停用的 `eleven_multilingual_v1`，保留已通过连接测试的三个模型；新增 meta-repo `docs/elevenlabs-model-catalog-prd.md` 记录范围和验证边界。
 
 ## 2026-09-16
 

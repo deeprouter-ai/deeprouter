@@ -23,6 +23,7 @@ on:
       - 'service/convert.go'
       - 'relay/channel/claude/**'
       - 'relay/channel/openai/**'
+      - 'relay/channel/elevenlabs/**'
       - 'controller/**'
       - 'router/**'
       - 'dto/**'
@@ -48,6 +49,7 @@ on:
       - 'service/convert.go'
       - 'relay/channel/claude/**'
       - 'relay/channel/openai/**'
+      - 'relay/channel/elevenlabs/**'
       - 'controller/**'
       - 'router/**'
       - 'dto/**'
@@ -120,6 +122,8 @@ jobs:
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
           go test ./relay/channel/task/doubao/ -count=1 -timeout 60s
           go test ./relay/channel/task/hailuo/ -count=1 -timeout 60s
+          go test ./relay/channel/elevenlabs/ -count=1 -race -timeout 60s
+          go test ./controller/ -run 'TestElevenLabs|TestBuildTestRequestForElevenLabs' -count=1 -race -timeout 60s
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.

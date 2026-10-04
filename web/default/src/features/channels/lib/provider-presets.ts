@@ -178,7 +178,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 58,
     modality: 'embedding',
     models:
-      'eleven_multilingual_v2,eleven_turbo_v2_5,eleven_flash_v2_5,eleven_multilingual_v1',
+      'eleven_v4,eleven_v4_turbo,eleven_v3,eleven_v3_conversational,eleven_multilingual_v2,eleven_turbo_v2_5,eleven_flash_v2_5,eleven_flash_v2,eleven_turbo_v2',
     testModel: 'eleven_flash_v2_5',
     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',
     description:

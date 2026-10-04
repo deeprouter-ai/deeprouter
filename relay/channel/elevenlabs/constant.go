@@ -1,8 +1,9 @@
 package elevenlabs
 
 // ElevenLabs is a text-to-speech (voice) provider. It is NOT OpenAI-compatible:
-// the voice id goes in the URL path, auth is the `xi-api-key` header, and the
-// request body is {text, model_id, voice_settings}. Only TTS is supported here.
+// auth is the `xi-api-key` header. Standard TTS uses a voice ID in the URL;
+// v4 uses single-voice Dialogue HTTP, and conversational models use the Dialogue
+// WebSocket bridged to an HTTP audio response. Only TTS is supported here.
 
 const (
 	ChannelName = "elevenlabs"
@@ -15,8 +16,19 @@ const (
 // These map to the model_id field of the ElevenLabs TTS request and to the
 // price keys in setting/ratio_setting/model_ratio.go.
 var ModelList = []string{
+	"eleven_v4",
+	"eleven_v4_turbo",
+	"eleven_v3",
+	"eleven_v3_conversational",
 	"eleven_multilingual_v2",
 	"eleven_turbo_v2_5",
 	"eleven_flash_v2_5",
-	"eleven_multilingual_v1",
+	"eleven_flash_v2",
+	"eleven_turbo_v2",
+}
+
+func usesDialogueHTTP(modelID string) bool { return modelID == "eleven_v4" }
+
+func usesDialogueWebSocket(modelID string) bool {
+	return modelID == "eleven_v3_conversational" || modelID == "eleven_v4_turbo"
 }

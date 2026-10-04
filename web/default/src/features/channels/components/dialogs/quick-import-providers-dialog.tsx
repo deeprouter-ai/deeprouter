@@ -57,6 +57,9 @@ export function QuickImportProvidersDialog({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [modelSelections, setModelSelections] = useState<
+    Record<string, string[]>
+  >({})
   const [submitting, setSubmitting] = useState(false)
 
   const selectedCount = useMemo(
@@ -69,17 +72,42 @@ export function QuickImportProvidersDialog({
   }
 
   const toggleAll = (next: boolean) => {
-    setSelected(
-      Object.fromEntries(PROVIDER_PRESETS.map((p) => [p.id, next]))
-    )
+    setSelected(Object.fromEntries(PROVIDER_PRESETS.map((p) => [p.id, next])))
+  }
+
+  const presetModels = (preset: ProviderPreset) =>
+    preset.models
+      .split(',')
+      .map((model) => model.trim())
+      .filter(Boolean)
+
+  const chosenModels = (preset: ProviderPreset) =>
+    modelSelections[preset.id] ?? presetModels(preset)
+
+  const hasEmptySelection = PROVIDER_PRESETS.some(
+    (preset) => selected[preset.id] && chosenModels(preset).length === 0
+  )
+
+  const toggleModel = (preset: ProviderPreset, model: string) => {
+    const current = chosenModels(preset)
+    setModelSelections((previous) => ({
+      ...previous,
+      [preset.id]: presetModels(preset).filter((candidate) =>
+        candidate === model
+          ? !current.includes(candidate)
+          : current.includes(candidate)
+      ),
+    }))
   }
 
   const reset = () => {
     setSelected({})
+    setModelSelections({})
     setSubmitting(false)
   }
 
   const createOne = async (preset: ProviderPreset) => {
+    const models = chosenModels(preset)
     const result = await createChannel({
       mode: 'single',
       channel: {
@@ -87,11 +115,14 @@ export function QuickImportProvidersDialog({
         type: preset.type,
         key: PLACEHOLDER_KEY,
         base_url: preset.baseUrl ?? '',
-        models: preset.models,
+        models: models.join(','),
         // Pre-set a cheap, right-modality test model so the channel "Test"
         // button works without the operator picking one (chat models can't
         // test image channels and vice versa).
-        test_model: preset.testModel ?? '',
+        test_model:
+          preset.testModel && models.includes(preset.testModel)
+            ? preset.testModel
+            : models[0],
         group: 'default',
         status: 2, // disabled until operator fills real key
       },
@@ -107,6 +138,10 @@ export function QuickImportProvidersDialog({
       toast.error(t('Pick at least one provider'))
       return
     }
+    if (hasEmptySelection) {
+      toast.error(t('Pick at least one model for each selected provider'))
+      return
+    }
     setSubmitting(true)
     let ok = 0
     const failures: string[] = []
@@ -114,11 +149,15 @@ export function QuickImportProvidersDialog({
       try {
         await createOne(p)
         ok += 1
+        setSelected((previous) => ({ ...previous, [p.id]: false }))
       } catch (e) {
         failures.push(`${p.name}: ${(e as Error).message}`)
       }
     }
     setSubmitting(false)
+    if (ok > 0) {
+      queryClient.invalidateQueries({ queryKey: ['channels'] })
+    }
     if (failures.length === 0) {
       toast.success(
         t(
@@ -126,7 +165,6 @@ export function QuickImportProvidersDialog({
           { n: ok }
         )
       )
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
       onOpenChange(false)
       reset()
     } else {
@@ -203,45 +241,127 @@ export function QuickImportProvidersDialog({
                 {items.map((p) => {
                   const checked = !!selected[p.id]
                   return (
-                    <Label
-                      key={p.id}
-                      htmlFor={`qip-${p.id}`}
-                      className='hover:bg-accent/40 flex cursor-pointer items-start gap-3 rounded-md border p-3'
-                    >
-                      <Checkbox
-                        id={`qip-${p.id}`}
-                        checked={checked}
-                        onCheckedChange={() => toggle(p.id)}
-                        disabled={submitting}
-                        className='mt-0.5'
-                      />
-                      <div className='flex-1 space-y-1'>
-                        <div className='flex items-center gap-2'>
-                          <span className='font-medium'>{p.name}</span>
-                          <span className='text-muted-foreground text-xs'>
-                            type={p.type}
-                          </span>
-                          {p.docsUrl && (
-                            <a
-                              href={p.docsUrl}
-                              target='_blank'
-                              rel='noopener noreferrer'
-                              onClick={(e) => e.stopPropagation()}
-                              className='text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-xs underline'
+                    <div key={p.id} className='rounded-[7px] border p-3'>
+                      <div className='flex items-start gap-3'>
+                        <Checkbox
+                          id={`qip-${p.id}`}
+                          checked={checked}
+                          onCheckedChange={() => toggle(p.id)}
+                          disabled={submitting}
+                          className='mt-0.5'
+                        />
+                        <div className='flex-1 space-y-1'>
+                          <div className='flex items-center gap-2'>
+                            <Label
+                              htmlFor={`qip-${p.id}`}
+                              className='cursor-pointer font-semibold'
                             >
-                              {t('Get key')}
-                              <ExternalLink className='size-3' />
-                            </a>
-                          )}
+                              {p.name}
+                            </Label>
+                            <span className='text-muted-foreground text-xs'>
+                              type={p.type}
+                            </span>
+                            {p.docsUrl && (
+                              <a
+                                href={p.docsUrl}
+                                target='_blank'
+                                rel='noopener noreferrer'
+                                onClick={(e) => e.stopPropagation()}
+                                className='text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 text-xs underline'
+                              >
+                                {t('Get key')}
+                                <ExternalLink className='size-3' />
+                              </a>
+                            )}
+                          </div>
+                          <p className='text-muted-foreground text-xs'>
+                            {p.description}
+                          </p>
+                          <p className='text-muted-foreground/80 font-mono text-[11px] break-all'>
+                            {p.models}
+                          </p>
                         </div>
-                        <p className='text-muted-foreground text-xs'>
-                          {p.description}
-                        </p>
-                        <p className='text-muted-foreground/80 font-mono text-[11px] break-all'>
-                          {p.models}
-                        </p>
                       </div>
-                    </Label>
+                      {checked && (
+                        <details className='mt-3 border-t pt-2'>
+                          <summary className='text-muted-foreground cursor-pointer text-xs'>
+                            {t('Choose models ({{selected}}/{{total}})', {
+                              selected: chosenModels(p).length,
+                              total: presetModels(p).length,
+                            })}
+                          </summary>
+                          <fieldset
+                            disabled={submitting}
+                            className='mt-2 space-y-2'
+                          >
+                            <legend className='sr-only'>
+                              {t('Models for {{provider}}', {
+                                provider: p.name,
+                              })}
+                            </legend>
+                            <div className='flex gap-2'>
+                              <Button
+                                type='button'
+                                variant='ghost'
+                                size='sm'
+                                disabled={submitting}
+                                onClick={() =>
+                                  setModelSelections((previous) => ({
+                                    ...previous,
+                                    [p.id]: presetModels(p),
+                                  }))
+                                }
+                              >
+                                {t('Select all models')}
+                              </Button>
+                              <Button
+                                type='button'
+                                variant='ghost'
+                                size='sm'
+                                disabled={submitting}
+                                onClick={() =>
+                                  setModelSelections((previous) => ({
+                                    ...previous,
+                                    [p.id]: [],
+                                  }))
+                                }
+                              >
+                                {t('Clear models')}
+                              </Button>
+                            </div>
+                            <div className='grid gap-2 sm:grid-cols-2'>
+                              {presetModels(p).map((model) => (
+                                <Label
+                                  key={model}
+                                  htmlFor={`qip-${p.id}-${model}`}
+                                  className='flex cursor-pointer items-center gap-2 rounded-[7px] border p-2 font-mono text-xs break-all'
+                                >
+                                  <Checkbox
+                                    id={`qip-${p.id}-${model}`}
+                                    checked={chosenModels(p).includes(model)}
+                                    onCheckedChange={() =>
+                                      toggleModel(p, model)
+                                    }
+                                    disabled={submitting}
+                                  />
+                                  {model}
+                                </Label>
+                              ))}
+                            </div>
+                            {chosenModels(p).length === 0 && (
+                              <p
+                                className='text-destructive text-xs'
+                                role='alert'
+                              >
+                                {t(
+                                  'Pick at least one model for each selected provider'
+                                )}
+                              </p>
+                            )}
+                          </fieldset>
+                        </details>
+                      )}
+                    </div>
                   )
                 })}
               </div>
@@ -253,7 +373,10 @@ export function QuickImportProvidersDialog({
           <Button
             type='button'
             variant='outline'
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              reset()
+              onOpenChange(false)
+            }}
             disabled={submitting}
           >
             {t('Cancel')}
@@ -261,7 +384,7 @@ export function QuickImportProvidersDialog({
           <Button
             type='button'
             onClick={handleSubmit}
-            disabled={submitting || selectedCount === 0}
+            disabled={submitting || selectedCount === 0 || hasEmptySelection}
           >
             {submitting && <Loader2 className='mr-1 size-4 animate-spin' />}
             {t('Import {{n}} channel(s)', { n: selectedCount })}
