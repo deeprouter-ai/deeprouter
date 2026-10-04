@@ -41,6 +41,7 @@ const PLACEHOLDER_KEY = 'REPLACE_WITH_YOUR_KEY'
 // Section order + labels (i18n keys) for the modality-grouped preset list.
 const MODALITY_GROUPS: Array<{ modality: ProviderModality; label: string }> = [
   { modality: 'chat', label: 'Chat / 对话' },
+  { modality: 'video', label: 'Video / 视频' },
   { modality: 'image', label: 'Image / 画图' },
   { modality: 'embedding', label: 'Embeddings & Audio / 向量·语音' },
 ]
@@ -48,11 +49,13 @@ const MODALITY_GROUPS: Array<{ modality: ProviderModality; label: string }> = [
 export interface QuickImportProvidersDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onManualCreate?: () => void
 }
 
 export function QuickImportProvidersDialog({
   open,
   onOpenChange,
+  onManualCreate,
 }: QuickImportProvidersDialogProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -370,6 +373,19 @@ export function QuickImportProvidersDialog({
         </div>
 
         <DialogFooter>
+          {onManualCreate && (
+            <Button
+              type='button'
+              variant='ghost'
+              onClick={() => {
+                reset()
+                onManualCreate()
+              }}
+              disabled={submitting}
+            >
+              {t('Manual configuration')}
+            </Button>
+          )}
           <Button
             type='button'
             variant='outline'

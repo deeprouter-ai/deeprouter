@@ -128,6 +128,9 @@ export type SimpleBrand = 'claude' | 'openai' | 'gemini' | 'deepseek'
 export type SimplePriceTierId = 'economy' | 'standard' | 'premium' | 'ultra'
 
 export interface PurposeSummary {
+  availability_error?: boolean
+  available?: boolean
+  available_models?: string[]
   id: SimplePurposeId
   label: string
   icon: string

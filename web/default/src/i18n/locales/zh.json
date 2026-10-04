@@ -1,5 +1,9 @@
 {
   "translation": {
+    "Video / 视频": "视频",
+    "Manual configuration": "手动配置",
+    "Connected — model generation not tested": "连接正常，未验证模型生成",
+    "Checks the video task API and key without generating a paid video. Model access and generation are not tested.": "检查视频任务接口和密钥，不生成付费视频。此测试不验证模型权限或生成结果。",
     "360": "360",
     "1000": "1000",
     "10000": "10000",
@@ -5134,5 +5138,30 @@
     "Models for {{provider}}": "{{provider}} 的模型",
     "Clear models": "清空模型",
     "Pick at least one model for each selected provider": "每个已选厂商至少选择一个模型"
-  }
+  },
+  "Use this key in a tool that supports video generation. Submit a video task, then check its status until the video is ready.": "把密钥粘贴到支持视频生成的工具中。提交视频任务后，查询进度，直到视频生成完成。",
+  "Use this key in a tool that supports image generation. Choose one of the included models below.": "把密钥粘贴到支持图片生成的工具中，再选择下方已包含的模型。",
+  "Use this key in a tool that supports speech. Choose one of the included models below. You do not need a separate provider key.": "把密钥粘贴到支持语音的工具中，再选择下方已包含的模型。无需另外申请供应商密钥。",
+  "Open this guide from a specific key to see its included models.": "从某把密钥的菜单打开指引，即可查看它包含的模型。",
+  "Loading included models…": "正在查询密钥包含的模型…",
+  "Could not load this key’s models. Retry before configuring your tool.": "无法查询这把密钥的模型，请重试后再配置工具。",
+  "This key has no models for this purpose. Create a new key with the matching purpose, or contact support.": "这把密钥没有此用途的模型。请选择对应用途创建新密钥，或联系支持。",
+  "All {{count}} models below are included in this key.": "这把密钥已包含下方全部 {{count}} 个模型。",
+  "Choose a model to use": "选择要使用的模型",
+  "Copy this key into your tool’s key field, then select the same model. Model access is configured; generation has not been tested.": "把密钥粘贴到工具的密钥输入框，再选择相同模型。模型权限已配置，尚未验证实际生成。",
+  "Developer details": "开发者详情",
+  "Example only. Running a generation request uses your account balance. Set DEEPROUTER_API_KEY securely and adjust model-specific parameters before running.": "以下为调用示例，执行生成请求会消耗账号余额。请安全设置 DEEPROUTER_API_KEY，并按所选模型调整参数。",
+  "A task ID means the request was accepted. Wait for a completed task and a playable video before considering generation successful.": "返回任务编号代表请求已受理。任务完成且视频可播放后，才算生成成功。",
+  "Your key includes the models for the purpose you selected. Choose one below to use it.": "密钥已包含所选用途的模型，请在下方选择一个开始使用。",
+  "No models available for your account": "账号暂无此用途的可用模型",
+  "Includes all {{count}} available models": "自动包含全部 {{count}} 个可用模型",
+  "Could not load model availability": "暂时无法查询可用模型，请稍后重试",
+  "Copy model name": "复制模型名",
+  "Official model directory": "供应商官方模型目录",
+  "API documentation": "API 文档",
+  "Where can I find this key’s models?": "在哪里查看这个密钥可用的模型？",
+  "This key’s model directory is the source of truth. Provider websites and the public pricing catalog may list models this key cannot use.": "以这个密钥查询到的模型目录为准。供应商网站和公开价格目录可能包含这个密钥无权使用的模型。",
+  "Set DEEPROUTER_API_KEY securely, then run this read-only query. It does not generate media.": "安全设置 DEEPROUTER_API_KEY 后，运行这个只读查询；不会生成媒体。",
+  "Endpoint metadata unavailable": "接口信息暂不可用",
+  "No models are available to this key.": "这个密钥没有可用模型。"
 }

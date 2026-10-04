@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/internal/channeltest"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -44,19 +45,40 @@ type testResult struct {
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
+	if isAudioSpeechOnlyChannel(channel) {
+		return string(constant.EndpointTypeAudioSpeech)
+	}
 	normalized := strings.TrimSpace(endpointType)
 	if normalized != "" {
 		return normalized
 	}
-	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
-		return string(constant.EndpointTypeOpenAIResponseCompact)
+	name := strings.ToLower(modelName)
+	if channel != nil && channel.Type == constant.ChannelTypeMiniMax {
+		if strings.HasPrefix(name, "speech-") {
+			return string(constant.EndpointTypeAudioSpeech)
+		}
+		if strings.HasPrefix(name, "image-01") {
+			return string(constant.EndpointTypeImageGeneration)
+		}
+	}
+	if strings.Contains(name, "rerank") {
+		return string(constant.EndpointTypeJinaRerank)
+	}
+	if strings.Contains(name, "embed") || strings.HasPrefix(name, "m3e") || strings.HasPrefix(name, "bge-") || (channel != nil && channel.Type == constant.ChannelTypeMokaAI) {
+		return string(constant.EndpointTypeEmbeddings)
+	}
+	if channel != nil && channel.Type == constant.ChannelTypeVolcEngine && strings.Contains(strings.ToLower(modelName), "seedream") {
+		return string(constant.EndpointTypeImageGeneration)
 	}
 	// Image models (gpt-image-*, dall-e-*, imagen-*, flux-*) reject chat
 	// completions upstream, so auto-detect must probe /v1/images/generations.
 	if common.IsImageGenerationModel(modelName) {
 		return string(constant.EndpointTypeImageGeneration)
 	}
-	if common.IsOpenAIResponseOnlyModel(modelName) {
+	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
+		return string(constant.EndpointTypeOpenAIResponseCompact)
+	}
+	if common.IsOpenAIResponseOnlyModel(modelName) || strings.Contains(name, "codex") {
 		return string(constant.EndpointTypeOpenAIResponse)
 	}
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
@@ -74,6 +96,28 @@ func isAudioSpeechOnlyChannel(channel *model.Channel) bool {
 }
 
 func testChannel(channel *model.Channel, testModel string, endpointType string, isStream bool) testResult {
+	if isMiniMaxVideoTest(channel, testModel) {
+		key, _, keyErr := channel.GetNextEnabledKey()
+		if keyErr != nil {
+			return testResult{localErr: keyErr}
+		}
+		client, err := service.GetHttpClientWithProxy(channel.GetSetting().Proxy)
+		if err != nil {
+			return testResult{localErr: fmt.Errorf("invalid MiniMax video channel proxy")}
+		}
+		return testResult{localErr: channeltest.MiniMaxVideoConnection(client, channel.GetBaseURL(), key)}
+	}
+	if channel.Type == constant.ChannelTypeDoubaoVideo {
+		key, _, keyErr := channel.GetNextEnabledKey()
+		if keyErr != nil {
+			return testResult{localErr: keyErr}
+		}
+		client, err := service.GetHttpClientWithProxy(channel.GetSetting().Proxy)
+		if err != nil {
+			return testResult{localErr: fmt.Errorf("invalid Seedance channel proxy")}
+		}
+		return testResult{localErr: channeltest.SeedanceConnection(client, channel.GetBaseURL(), key)}
+	}
 	tik := time.Now()
 	var unsupportedTestChannelTypes = []int{
 		constant.ChannelTypeMidjourney,
@@ -81,7 +125,6 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 		constant.ChannelTypeSunoAPI,
 		constant.ChannelTypeKling,
 		constant.ChannelTypeJimeng,
-		constant.ChannelTypeDoubaoVideo,
 		constant.ChannelTypeVidu,
 	}
 	if lo.Contains(unsupportedTestChannelTypes, channel.Type) {
@@ -109,7 +152,7 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
-	if endpointType == string(constant.EndpointTypeImageGeneration) {
+	if endpointType == string(constant.EndpointTypeImageGeneration) || endpointType == string(constant.EndpointTypeAudioSpeech) || endpointType == string(constant.EndpointTypeEmbeddings) || endpointType == string(constant.EndpointTypeJinaRerank) {
 		isStream = false
 	}
 
@@ -119,43 +162,9 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	if endpointType != "" {
 		if endpointInfo, ok := common.GetDefaultEndpointInfo(constant.EndpointType(endpointType)); ok {
 			requestPath = endpointInfo.Path
+		} else {
+			return testResult{localErr: fmt.Errorf("unsupported channel test endpoint: %s", endpointType)}
 		}
-	} else {
-		// 如果没有指定端点类型，使用原有的自动检测逻辑
-
-		if strings.Contains(strings.ToLower(testModel), "rerank") {
-			requestPath = "/v1/rerank"
-		}
-
-		// 先判断是否为 Embedding 模型
-		if strings.Contains(strings.ToLower(testModel), "embedding") ||
-			strings.HasPrefix(testModel, "m3e") || // m3e 系列模型
-			strings.Contains(testModel, "bge-") || // bge 系列模型
-			strings.Contains(testModel, "embed") ||
-			channel.Type == constant.ChannelTypeMokaAI { // 其他 embedding 模型
-			requestPath = "/v1/embeddings" // 修改请求路径
-		}
-
-		// VolcEngine 图像生成模型
-		if channel.Type == constant.ChannelTypeVolcEngine && strings.Contains(testModel, "seedream") {
-			requestPath = "/v1/images/generations"
-		}
-
-		// responses-only models
-		if strings.Contains(strings.ToLower(testModel), "codex") {
-			requestPath = "/v1/responses"
-		}
-
-		// responses compaction models (must use /v1/responses/compact)
-		if strings.HasSuffix(testModel, ratio_setting.CompactModelSuffix) {
-			requestPath = "/v1/responses/compact"
-		}
-	}
-
-	// TTS-only channels (ElevenLabs) cannot be probed with chat completions —
-	// route them to the audio-speech endpoint so the test exercises the real path.
-	if isAudioSpeechOnlyChannel(channel) {
-		requestPath = "/v1/audio/speech"
 	}
 
 	if strings.HasPrefix(requestPath, "/v1/responses/compact") {
@@ -216,6 +225,8 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			relayFormat = types.RelayFormatOpenAIImage
 		case constant.EndpointTypeEmbeddings:
 			relayFormat = types.RelayFormatEmbedding
+		case constant.EndpointTypeAudioSpeech:
+			relayFormat = types.RelayFormatOpenAIAudio
 		default:
 			relayFormat = types.RelayFormatOpenAI
 		}
@@ -471,9 +482,11 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 			newAPIError: types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusInternalServerError),
 		}
 	}
-	var httpResp *http.Response
-	if resp != nil {
-		httpResp = resp.(*http.Response)
+	httpResp, ok := resp.(*http.Response)
+	if !ok || httpResp == nil || httpResp.Body == nil {
+		return testResult{context: c, localErr: errors.New("upstream returned no HTTP response")}
+	}
+	{
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
 			common.SysError(fmt.Sprintf(
@@ -728,6 +741,7 @@ func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {
 }
 
 func buildTestRequest(model string, endpointType string, channel *model.Channel, isStream bool) dto.Request {
+	endpointType = normalizeChannelTestEndpoint(channel, model, endpointType)
 	testResponsesInput := json.RawMessage(`[{"role":"user","content":"hi"}]`)
 
 	// 根据端点类型构建不同的测试请求
@@ -739,13 +753,23 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				Model: model,
 				Input: []any{"hello world"},
 			}
+		case constant.EndpointTypeAudioSpeech:
+			req := &dto.AudioRequest{Model: model, Input: "DeepRouter channel test.", ResponseFormat: "mp3", Speed: lo.ToPtr(1.0)}
+			if channel != nil && channel.Type == constant.ChannelTypeMiniMax {
+				req.Voice = "male-qn-qingse"
+			}
+			return req
 		case constant.EndpointTypeImageGeneration:
 			// 返回 ImageRequest
+			size := "1024x1024"
+			if channel != nil && channel.Type == constant.ChannelTypeVolcEngine && strings.Contains(strings.ToLower(model), "seedream") {
+				size = "2048x2048"
+			}
 			return &dto.ImageRequest{
 				Model:  model,
 				Prompt: "a cute cat",
 				N:      lo.ToPtr(uint(1)),
-				Size:   "1024x1024",
+				Size:   size,
 			}
 		case constant.EndpointTypeJinaRerank:
 			// 返回 RerankRequest
@@ -789,53 +813,6 @@ func buildTestRequest(model string, endpointType string, channel *model.Channel,
 				req.StreamOptions = &dto.StreamOptions{IncludeUsage: true}
 			}
 			return req
-		}
-	}
-
-	// TTS-only channels (ElevenLabs): probe the audio-speech endpoint instead
-	// of chat completions. Voice is left empty so the adaptor uses its default.
-	if isAudioSpeechOnlyChannel(channel) {
-		return &dto.AudioRequest{
-			Model: model,
-			Input: "DeepRouter channel test.",
-		}
-	}
-
-	// 自动检测逻辑（保持原有行为）
-	if strings.Contains(strings.ToLower(model), "rerank") {
-		return &dto.RerankRequest{
-			Model:     model,
-			Query:     "What is Deep Learning?",
-			Documents: []any{"Deep Learning is a subset of machine learning.", "Machine learning is a field of artificial intelligence."},
-			TopN:      lo.ToPtr(2),
-		}
-	}
-
-	// 先判断是否为 Embedding 模型
-	if strings.Contains(strings.ToLower(model), "embedding") ||
-		strings.HasPrefix(model, "m3e") ||
-		strings.Contains(model, "bge-") {
-		// 返回 EmbeddingRequest
-		return &dto.EmbeddingRequest{
-			Model: model,
-			Input: []any{"hello world"},
-		}
-	}
-
-	// Responses compaction models (must use /v1/responses/compact)
-	if strings.HasSuffix(model, ratio_setting.CompactModelSuffix) {
-		return &dto.OpenAIResponsesCompactionRequest{
-			Model: model,
-			Input: testResponsesInput,
-		}
-	}
-
-	// Responses-only models (e.g. codex series)
-	if strings.Contains(strings.ToLower(model), "codex") {
-		return &dto.OpenAIResponsesRequest{
-			Model:  model,
-			Input:  json.RawMessage(`[{"role":"user","content":"hi"}]`),
-			Stream: lo.ToPtr(isStream),
 		}
 	}
 
@@ -919,10 +896,31 @@ func TestChannel(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"time":    consumedTime,
+		"success":    true,
+		"message":    "",
+		"time":       consumedTime,
+		"test_scope": channelTestScope(channel),
 	})
+}
+
+func isMiniMaxVideoTest(channel *model.Channel, testModel string) bool {
+	if channel == nil || channel.Type != constant.ChannelTypeMiniMax {
+		return false
+	}
+	if testModel == "" {
+		testModel = lo.FromPtr(channel.TestModel)
+	}
+	if testModel == "" {
+		testModel = strings.Split(channel.Models, ",")[0]
+	}
+	return channeltest.IsMiniMaxVideoModel(testModel)
+}
+
+func channelTestScope(channel *model.Channel) string {
+	if channel.Type == constant.ChannelTypeDoubaoVideo || isMiniMaxVideoTest(channel, "") {
+		return "connection_only"
+	}
+	return "model_request"
 }
 
 var testAllChannelsLock sync.Mutex

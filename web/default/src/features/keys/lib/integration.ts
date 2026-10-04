@@ -34,16 +34,12 @@ export function defaultBaseUrl(): string {
   return `${protocol}//${host}/v1`
 }
 
-/**
- * The ONLY model name the gateway routes today is the `deeprouter-auto`
- * virtual model (smart-router). Purpose-specific aliases (deeprouter-coding /
- * -image / …) and the bare `deeprouter` name are NOT provisioned and return
- * 503 — verified against a live gateway 2026-06-11. Per CLAUDE.md §0 rule 3,
- * never surface a model name here without re-testing it end to end.
- */
+/** Media guides resolve concrete models from the key's authenticated catalog. */
 export function modelNameForPurpose(
-  _purpose?: SimplePurposeId | string
+  purpose?: SimplePurposeId | string
 ): string {
+  if (purpose === 'video' || purpose === 'image' || purpose === 'voice')
+    return ''
   return 'deeprouter-auto'
 }
 
