@@ -2,6 +2,7 @@
 
 ## 2026-10-04
 
+- 清理已下线模型：从各服务商默认模型列表、种子渠道和两个快速导入中删除 OpenAI `dall-e-2/3`、`o3-deep-research`、`sora-2/-pro`（9-24 停服，种子里的 Sora 渠道一并移除），Anthropic Claude 3.x / `claude-opus-4` / `claude-sonnet-4` / `claude-opus-4-1`，Google `gemini-2.0-flash*`、`gemini-3-pro-preview`、`gemini-2.5-flash-image`、预览版图片模型、`imagen-4.0-*`、`veo-2.0/3.0`，DeepSeek `deepseek-chat`/`deepseek-reasoner`/`deepseek-v4-flash`（DeepSeek 渠道测试模型改为 `deepseek-v4-pro`）。价格表保留以便已配置渠道的历史计费；AWS Bedrock / Vertex / 火山方舟托管的同名模型下线时间不同，未改动。
 - 快速导入预设更新到各家最新已定价型号：Claude Opus 5 / Sonnet 5 / Fable 5、Gemini 3.7 Flash / 3.1 Pro Preview、Qwen 3.8 Max / 3.7、GLM-5.3、Grok 4.6、Kimi K3 / K2.7 Code、豆包 Seed 2.0 Mini、DeepSeek V4，OpenAI 对话预设加入 GPT-5.6 Luna 并改为测试模型；模型快速导入同步补齐，已下线的 `claude-3-5-haiku-latest` 换成 Haiku 4.5，测试模型改成各家当前便宜型号。新增 `TestQuickImportPresetModelsArePriced`：渠道快速导入里任何模型（含 testModel）没有价格即 CI 失败，避免导入后一调用就报「价格未配置」。
 - 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
 - 新增 OpenAI 最新模型：GPT-6 系列 `gpt-6-astra`（$10/$50）、`gpt-6-sol`（$2/$10）、`gpt-6.1-sol`（$2/$10，缓存 $0.10，2026-09-29 发布），输出统一 5× 计价；图片模型 `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`（2026-09-08，沿用 gpt-image-2 的 token 价）。gpt-6 复用 gpt-5 的推理参数规则（`max_tokens`→`max_completion_tokens`、去掉 temperature/top_p、system→developer），否则上游 400。同步种子渠道、渠道/模型快速导入预设；儿童模式白名单加入 gpt-image-2.5；OpenAI 画图预设移除已下线的 `dall-e-3`。

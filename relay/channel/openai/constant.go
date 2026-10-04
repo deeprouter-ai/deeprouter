@@ -30,7 +30,6 @@ var ModelList = []string{
 	"o3-mini-medium", "o3-mini-2025-01-31-medium",
 	"o3", "o3-2025-04-16",
 	"o3-pro", "o3-pro-2025-06-10",
-	"o3-deep-research", "o3-deep-research-2025-06-26",
 	"o4-mini", "o4-mini-2025-04-16",
 	"o4-mini-deep-research", "o4-mini-deep-research-2025-06-26",
 	"gpt-5", "gpt-5-2025-08-07", "gpt-5-chat-latest",
@@ -74,7 +73,6 @@ var ModelList = []string{
 	"omni-moderation-latest", "omni-moderation-2024-09-26",
 	"text-davinci-edit-001",
 	"davinci-002", "babbage-002",
-	"dall-e-2", "dall-e-3", // retired 2026-05-12 by OpenAI; entries kept for back-compat with already-configured channels
 	"gpt-image-1", "gpt-image-1-mini", "gpt-image-1.5",
 	"gpt-image-2", "gpt-image-2-2026-04-21", // current default image model since 2026-04-21 (thinking-mode + 4K)
 	"gpt-image-2.5-flare", "gpt-image-2.5-sunburst", // 2026-09-08; flare is the recommended default
@@ -82,7 +80,6 @@ var ModelList = []string{
 	"whisper-1",
 	"tts-1", "tts-1-1106", "tts-1-hd", "tts-1-hd-1106",
 	"computer-use-preview", "computer-use-preview-2025-03-11",
-	"sora-2", "sora-2-pro",
 }
 
 var ChannelName = "openai"

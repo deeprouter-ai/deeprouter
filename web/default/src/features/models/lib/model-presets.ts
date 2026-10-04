@@ -154,27 +154,6 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
-    model_name: 'deepseek-v4-flash',
-    description: 'DeepSeek V4 Flash — fast, cheap V4 tier.',
-    group: 'chat',
-    tags: ['open-source', 'fast', 'cheap'],
-    endpoints: 'chat',
-  },
-  {
-    model_name: 'deepseek-chat',
-    description: 'DeepSeek V4 (chat alias) — open weights, strong code.',
-    group: 'chat',
-    tags: ['open-source', 'coder'],
-    endpoints: 'chat',
-  },
-  {
-    model_name: 'deepseek-reasoner',
-    description: 'DeepSeek R1 — open-weights reasoning model.',
-    group: 'reasoning',
-    tags: ['reasoning', 'thinking', 'open-source'],
-    endpoints: 'chat',
-  },
-  {
     model_name: 'qwen3.8-max',
     description:
       '阿里 Qwen 3.8 Max — current domestic flagship, strong Chinese.',
@@ -308,13 +287,6 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
 
   // ── Video Generation ─────────────────────────────────────────────────
-  {
-    model_name: 'veo-3.0-generate-001',
-    description: 'Google Veo 3 — text-to-video.',
-    group: 'video',
-    tags: ['video'],
-    endpoints: 'video',
-  },
   {
     model_name: 'doubao-seedance-2-0-260128',
     description: 'Doubao Seedance 2.0 — Volcengine text-to-video.',

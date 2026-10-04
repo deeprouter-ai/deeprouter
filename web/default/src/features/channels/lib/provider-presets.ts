@@ -83,10 +83,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     name: 'DeepSeek · 对话',
     type: 43,
     modality: 'chat',
-    models: 'deepseek-v4-pro,deepseek-v4-flash',
-    testModel: 'deepseek-v4-flash',
+    // deepseek-chat / -reasoner (2026-07-24) and deepseek-v4-flash were retired.
+    models: 'deepseek-v4-pro',
+    testModel: 'deepseek-v4-pro',
     docsUrl: 'https://platform.deepseek.com/api_keys',
-    description: '对话 / DeepSeek V4 Pro · V4 Flash',
+    description: '对话 / DeepSeek V4 Pro',
   },
   {
     id: 'qwen',
