@@ -49,7 +49,7 @@ var ModelList = []string{
 	"gpt-5.4-pro", "gpt-5.4-pro-2026-03-05",
 	"gpt-5.5", "gpt-5.5-pro",
 	// GPT-6 family (current flagship). gpt-6.1-sol released 2026-09-29.
-	"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol",
+	"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol", "gpt-6-luna",
 	// GPT-5.6 family. "gpt-5.6" is the alias for -sol.
 	"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 	"gpt-5.6-cyber",

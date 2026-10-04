@@ -121,7 +121,7 @@ python3 seed.py
 
 ### 加新模型
 
-直接在对应 channel 的 `models:` 数组里加。前提是该模型在 `setting/ratio_setting/model_ratio.go` 里有定价；不在的话会落到默认 ratio（`1.0` = $0.002/1K），admin UI 里可手动调。
+直接在对应 channel 的 `models:` 数组里加。前提是该模型在 `setting/ratio_setting/model_ratio.go` 里有定价；未知型号必须先按官方价格补齐计费，并通过 `TestSeededModelsArePriced`；禁止依赖默认 ratio。
 
 ### 关闭 channel
 
@@ -197,3 +197,9 @@ python3 -c "import yaml,os,urllib.request,json; \
 - 合规话题（推广前必须）：[`docs/compliance-prd.md`](../../docs/compliance-prd.md)
 - Channel 类型枚举：[`constant/channel.go`](../../constant/channel.go)
 - 模型定价表：[`setting/ratio_setting/model_ratio.go`](../../setting/ratio_setting/model_ratio.go)
+
+## 模型发现
+
+客户 key：使用 Bearer 鉴权 `GET /v1/models`，仅该 key 的分组/白名单/计费/儿童策略过滤后目录。公开 `/api/pricing` 和供应商目录不是权限凭证。项目 `discover-models` skill 提供无生成费用的查询脚本。导入模型预设包含官方目录和 API 文档链接；导入后的 description 保留这些链接。
+
+ElevenLabs seed 为 TTS-only 禁用模板，授权供应商凭据后按现有 seed 流程启用。不能用 TTS key 指南声称 ElevenLabs Music 或 Scribe 已接入；这些需要独立协议、计费、权限和完成结果验收。

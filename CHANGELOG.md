@@ -16,6 +16,11 @@
   - 第 3 步测试视频改为**可选**:它花的是真钱,prompt 现在让 AI 先把参数和预计花费报给用户、同意才生成,拒绝就跳过(配置不受影响);结尾向用户讲明「这段话只在最开始粘一次,以后直接说『生成视频』,不用再跑配置」。页面脚注同步(「每个项目只粘一次……跳过测试不花钱」)。
   - 测试:Go 侧 3 个(两种 UA 下 env 响应一致、死令牌 env 形态、二次抓取拿 DR_ERROR——一次性语义),前端 4 个(prompt env 合约+失败分支、环境防线、复制重铸且剪贴板里是新令牌、测试可选+只跑一次话术)。internal/connect 整包与前端 184 测试全绿。
 
+- 补齐 2026-08/09 新模型并按官方价修正价格（2026-10-04 核对）。新增：`gpt-6-luna`（$0.10/$0.50）、`claude-opus-5-5`（$4/$20）、`claude-sonnet-5-5`（$2/$10）、`claude-fable-5-1`（$10/$50）、`gemini-3.8-flash`、`gemini-3.5-flash-lite`、`gemini-embedding-2`、`grok-4.7`、`deepseek-flash`（V4.1，DeepSeek 渠道测试模型改为它）、Mistral 带日期型号（`mistral-medium-2604` / `small-2603` / `large-2512` / `codestral-2508`）、`qwen3.8-flash` / `qwen3-coder-flash` / `qwen3-vl-plus`、`glm-5.3-flash` / `flashx`、`doubao-seed-2-1-pro/turbo-260628`、`MiniMax-M2.7-highspeed`；同步各服务商模型列表、种子渠道和两个快速导入。修正：`gpt-5.6`/`-sol` $5/$30→$4/$20（输出 5×）、`gpt-5.6-cyber` 估价→$12.5/$75、`claude-sonnet-5` $3/$15→$2/$10、`MiniMax-M3` $0.6/$2.4→$0.3/$1.2、`deepseek-v4-pro` $0.435/$0.87→$1.32/$3.96（此前少收约 3 倍）、`mistral-medium/small-latest` 改为 Medium 3.5 / Small 4 官方价并修正输出倍率、`qwen3.7-max/plus/flash` 估价改为官方价、`glm-5.3` 标注已核实。
+- 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
+
+- 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+
 - **修复:建 key 成功弹窗从未弹出过——AddToken 不返回 key**(@sam 验证 P7 弹窗时发现):
   - 前端"密钥只显示一次"成功弹窗(simple-advanced PRD §4.2)的开门条件是 `result.data.key`,而后端 `AddToken` 成功响应只有 `{success:true}`——**弹窗自交付起就是死代码**,所有人建完 key 只见过兜底 toast(老板"建完 key 然后呢"体感的又一块拼图;P7 的 video 分流也被这扇门挡着)。
   - 修复:`AddToken` 成功响应补 `data: {id, key}`(裸 key 与存储一致,创建时返回一次是行业惯例;该函数本就是 fork 已动过的);前端抽屉按密钥页同款口径给显示值加 `sk-` 前缀。
@@ -54,6 +59,14 @@
 - 优化快速导入：支持按厂商展开并勾选部分模型，测试模型自动落在所选范围内；阻止空模型提交，部分导入成功后刷新列表并仅保留失败项待重试，避免重复创建渠道（`quick-import-providers-dialog.tsx`、中英文文案、交互回归测试；meta-repo ElevenLabs PRD 更新）。
 - 新增 ElevenLabs 全部 TTS 模型目录（v4、v4 Turbo、v3、v3 Conversational、Multilingual v2、Flash v2/v2.5、Turbo v2/v2.5）：补齐语音、Dialogue HTTP 与 WebSocket 单次音频转换和新模型字符计费，拒绝停用 v1；新增协议、错误、取消与计费回归测试。v4 Turbo 上游文档存在矛盾，真实账号验证待完成（`relay/channel/elevenlabs`、渠道预设、`setting/ratio_setting`；meta-repo PRD 更新）。
 - 修复 ElevenLabs 默认模型目录与渠道导入预设：移除上游已停用的 `eleven_multilingual_v1`，保留已通过连接测试的三个模型；新增 meta-repo `docs/elevenlabs-model-catalog-prd.md` 记录范围和验证边界。
+- 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
+- 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+- 新增 MiniMax 多媒体快速导入：独立海螺视频（含 H3）、图片和 Speech 2.8 / 2.6 / 02 语音预设，补充图片及按字符语音定价；修复 TTS 输出格式、默认语速和结算字符数；视频测试改用只读任务列表并标明仅验证连通性。
+- 统一渠道测试的图片、语音、embedding、rerank、Responses 端点检测与 DTO，修复 MiniMax 语音/图片和 ElevenLabs 显式端点误测；拒绝未知测试端点及空 HTTP 响应。
+- 新增 MiniMax 对话快速导入预设：使用官方国际站 OpenAI 兼容接口和已有定价的 M3 / M2.7 / M2，保留禁用状态及占位密钥；新增 meta-repo `docs/minimax-quick-import-prd.md` 记录范围和验证。
+- 优化添加渠道默认流程：主按钮先打开供应商快速导入预设，弹窗保留“手动配置”入口。
+- 修复 Seedream 渠道自动测试端点与请求类型不一致：统一使用图片请求，2048x2048 测试尺寸并关闭图片测试流式校验；覆盖 4 个型号及显式端点选择。
+- 修复 Seedance 视频渠道连接测试：用只读任务列表检查鉴权和连通性，支持渠道代理与启用密钥；标明未验证模型生成，避免批量测试产生付费视频。新增实际测试入口的错误响应回归覆盖。
 
 ## 2026-09-29
 

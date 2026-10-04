@@ -494,7 +494,7 @@ export function ApiKeysMutateDrawer({
                   />
 
                   {simplePurpose &&
-                    simplePurpose !== 'all' &&
+                    !['all', 'video', 'image', 'voice'].includes(simplePurpose) &&
                     (() => {
                       const card = purposes.find((p) => p.id === simplePurpose)
                       if (!card || card.available_brands.length === 0)

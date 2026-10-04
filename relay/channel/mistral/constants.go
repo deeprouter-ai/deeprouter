@@ -10,6 +10,8 @@ var ModelList = []string{
 	"magistral-medium-latest",
 	"magistral-small-latest",
 	"codestral-latest",
+	// dated IDs, as listed on Mistral's model page (2026-10-04)
+	"mistral-medium-2604", "mistral-small-2603", "mistral-large-2512", "codestral-2508",
 	"pixtral-large-latest",
 	"ministral-8b-latest",
 	"ministral-3b-latest",

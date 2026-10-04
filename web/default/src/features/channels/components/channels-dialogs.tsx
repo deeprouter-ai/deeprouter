@@ -104,6 +104,7 @@ export function ChannelsDialogs() {
       <QuickImportProvidersDialog
         open={open === 'quick-import-providers'}
         onOpenChange={(v) => !v && setOpen(null)}
+        onManualCreate={() => setOpen('create-channel')}
       />
     </>
   )
