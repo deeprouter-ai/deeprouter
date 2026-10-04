@@ -1,7 +1,8 @@
 # DeepRouter
 
 > One API key for many models (Claude, Qwen, GLM, DeepSeek, Kimi and more) behind one
-> OpenAI-, Anthropic- and Gemini-compatible gateway. Point the tool you already use at
+> OpenAI-, Anthropic- and Gemini-compatible gateway, plus video, image and voice
+> generation. Point the tool you already use at
 > DeepRouter by changing two things: a base URL and an API key.
 
 ## Read this first
@@ -20,6 +21,68 @@ Adding the version segment when the tool already does gives a doubled path and a
 Every guide below starts with a machine-readable `Facts for AI assistants` block
 holding the exact base URL, endpoint, auth header and model for that tool.
 Append `.zh.md` instead of `.md` for the Chinese version of any guide.
+
+## You were handed a key: find out what it can do
+
+A DeepRouter key looks like `sk-...` and works against `https://api.deeprouter.co`.
+Different keys can call different models, so ask before you call anything:
+
+    GET https://api.deeprouter.co/v1/models
+    Authorization: Bearer sk-...
+
+Each entry in `data` has `id` (the exact model name to send) and
+`supported_endpoint_types` (which endpoint it accepts). Pick the endpoint from
+that list; never guess support from the model name:
+
+| `supported_endpoint_types` contains | Call |
+|---|---|
+| `openai` | `POST /v1/chat/completions` (chat, writing, code) |
+| `anthropic` | `POST /v1/messages` |
+| `image-generation` | `POST /v1/images/generations` |
+| `video-generation` | `POST /v1/video/generations` (async, see below) |
+| `openai-video` | `POST /v1/videos` (async) |
+| `audio-speech` | `POST /v1/audio/speech` |
+| `audio-transcription` | `POST /v1/audio/transcriptions` |
+
+`deeprouter-auto` is a chat model name that picks a suitable model per request.
+It is for chat only — never send media requests to it.
+
+If the user pasted a one-time setup link (`https://api.deeprouter.co/i/<token>`),
+`GET` it once: the response is a shell script holding `DR_BASE_URL` and
+`DR_API_KEY`. The link works once and expires after 30 minutes. Store the key
+in `.env` (git-ignored), never in code, logs or memory files.
+
+## Media: video, image, voice
+
+All requests use `Authorization: Bearer sk-...` and the base `https://api.deeprouter.co`.
+Media is billed per result; tell the user the expected cost before generating.
+
+Video is asynchronous — submitting is not success:
+
+1. `POST /v1/video/generations` with `{"model":"<id>","prompt":"..."}`
+   (optional `duration` in seconds). The response `id` is the task id.
+2. Poll `GET /v1/video/generations/{id}` every ~10 s until `status` is
+   `completed` (or `failed` — report the error and stop).
+3. Download `GET /v1/videos/{id}/content` and save it as an `.mp4`.
+
+Image: `POST /v1/images/generations` with `{"model":"<id>","prompt":"..."}`.
+`data[0]` holds either `url` (download it) or `b64_json` (decode it).
+
+Voice-over: `POST /v1/audio/speech` with
+`{"model":"<id>","input":"text to read","response_format":"mp3"}`; the body of
+the response is the audio file. OpenAI voices (`gpt-*`, `tts-*` models) also
+need `"voice":"alloy"`.
+
+Transcription: `POST /v1/audio/transcriptions` as `multipart/form-data` with
+`model` and `file`.
+
+## When a call fails
+
+- `401` — the key is wrong, disabled or missing the `Bearer ` prefix.
+- `403` "This token has no access to model …" — this key was not granted that model. Re-check
+  `GET /v1/models`; the user can grant it in the DeepRouter console.
+- `404 Invalid URL` — wrong path, often a doubled version segment (`/v1/v1/...`).
+- Insufficient balance — the user tops up at https://deeprouter.co.
 
 ## Guides
 
