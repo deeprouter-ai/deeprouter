@@ -11,3 +11,14 @@ type voiceSettings struct {
 	Stability       float64 `json:"stability"`
 	SimilarityBoost float64 `json:"similarity_boost"`
 }
+
+// Single-voice dialogue preserves the gateway's OpenAI audio/speech contract.
+type dialogueInput struct {
+	Text    string `json:"text"`
+	VoiceID string `json:"voice_id"`
+}
+
+type dialogueRequest struct {
+	Inputs  []dialogueInput `json:"inputs"`
+	ModelID string          `json:"model_id"`
+}

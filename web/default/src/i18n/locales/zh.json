@@ -5133,6 +5133,21 @@
     "A reference listing cannot be paid": "引用型条目不能设为付费",
     "Creates a draft skill that links out to an external repo — no package, no version to upload.": "创建一个链接到外部仓库的草稿技能——无需打包，无需上传版本。",
     "Set a source URL before publishing": "发布前请先填写来源链接",
-    "View on GitHub": "在 GitHub 上查看"
+    "View on GitHub": "在 GitHub 上查看",
+    "Quick Import Providers": "快速导入厂商",
+    "Create disabled channel skeletons for common providers in one click. Each channel needs you to fill the real API key + enable it afterwards.": "选择厂商与模型，批量创建停用的渠道。导入后需填写真实 API 密钥并启用渠道。",
+    "{{n}} of {{total}} selected": "已选 {{n}} / {{total}} 家厂商",
+    "Import {{n}} channel(s)": "导入 {{n}} 个渠道",
+    "Pick at least one provider": "请至少选择一家厂商",
+    "Imported {{n}} provider(s) as disabled channels. Edit each to add the API key.": "已导入 {{n}} 个停用渠道，请编辑渠道并填写 API 密钥。",
+    "Imported {{ok}}/{{total}}. Failures:\n{{msgs}}": "已成功导入 {{ok}} / {{total}} 个渠道。以下失败项可重试：\n{{msgs}}",
+    "Get key": "获取密钥",
+    "Chat / 对话": "对话",
+    "Image / 画图": "图片",
+    "Embeddings & Audio / 向量·语音": "向量与语音",
+    "Choose models ({{selected}}/{{total}})": "选择模型（{{selected}}/{{total}}）",
+    "Models for {{provider}}": "{{provider}} 的模型",
+    "Clear models": "清空模型",
+    "Pick at least one model for each selected provider": "每个已选厂商至少选择一个模型"
   }
 }

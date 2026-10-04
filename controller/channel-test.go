@@ -51,6 +51,14 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
 		return string(constant.EndpointTypeOpenAIResponseCompact)
 	}
+	// Image models (gpt-image-*, dall-e-*, imagen-*, flux-*) reject chat
+	// completions upstream, so auto-detect must probe /v1/images/generations.
+	if common.IsImageGenerationModel(modelName) {
+		return string(constant.EndpointTypeImageGeneration)
+	}
+	if common.IsOpenAIResponseOnlyModel(modelName) {
+		return string(constant.EndpointTypeOpenAIResponse)
+	}
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
 		return string(constant.EndpointTypeOpenAIResponse)
 	}
@@ -101,6 +109,9 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
+	if endpointType == string(constant.EndpointTypeImageGeneration) {
+		isStream = false
+	}
 
 	requestPath := "/v1/chat/completions"
 

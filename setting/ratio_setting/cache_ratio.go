@@ -29,6 +29,9 @@ var defaultCacheRatio = map[string]float64{
 	"gpt-4.1":                             0.25,
 	"gpt-4.1-mini":                        0.25,
 	"gpt-4.1-nano":                        0.25,
+	"gpt-6-astra":                         0.1,  // $1 cached / $10 input
+	"gpt-6-sol":                           0.1,  // $0.2 cached / $2 input
+	"gpt-6.1-sol":                         0.05, // $0.1 cached / $2 input
 	"gpt-5":                               0.1,
 	"gpt-5-2025-08-07":                    0.1,
 	"gpt-5-chat-latest":                   0.1,

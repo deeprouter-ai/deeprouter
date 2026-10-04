@@ -88,6 +88,8 @@ jobs:
           # pointing at sellable models (Video First Wave AC-E — the veo/sora
           # placeholder bug made every Simple video key unusable).
           go test ./setting/alias_setting/ -count=1 -timeout 60s
+          go test ./relay/channel/elevenlabs/ -count=1 -race -timeout 60s
+          go test ./controller/ -run 'TestElevenLabs|TestBuildTestRequestForElevenLabs' -count=1 -race -timeout 60s
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.

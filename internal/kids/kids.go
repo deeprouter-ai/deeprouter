@@ -28,8 +28,14 @@ var EligibleModels = map[string]bool{
 	// reasoning "thinking mode" self-audits before output. gpt-image-1 stays as
 	// a fallback for channels still configured against it; dall-e-3 was retired
 	// by OpenAI on 2026-05-12 and is no longer eligible.
-	"gpt-image-2": true,
-	"gpt-image-1": true,
+	// gpt-image-2.5-flare / -sunburst (2026-09-08) are the successors and keep
+	// the same thinking-mode audit; listed explicitly rather than relying on
+	// the gpt-image-2 prefix match. GPT-6 chat models are frontier tier and,
+	// like claude-opus-5, deliberately not kids-eligible.
+	"gpt-image-2.5-flare":    true,
+	"gpt-image-2.5-sunburst": true,
+	"gpt-image-2":            true,
+	"gpt-image-1":            true,
 	// Anthropic — base names match "-latest" and "-YYYYMMDD" via HasPrefix.
 	// claude-haiku-4-5 is the current small/cheap tier and the successor to
 	// claude-3-5-haiku; the two 3.5 entries were retired by Anthropic

@@ -22,8 +22,12 @@ func TestIsModelEligible(t *testing.T) {
 		{"gpt-image-2", true},
 		{"gpt-image-2-2026-04-21", true}, // snapshot variant via HasPrefix
 		{"gpt-image-1", true},            // kept as fallback for older channels
-		{"dall-e-3", false},              // retired by OpenAI on 2026-05-12
-		{"dall-e-2", false},              // retired same date
+		{"gpt-image-2.5-flare", true},    // 2026-09-08 successor
+		{"gpt-image-2.5-sunburst", true}, // 2026-09-08 successor
+		{"gpt-6.1-sol", false},           // frontier chat tier, not kids-eligible
+		{"gpt-6-astra", false},
+		{"dall-e-3", false}, // retired by OpenAI on 2026-05-12
+		{"dall-e-2", false}, // retired same date
 	}
 	for _, tc := range cases {
 		if got := IsModelEligible(tc.model); got != tc.want {

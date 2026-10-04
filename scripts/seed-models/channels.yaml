@@ -31,7 +31,11 @@ channels:
     test_model: gpt-5.6-luna
     tag: openai
     models:
-      # GPT-5.6 系列（当前旗舰；gpt-5.6 = gpt-5.6-sol 的别名）
+      # GPT-6 系列（当前旗舰；gpt-6.1-sol 2026-09-29 发布）
+      - gpt-6-astra
+      - gpt-6.1-sol
+      - gpt-6-sol
+      # GPT-5.6 系列（gpt-5.6 = gpt-5.6-sol 的别名）
       - gpt-5.6
       - gpt-5.6-sol
       - gpt-5.6-terra
@@ -56,6 +60,8 @@ channels:
       - gpt-4o-mini
       - chatgpt-4o-latest
       # 多模态生成（dall-e-* 已于 2026-05-12 下线，不再种子化）
+      - gpt-image-2.5-flare
+      - gpt-image-2.5-sunburst
       - gpt-image-2
       - gpt-image-1
       # 语音（实时 / 转写 / TTS）

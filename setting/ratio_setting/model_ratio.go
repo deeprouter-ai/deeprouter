@@ -62,6 +62,8 @@ var defaultModelRatio = map[string]float64{
 	"gpt-image-2":                      2.5,  // text input $5 / 1M tokens (since 2026-04-21)
 	"gpt-image-2-2026-04-21":           2.5,  // snapshot
 	"gpt-image-1.5":                    2.5,  // bootstrap (≈gpt-image-2); refine via models.dev sync
+	"gpt-image-2.5-flare":              2.5,  // 2026-09-08; same token prices as gpt-image-2
+	"gpt-image-2.5-sunburst":           2.5,  // 2026-09-08; same token prices as gpt-image-2
 	"o1":                               7.5,  // $15 / 1M tokens
 	"o1-2024-12-17":                    7.5,  // $15 / 1M tokens
 	"o1-preview":                       7.5,  // $15 / 1M tokens
@@ -94,6 +96,9 @@ var defaultModelRatio = map[string]float64{
 	"gpt-4-turbo-2024-04-09":           5, // $0.01 / 1K tokens
 	"gpt-4.5-preview":                  37.5,
 	"gpt-4.5-preview-2025-02-27":       37.5,
+	"gpt-6-astra":                      5.0,   // $10/$50 per 1M (GPT-6 flagship)
+	"gpt-6-sol":                        1.0,   // $2/$10 per 1M
+	"gpt-6.1-sol":                      1.0,   // $2/$10 per 1M (2026-09-29); cached $0.10
 	"gpt-5.6":                          2.5,   // alias of -sol; $5/$30 per 1M (2026-07-30 price cut)
 	"gpt-5.6-sol":                      2.5,   // $5/$30 per 1M (flagship)
 	"gpt-5.6-terra":                    1.0,   // $2/$12 per 1M
@@ -379,6 +384,15 @@ var defaultModelRatio = map[string]float64{
 	"eleven_multilingual_v1": 0.15,
 	"eleven_turbo_v2_5":      0.075,
 	"eleven_flash_v2_5":      0.05,
+	// Additional TTS models: regular API list prices, USD per 1K characters.
+	// https://elevenlabs.io/pricing/api (2026-10-04); excludes temporary v4 promos.
+	// Existing model ratios above remain operator-compatible bootstrap estimates.
+	"eleven_v4":                0.08 / 1000 * USD,
+	"eleven_v4_turbo":          0.04 / 1000 * USD,
+	"eleven_v3":                0.08 / 1000 * USD,
+	"eleven_v3_conversational": 0.04 / 1000 * USD,
+	"eleven_flash_v2":          0.04 / 1000 * USD,
+	"eleven_turbo_v2":          0.04 / 1000 * USD,
 	// Perplexity online 模型对搜索额外收费，有需要应自行调整，此处不计入搜索费用
 	"llama-3-sonar-small-32k-chat": 0.2 / 1000 * USD,
 	// Perplexity Sonar (input, USD per 1M tokens). Note: Perplexity also charges a
@@ -558,12 +572,14 @@ var modelRatioMap = types.NewRWMap[string, float64]()
 var completionRatioMap = types.NewRWMap[string, float64]()
 
 var defaultCompletionRatio = map[string]float64{
-	"gpt-4-gizmo-*":  2,
-	"gpt-4o-gizmo-*": 3,
-	"gpt-4-all":      2,
-	"gpt-image-1":    8,
-	"gpt-image-2":    6, // image output $30/1M ÷ text input $5/1M = 6×
-	"gpt-image-1.5":  6, // bootstrap (≈gpt-image-2); refine via models.dev sync
+	"gpt-4-gizmo-*":          2,
+	"gpt-4o-gizmo-*":         3,
+	"gpt-4-all":              2,
+	"gpt-image-1":            8,
+	"gpt-image-2":            6, // image output $30/1M ÷ text input $5/1M = 6×
+	"gpt-image-1.5":          6, // bootstrap (≈gpt-image-2); refine via models.dev sync
+	"gpt-image-2.5-flare":    6, // same token prices as gpt-image-2
+	"gpt-image-2.5-sunburst": 6, // same token prices as gpt-image-2
 	// Output-price multipliers for models whose output ≠ input and which are NOT
 	// covered by the prefix logic in getHardcodedCompletionModelRatio (otherwise
 	// they would default to 1× = output billed at input price, undercharging).
@@ -812,6 +828,10 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 			}
 			return 4, false
 		}
+		// gpt-6 family: every tier bills output at 5x input ($10/$50, $2/$10)
+		if strings.HasPrefix(name, "gpt-6") {
+			return 5, true
+		}
 		// gpt-5 匹配
 		if strings.HasPrefix(name, "gpt-5") {
 			if strings.HasPrefix(name, "gpt-5.6") {
@@ -968,8 +988,10 @@ func ModelRatio2JSONString() string {
 }
 
 var defaultImageRatio = map[string]float64{
-	"gpt-image-1": 2,
-	"gpt-image-2": 1.6, // image input $8/1M ÷ text input $5/1M = 1.6×
+	"gpt-image-1":            2,
+	"gpt-image-2":            1.6, // image input $8/1M ÷ text input $5/1M = 1.6×
+	"gpt-image-2.5-flare":    1.6, // same token prices as gpt-image-2
+	"gpt-image-2.5-sunburst": 1.6, // same token prices as gpt-image-2
 }
 var imageRatioMap = types.NewRWMap[string, float64]()
 var audioRatioMap = types.NewRWMap[string, float64]()
