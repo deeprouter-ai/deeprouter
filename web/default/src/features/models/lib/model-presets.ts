@@ -25,8 +25,8 @@ export interface ModelPreset {
   description: string
   group: ModelPresetGroup
   tags: string[]
-  sourceUrl: string // official provider model directory; not proof of key access
-  apiDocsUrl: string // official API documentation
+  sourceUrl: string // provider model directory; not a key entitlement
+  apiDocsUrl: string // provider or explicitly identified proxy API docs
   endpoints: string // pipe-separated endpoint types: "chat" | "image" | "audio" | "embedding"
 }
 
@@ -331,8 +331,8 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     model_name: 'glm-5.3',
-    sourceUrl: 'https://docs.z.ai/guides/overview/pricing',
-    apiDocsUrl: 'https://docs.z.ai/',
+    sourceUrl: 'https://docs.z.ai/guides/llm',
+    apiDocsUrl: 'https://docs.z.ai/api-reference',
     description: '智谱 GLM-5.3 — current flagship, strong Chinese.',
     group: 'chat',
     tags: ['chinese', 'tools'],
@@ -340,8 +340,8 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
   {
     model_name: 'glm-5.3-flash',
-    sourceUrl: 'https://docs.z.ai/guides/overview/pricing',
-    apiDocsUrl: 'https://docs.z.ai/',
+    sourceUrl: 'https://docs.z.ai/guides/llm',
+    apiDocsUrl: 'https://docs.z.ai/api-reference',
     description: '智谱 GLM-5.3 Flash — fast, cheap GLM-5.3 tier.',
     group: 'chat',
     tags: ['chinese', 'fast', 'cheap'],
@@ -350,7 +350,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
   {
     model_name: 'grok-4.7',
     sourceUrl: 'https://docs.x.ai/docs/models',
-    apiDocsUrl: 'https://docs.x.ai/docs/models',
+    apiDocsUrl: 'https://docs.x.ai/docs/api-reference',
     description: 'xAI Grok 4.7 (2026-09-21) — current flagship.',
     group: 'chat',
     tags: ['tools', 'reasoning'],
@@ -359,7 +359,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
   {
     model_name: 'grok-4.6',
     sourceUrl: 'https://docs.x.ai/docs/models',
-    apiDocsUrl: 'https://docs.x.ai/docs/models',
+    apiDocsUrl: 'https://docs.x.ai/docs/api-reference',
     description: 'xAI Grok 4.6 — previous-gen flagship.',
     group: 'chat',
     tags: ['tools', 'reasoning'],
@@ -460,6 +460,29 @@ export const MODEL_PRESETS: ModelPreset[] = [
     group: 'image',
     tags: ['image', 'chinese'],
     endpoints: 'image',
+  },
+
+  {
+    model_name: 'MiniMax-H3',
+    sourceUrl: 'https://platform.minimax.io/docs',
+    apiDocsUrl:
+      'https://platform.minimax.io/docs/api-reference/video-generation-t2v',
+    description:
+      'MiniMax Hailuo 3.0 — text-to-video with sound, 4–15 s, up to 2K.',
+    group: 'video',
+    tags: ['video', 'chinese'],
+    endpoints: 'video',
+  },
+
+  {
+    model_name: 'doubao-seedance-2-5-260628',
+    sourceUrl: 'https://www.volcengine.com/docs/82379',
+    apiDocsUrl: 'https://www.volcengine.com/docs/82379',
+    description:
+      'Doubao Seedance 2.5 — Volcengine text-to-video, up to 30 s / 4K, synced audio.',
+    group: 'video',
+    tags: ['video', 'chinese'],
+    endpoints: 'video',
   },
 
   // ── Video Generation ─────────────────────────────────────────────────
