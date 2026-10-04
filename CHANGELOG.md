@@ -2,6 +2,7 @@
 
 ## 2026-10-04
 
+- 补齐 2026-08/09 新模型并按官方价修正价格（2026-10-04 核对）。新增：`gpt-6-luna`（$0.10/$0.50）、`claude-opus-5-5`（$4/$20）、`claude-sonnet-5-5`（$2/$10）、`claude-fable-5-1`（$10/$50）、`gemini-3.8-flash`、`gemini-3.5-flash-lite`、`gemini-embedding-2`、`grok-4.7`、`deepseek-flash`（V4.1，DeepSeek 渠道测试模型改为它）、Mistral 带日期型号（`mistral-medium-2604` / `small-2603` / `large-2512` / `codestral-2508`）、`qwen3.8-flash` / `qwen3-coder-flash` / `qwen3-vl-plus`、`glm-5.3-flash` / `flashx`、`doubao-seed-2-1-pro/turbo-260628`、`MiniMax-M2.7-highspeed`；同步各服务商模型列表、种子渠道和两个快速导入。修正：`gpt-5.6`/`-sol` $5/$30→$4/$20（输出 5×）、`gpt-5.6-cyber` 估价→$12.5/$75、`claude-sonnet-5` $3/$15→$2/$10、`MiniMax-M3` $0.6/$2.4→$0.3/$1.2、`deepseek-v4-pro` $0.435/$0.87→$1.32/$3.96（此前少收约 3 倍）、`mistral-medium/small-latest` 改为 Medium 3.5 / Small 4 官方价并修正输出倍率、`qwen3.7-max/plus/flash` 估价改为官方价、`glm-5.3` 标注已核实。
 - 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
 
 - 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。

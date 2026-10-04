@@ -99,11 +99,12 @@ var defaultModelRatio = map[string]float64{
 	"gpt-6-astra":                      5.0,   // $10/$50 per 1M (GPT-6 flagship)
 	"gpt-6-sol":                        1.0,   // $2/$10 per 1M
 	"gpt-6.1-sol":                      1.0,   // $2/$10 per 1M (2026-09-29); cached $0.10
-	"gpt-5.6":                          2.5,   // alias of -sol; $5/$30 per 1M (2026-07-30 price cut)
-	"gpt-5.6-sol":                      2.5,   // $5/$30 per 1M (flagship)
+	"gpt-6-luna":                       0.05,  // $0.10/$0.50 per 1M (2026-09-22); cached $0.01
+	"gpt-5.6":                          2.0,   // alias of -sol; $4/$20 per 1M (official pricing, 2026-10-04)
+	"gpt-5.6-sol":                      2.0,   // $4/$20 per 1M
 	"gpt-5.6-terra":                    1.0,   // $2/$12 per 1M
 	"gpt-5.6-luna":                     0.1,   // $0.2/$1.2 per 1M
-	"gpt-5.6-cyber":                    2.5,   // bootstrap (≈sol); security-specialised tier — verify
+	"gpt-5.6-cyber":                    6.25,  // $12.5/$75 per 1M (official pricing, 2026-10-04)
 	"gpt-5.5":                          2.5,   // $5/$30 per 1M (2026-04-24); completion 6 via prefix
 	"gpt-5.5-pro":                      15.0,  // $30/$180 per 1M
 	"gpt-5.4":                          1.25,  // $2.5/$15 per 1M (2026-03-05)
@@ -171,9 +172,13 @@ var defaultModelRatio = map[string]float64{
 	"claude-fable-5-thinking":             5.0,
 	"claude-mythos-5":                     5.0, // $10/$50 per 1M (Project Glasswing only; same rates as Fable 5)
 	"claude-mythos-5-thinking":            5.0,
+	// Claude 5.x point releases (2026-09); official pricing 2026-10-04
+	"claude-fable-5-1":  5.0, // $10/$50 per 1M; cache read $0.25
+	"claude-opus-5-5":   2.0, // $4/$20 per 1M; cache read $0.20
+	"claude-sonnet-5-5": 1.0, // $2/$10 per 1M; cache read $0.20
 	// Claude 5 generation (completion ratio 5x is locked in getHardcodedCompletionModelRatio)
-	"claude-sonnet-5":                           1.5, // $3/$15 per 1M standard ($2/$10 intro through 2026-08-31 — we bill standard)
-	"claude-sonnet-5-thinking":                  1.5,
+	"claude-sonnet-5":                           1.0, // $2/$10 per 1M (official pricing, 2026-10-04)
+	"claude-sonnet-5-thinking":                  1.0,
 	"claude-opus-5":                             2.5, // $5/$25 per 1M (same sticker as Opus 4.8)
 	"claude-opus-5-max":                         2.5,
 	"claude-opus-5-xhigh":                       2.5,
@@ -234,6 +239,8 @@ var defaultModelRatio = map[string]float64{
 	"gemini-3.5-flash":                          0.75,  // $1.5/$9 per 1M
 	"gemini-3.7-flash":                          0.75,  // $1.5/$7.5 per 1M standard ($0.75/$3.75 intro through 2026-12-31 — we bill standard)
 	"gemini-3.6-flash":                          0.75,  // $1.5/$7.5 per 1M standard (same intro window as 3.7)
+	"gemini-3.8-flash":                          0.75,  // $1.5/$7.5 per 1M standard ($0.75/$3.75 intro through 2026-12-31), GA 2026-09-02
+	"gemini-3.5-flash-lite":                     0.15,  // $0.30/$2.50 per 1M (GA 2026-07-21)
 	"gemini-3.1-flash-lite":                     0.125, // $0.25/$1.5 per 1M
 	"gemini-2.5-flash-lite":                     0.05,  // $0.10/$0.40 per 1M
 	"gemini-2.5-pro":                            0.625,
@@ -250,6 +257,7 @@ var defaultModelRatio = map[string]float64{
 	"gemini-2.5-flash":                          0.15,
 	"gemini-robotics-er-1.5-preview":            0.15,
 	"gemini-embedding-001":                      0.075,
+	"gemini-embedding-2":                        0.1, // $0.20 per 1M text input (GA 2026-04-22)
 	"text-embedding-004":                        0.001,
 	"chatglm_turbo":                             0.3572,     // ￥0.005 / 1k tokens
 	"chatglm_pro":                               0.7143,     // ￥0.01 / 1k tokens
@@ -266,7 +274,9 @@ var defaultModelRatio = map[string]float64{
 	"glm-4-long":                                0.001 * RMB,
 	"glm-4-flash":                               0,
 	"glm-4v-plus":                               0.01 * RMB,
-	"glm-5.3":                                   0.7,    // bootstrap (≈glm-5.2); Z.ai list price not published yet — verify
+	"glm-5.3":                                   0.7,    // $1.40/$4.40 per 1M (Z.ai official, 2026-08-18)
+	"glm-5.3-flash":                             0.075,  // $0.15/$0.50 per 1M (2026-08-26)
+	"glm-5.3-flashx":                            0.185,  // $0.37/$1.25 per 1M
 	"glm-5.2":                                   0.7,    // bootstrap (≈glm-5.1); verify
 	"glm-5.1":                                   0.7,    // $1.4/$4.4 per 1M (Z.ai)
 	"glm-5":                                     0.5,    // $1.0/$3.2 per 1M (Z.ai)
@@ -281,9 +291,12 @@ var defaultModelRatio = map[string]float64{
 	"qwen-max":                                  0.8,    // $1.6/$6.4 per 1M (legacy flagship; was $20/1M)
 	"qwen-flash":                                0.025,  // $0.05/$0.4 per 1M
 	"qwen3.8-max":                               1.0,    // $2/$6 per 1M (2026-08 flagship)
-	"qwen3.7-max":                               1.0,    // bootstrap (≈qwen3.8-max); verify
-	"qwen3.7-plus":                              0.2,    // bootstrap (≈qwen3.5-plus); verify
-	"qwen3.7-flash":                             0.025,  // bootstrap (≈qwen-flash); verify
+	"qwen3.7-max":                               1.25,   // $2.50/$7.50 per 1M (Model Studio official)
+	"qwen3.7-plus":                              0.2,    // $0.40/$1.60 per 1M non-thinking (Model Studio official)
+	"qwen3.7-flash":                             0.015,  // $0.03/$0.13 per 1M (Model Studio official)
+	"qwen3.8-flash":                             0.075,  // $0.15/$0.47 per 1M (2026-08-26)
+	"qwen3-coder-flash":                         0.15,   // $0.30/$1.50 per 1M
+	"qwen3-vl-plus":                             0.1,    // $0.20/$1.60 per 1M
 	"qwen3-max":                                 0.6,    // $1.2/$6 per 1M (0–32K tier); flagship
 	"qwen3.5-plus":                              0.2,    // $0.4/$2.4 per 1M (≤256K tier)
 	"qwen3-coder-plus":                          0.5,    // $1/$5 per 1M (≤32K tier)
@@ -324,13 +337,14 @@ var defaultModelRatio = map[string]float64{
 	"command-r-plus":         1.5,
 	"command-r-08-2024":      0.075,
 	"command-r-plus-08-2024": 1.25,
-	"deepseek-chat":          0.07,   // → V4-flash $0.14/$0.28 per 1M (alias deprecates 2026-07-24)
-	"deepseek-coder":         0.07,   // → V4-flash
-	"deepseek-reasoner":      0.07,   // → V4-flash thinking $0.14/$0.28 per 1M
-	"deepseek-v4-flash":      0.07,   // $0.14/$0.28 per 1M (1M ctx, 2026-04-24)
-	"deepseek-v4-pro":        0.2175, // $0.435/$0.87 per 1M (flagship)
-	"deepseek-v3":            0.135,  // legacy V3.x $0.27 in
-	"deepseek-r1":            0.275,  // legacy R1 $0.55 in
+	"deepseek-chat":          0.07,  // → V4-flash $0.14/$0.28 per 1M (alias deprecates 2026-07-24)
+	"deepseek-coder":         0.07,  // → V4-flash
+	"deepseek-reasoner":      0.07,  // → V4-flash thinking $0.14/$0.28 per 1M
+	"deepseek-v4-flash":      0.07,  // $0.14/$0.28 per 1M (1M ctx, 2026-04-24)
+	"deepseek-v4-pro":        0.66,  // $1.32/$3.96 per 1M peak (DeepSeek official, 2026-10-04)
+	"deepseek-flash":         0.15,  // V4.1-Flash: $0.30/$1.20 per 1M peak (2026-09-10); cached $0.006
+	"deepseek-v3":            0.135, // legacy V3.x $0.27 in
+	"deepseek-r1":            0.275, // legacy R1 $0.55 in
 	// ── Bootstrap defaults for Quick Import providers (verify via models.dev sync
 	//    before charging customers; list prices below are approximate). ──
 	// Moonshot / Kimi (input, RMB per 1K tokens)
@@ -351,6 +365,8 @@ var defaultModelRatio = map[string]float64{
 	"doubao-seed-2.0-pro":             0.0032 * RMB, // ¥3.2/¥16 per 1M ≤32K (Seed 2.0, 2026-02-14)
 	"doubao-seed-2.0-lite":            0.0006 * RMB, // ¥0.6/¥3.6 per 1M ≤32K
 	"doubao-seed-2.0-mini":            0.0002 * RMB, // ¥0.2/¥2.0 per 1M ≤32K
+	"doubao-seed-2-1-pro-260628":      0.006 * RMB,  // ¥6/¥30 per 1M ≤32K (Seed 2.1, 2026-06-23)
+	"doubao-seed-2-1-turbo-260628":    0.003 * RMB,  // ¥3/¥15 per 1M ≤32K
 	// ── Seedance 2.5 video: TOKEN RATIO, not a per-call price ──
 	// Ark bills video generation per token; 2.5 allows 30s segments, so the flat
 	// per-call prices used for Seedance ≤2.0 (defaultModelPrice) would lose money
@@ -369,14 +385,20 @@ var defaultModelRatio = map[string]float64{
 	"deepseek-v3-1-250821": 0.135, // = deepseek-v3 tier
 	"deepseek-r1-250120":   0.275, // = deepseek-r1 tier
 	// MiniMax (input, USD per 1M tokens)
-	"MiniMax-M3":   0.3,  // $0.6/$2.4 per 1M (2026-06-01)
-	"MiniMax-M2":   0.15, // $0.3/$1.2 per 1M
-	"MiniMax-M2.7": 0.15, // $0.3/$1.2 per 1M
+	"MiniMax-M3":             0.15, // $0.3/$1.2 per 1M (≤512K input; official, 2026-10-04)
+	"MiniMax-M2":             0.15, // $0.3/$1.2 per 1M
+	"MiniMax-M2.7":           0.15, // $0.3/$1.2 per 1M
+	"MiniMax-M2.7-highspeed": 0.3,  // $0.6/$2.4 per 1M
 	// Mistral (input, USD per 1K tokens)
-	"mistral-large-latest":  0.0005 * USD, // $0.5/$1.5 per 1M (was $2/$6 — stale aggregator price)
-	"mistral-medium-latest": 0.0004 * USD,
-	"mistral-small-latest":  0.0002 * USD,
+	"mistral-large-latest":  0.0005 * USD,  // $0.5/$1.5 per 1M (was $2/$6 — stale aggregator price)
+	"mistral-medium-latest": 0.0015 * USD,  // Medium 3.5: $1.5/$7.5 per 1M
+	"mistral-small-latest":  0.00015 * USD, // Small 4: $0.15/$0.6 per 1M
 	"codestral-latest":      0.0003 * USD,
+	// Mistral now publishes dated IDs (official, 2026-10-04)
+	"mistral-medium-2604": 0.0015 * USD,  // Medium 3.5: $1.5/$7.5 per 1M
+	"mistral-small-2603":  0.00015 * USD, // Small 4: $0.15/$0.6 per 1M
+	"mistral-large-2512":  0.0005 * USD,  // Large 3: $0.5/$1.5 per 1M
+	"codestral-2508":      0.0003 * USD,  // $0.3/$0.9 per 1M
 	// ElevenLabs TTS — billed per INPUT CHARACTER (prompt tokens = char count).
 	// Bootstrap estimates (~$0.30 / 1K chars premium, less for turbo/flash);
 	// verify against your ElevenLabs plan before charging customers.
@@ -408,6 +430,7 @@ var defaultModelRatio = map[string]float64{
 	"llama-3-sonar-large-32k-online": 1 / 1000 * USD,
 	// grok
 	"grok-4.6":              1.0,   // $2/$6 per 1M (<200K prompt; ≥200K bills the whole request at $4/$12)
+	"grok-4.7":              1.0,   // $2/$6 per 1M (<200K prompt), 2026-09-21
 	"grok-4.5":              1.0,   // bootstrap (≈grok-4.6); verify
 	"grok-4.3":              0.625, // $1.25/$2.50 per 1M (2026-04-30 flagship; grok-3/4 ids now redirect here)
 	"grok-4.3-latest":       0.625,
@@ -583,65 +606,77 @@ var defaultCompletionRatio = map[string]float64{
 	// Output-price multipliers for models whose output ≠ input and which are NOT
 	// covered by the prefix logic in getHardcodedCompletionModelRatio (otherwise
 	// they would default to 1× = output billed at input price, undercharging).
-	"claude-fable-5":           5, // $50/$10
-	"claude-fable-5-thinking":  5,
-	"gemini-3.1-pro-preview":   6, // $12/$2
-	"gemini-3.1-pro":           6,
-	"gemini-3-flash-preview":   6, // $3/$0.5
-	"gemini-3.5-flash":         6, // $9/$1.5
-	"gemini-3.7-flash":         5, // $7.5/$1.5
-	"gemini-3.6-flash":         5, // $7.5/$1.5
-	"gemini-3.1-flash-lite":    6, // $1.5/$0.25
-	"qwen-plus":                3, // $1.2/$0.4
-	"qwen-max":                 4, // $6.4/$1.6
-	"qwen-turbo":               4, // $0.2/$0.05
-	"qwen-flash":               8, // $0.4/$0.05
-	"qwen3-max":                5, // $6/$1.2
-	"qwen3.8-max":              3, // $6/$2
-	"qwen3.7-max":              3,
-	"qwen3.7-plus":             6,
-	"qwen3.7-flash":            8,
-	"qwen3.5-plus":             6, // $2.4/$0.4
-	"qwen3-coder-plus":         5, // $5/$1
-	"deepseek-chat":            2, // $0.28/$0.14
-	"deepseek-coder":           2,
-	"deepseek-reasoner":        2,
-	"deepseek-v4-flash":        2,
-	"deepseek-v4-pro":          2, // $0.87/$0.435
-	"deepseek-v3-1-250821":     4, // Ark dated id (= deepseek-v3 tier)
-	"deepseek-r1-250120":       4, // Ark dated id (= deepseek-r1 tier)
-	"deepseek-v3":              4, // legacy V3 ≈ $1.1/$0.27
-	"deepseek-r1":              4, // legacy R1 ≈ $2.19/$0.55
-	"glm-5.3":                  3.14,
-	"glm-5.2":                  3.14,
-	"glm-5.1":                  3.14, // $4.4/$1.4
-	"glm-5":                    3.2,  // $3.2/$1.0
-	"glm-4.7":                  3.67, // $2.2/$0.6
-	"glm-4.6":                  3.67,
-	"glm-4.5":                  3.67,
-	"glm-4.5-air":              5.5, // $1.1/$0.2
-	"sonar":                    1,   // $1/$1
-	"sonar-pro":                5,   // $15/$3
-	"sonar-reasoning":          5,   // $5/$1
-	"sonar-reasoning-pro":      4,   // $8/$2
-	"sonar-deep-research":      4,   // $8/$2
-	"grok-4.6":                 3,   // $6/$2
-	"grok-4.5":                 3,
-	"grok-4.3":                 2, // $2.5/$1.25
-	"grok-4.3-latest":          2,
-	"grok-4.20":                2,
-	"grok-build-0.1":           2,    // $2/$1
-	"doubao-seed-2.0-pro":      5,    // ¥16/¥3.2
-	"doubao-seed-2.0-lite":     6,    // ¥3.6/¥0.6
-	"doubao-seed-2.0-mini":     10,   // ¥2.0/¥0.2
-	"kimi-k2.5":                5.25, // ¥21/¥4
-	"kimi-k2.6":                4.15, // ¥27/¥6.5
-	"kimi-k2.7-code":           4.15,
-	"kimi-k2.7-code-highspeed": 4.15,
-	"kimi-k3":                  5, // $15/$3
-	"MiniMax-M3":               4, // $2.4/$0.6
-	"MiniMax-M2":               4, // $1.2/$0.3
-	"MiniMax-M2.7":             4,
+	"claude-fable-5":               5, // $50/$10
+	"claude-fable-5-thinking":      5,
+	"gemini-3.1-pro-preview":       6, // $12/$2
+	"gemini-3.1-pro":               6,
+	"gemini-3-flash-preview":       6,     // $3/$0.5
+	"gemini-3.5-flash":             6,     // $9/$1.5
+	"gemini-3.7-flash":             5,     // $7.5/$1.5
+	"gemini-3.6-flash":             5,     // $7.5/$1.5
+	"gemini-3.8-flash":             5,     // $7.5/$1.5
+	"gemini-3.5-flash-lite":        8.333, // $2.50/$0.30
+	"gemini-3.1-flash-lite":        6,     // $1.5/$0.25
+	"qwen-plus":                    3,     // $1.2/$0.4
+	"qwen-max":                     4,     // $6.4/$1.6
+	"qwen-turbo":                   4,     // $0.2/$0.05
+	"qwen-flash":                   8,     // $0.4/$0.05
+	"qwen3-max":                    5,     // $6/$1.2
+	"qwen3.8-max":                  3,     // $6/$2
+	"qwen3.7-max":                  3,
+	"qwen3.7-plus":                 4,     // $1.6/$0.4
+	"qwen3.7-flash":                4.333, // $0.13/$0.03
+	"qwen3.5-plus":                 6,     // $2.4/$0.4
+	"qwen3-coder-plus":             5,     // $5/$1
+	"qwen3.8-flash":                3.133, // $0.47/$0.15
+	"qwen3-coder-flash":            5,     // $1.50/$0.30
+	"qwen3-vl-plus":                8,     // $1.60/$0.20
+	"deepseek-chat":                2,     // $0.28/$0.14
+	"deepseek-coder":               2,
+	"deepseek-reasoner":            2,
+	"deepseek-v4-flash":            2,
+	"deepseek-v4-pro":              3, // $3.96/$1.32
+	"deepseek-flash":               4, // $1.20/$0.30
+	"deepseek-v3-1-250821":         4, // Ark dated id (= deepseek-v3 tier)
+	"deepseek-r1-250120":           4, // Ark dated id (= deepseek-r1 tier)
+	"deepseek-v3":                  4, // legacy V3 ≈ $1.1/$0.27
+	"deepseek-r1":                  4, // legacy R1 ≈ $2.19/$0.55
+	"glm-5.3":                      3.14,
+	"glm-5.3-flash":                3.333, // $0.50/$0.15
+	"glm-5.3-flashx":               3.378, // $1.25/$0.37
+	"glm-5.2":                      3.14,
+	"glm-5.1":                      3.14, // $4.4/$1.4
+	"glm-5":                        3.2,  // $3.2/$1.0
+	"glm-4.7":                      3.67, // $2.2/$0.6
+	"glm-4.6":                      3.67,
+	"glm-4.5":                      3.67,
+	"glm-4.5-air":                  5.5, // $1.1/$0.2
+	"sonar":                        1,   // $1/$1
+	"sonar-pro":                    5,   // $15/$3
+	"sonar-reasoning":              5,   // $5/$1
+	"sonar-reasoning-pro":          4,   // $8/$2
+	"sonar-deep-research":          4,   // $8/$2
+	"grok-4.6":                     3,   // $6/$2
+	"grok-4.7":                     3,   // $6/$2
+	"grok-4.5":                     3,
+	"grok-4.3":                     2, // $2.5/$1.25
+	"grok-4.3-latest":              2,
+	"grok-4.20":                    2,
+	"grok-build-0.1":               2,    // $2/$1
+	"doubao-seed-2.0-pro":          5,    // ¥16/¥3.2
+	"doubao-seed-2.0-lite":         6,    // ¥3.6/¥0.6
+	"doubao-seed-2.0-mini":         10,   // ¥2.0/¥0.2
+	"doubao-seed-2-1-pro-260628":   5,    // ¥30/¥6
+	"doubao-seed-2-1-turbo-260628": 5,    // ¥15/¥3
+	"kimi-k2.5":                    5.25, // ¥21/¥4
+	"kimi-k2.6":                    4.15, // ¥27/¥6.5
+	"kimi-k2.7-code":               4.15,
+	"kimi-k2.7-code-highspeed":     4.15,
+	"kimi-k3":                      5, // $15/$3
+	"MiniMax-M3":                   4, // $2.4/$0.6
+	"MiniMax-M2":                   4, // $1.2/$0.3
+	"MiniMax-M2.7":                 4,
+	"MiniMax-M2.7-highspeed":       4,
 }
 
 // InitRatioSettings initializes all model related settings maps
@@ -834,8 +869,11 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 		}
 		// gpt-5 匹配
 		if strings.HasPrefix(name, "gpt-5") {
+			if name == "gpt-5.6" || strings.HasPrefix(name, "gpt-5.6-sol") {
+				return 5, true // $4/$20
+			}
 			if strings.HasPrefix(name, "gpt-5.6") {
-				return 6, true // every 5.6 tier bills output at 6x input
+				return 6, true // terra $2/$12, luna $0.2/$1.2, cyber $12.5/$75
 			}
 			if strings.HasPrefix(name, "gpt-5.5") {
 				return 6, true
@@ -890,6 +928,13 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 		return 4.0 / 3.0, true
 	}
 	if strings.HasPrefix(name, "mistral-") {
+		// Medium 3.5 $1.5/$7.5 and Small 4 $0.15/$0.6 (official, 2026-10-04)
+		if strings.HasPrefix(name, "mistral-medium-26") || name == "mistral-medium-latest" {
+			return 5, true
+		}
+		if strings.HasPrefix(name, "mistral-small-26") || name == "mistral-small-latest" {
+			return 4, true
+		}
 		return 3, true
 	}
 	if strings.HasPrefix(name, "gemini-") {

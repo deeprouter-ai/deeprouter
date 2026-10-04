@@ -13,6 +13,9 @@ var ModelList = []string{
 	// ── Claude 5 generation (current) ──
 	// Opus 5 is the default Opus-tier target. Fable 5 sits above it; Mythos 5 is
 	// the same model behind Project Glasswing.
+	"claude-opus-5-5", // 2026-09 point releases
+	"claude-sonnet-5-5",
+	"claude-fable-5-1",
 	"claude-opus-5",
 	"claude-opus-5-max",
 	"claude-opus-5-xhigh",

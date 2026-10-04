@@ -51,7 +51,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 1,
     modality: 'chat',
     models:
-      'gpt-6.1-sol,gpt-6-astra,gpt-6-sol,gpt-5.6,gpt-5.6-terra,gpt-5.6-luna,gpt-4o-mini',
+      'gpt-6.1-sol,gpt-6-astra,gpt-6-sol,gpt-6-luna,gpt-5.6,gpt-5.6-terra,gpt-5.6-luna,gpt-4o-mini',
     testModel: 'gpt-5.6-luna',
     docsUrl: 'https://platform.openai.com/api-keys',
     description: '对话 / GPT-6.1 Sol · GPT-6 Astra · GPT-5.6 Luna（最快）',
@@ -62,10 +62,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 14,
     modality: 'chat',
     models:
-      'claude-opus-5,claude-sonnet-5,claude-fable-5,claude-opus-4-8,claude-sonnet-4-6,claude-haiku-4-5-20251001',
+      'claude-opus-5-5,claude-sonnet-5-5,claude-fable-5-1,claude-opus-5,claude-sonnet-5,claude-fable-5,claude-opus-4-8,claude-sonnet-4-6,claude-haiku-4-5-20251001',
     testModel: 'claude-haiku-4-5-20251001',
     docsUrl: 'https://console.anthropic.com/settings/keys',
-    description: '对话 / Opus 5 · Sonnet 5 · Fable 5 · Haiku 4.5',
+    description: '对话 / Opus 5.5 · Sonnet 5.5 · Fable 5.1 · Haiku 4.5',
   },
   {
     id: 'gemini',
@@ -73,10 +73,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 24,
     modality: 'chat',
     models:
-      'gemini-3.7-flash,gemini-3.6-flash,gemini-3.1-pro-preview,gemini-3.1-flash-lite,gemini-2.5-pro,gemini-2.5-flash',
+      'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.1-pro-preview,gemini-3.1-flash-lite,gemini-2.5-pro,gemini-2.5-flash',
     testModel: 'gemini-3.7-flash',
     docsUrl: 'https://aistudio.google.com/apikey',
-    description: '对话 / Gemini 3.7 Flash · 3.1 Pro · 2.5 Pro',
+    description: '对话 / Gemini 3.8 Flash · 3.1 Pro · 2.5 Pro',
   },
   {
     id: 'deepseek',
@@ -84,10 +84,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 43,
     modality: 'chat',
     // deepseek-chat / -reasoner (2026-07-24) and deepseek-v4-flash were retired.
-    models: 'deepseek-v4-pro',
-    testModel: 'deepseek-v4-pro',
+    models: 'deepseek-flash,deepseek-v4-pro',
+    testModel: 'deepseek-flash',
     docsUrl: 'https://platform.deepseek.com/api_keys',
-    description: '对话 / DeepSeek V4 Pro',
+    description: '对话 / DeepSeek V4.1 Flash · V4 Pro',
   },
   {
     id: 'qwen',
@@ -95,7 +95,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 17,
     modality: 'chat',
     models:
-      'qwen3.8-max,qwen3.7-max,qwen3.7-plus,qwen3.7-flash,qwen3-coder-plus,qwen-plus,qwen-flash',
+      'qwen3.8-max,qwen3.8-flash,qwen3.7-max,qwen3.7-plus,qwen3.7-flash,qwen3-coder-plus,qwen-plus,qwen-flash',
     testModel: 'qwen3.7-flash',
     docsUrl: 'https://bailian.console.aliyun.com/?apiKey=1',
     description: '对话 / Qwen 3.8 Max · 3.7 Plus / Flash · Coder（阿里）',
@@ -105,7 +105,8 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     name: '智谱 GLM · 对话',
     type: 26,
     modality: 'chat',
-    models: 'glm-5.3,glm-5.2,glm-5.1,glm-5,glm-4.7,glm-4.7-flash',
+    models:
+      'glm-5.3,glm-5.3-flash,glm-5.3-flashx,glm-5.2,glm-5.1,glm-5,glm-4.7,glm-4.7-flash',
     testModel: 'glm-4.7-flash',
     docsUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     description: '对话 / GLM-5.3 · GLM-5 · GLM-4.7 Flash（智谱）',
@@ -115,10 +116,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     name: 'xAI Grok · 对话',
     type: 48,
     modality: 'chat',
-    models: 'grok-4.6,grok-4.5,grok-4.3,grok-4.20,grok-build-0.1',
+    models: 'grok-4.7,grok-4.6,grok-4.5,grok-4.3,grok-4.20,grok-build-0.1',
     testModel: 'grok-4.6',
     docsUrl: 'https://console.x.ai',
-    description: '对话 / Grok 4.6 · 4.5 · Grok Build（xAI）',
+    description: '对话 / Grok 4.7 · 4.6 · Grok Build（xAI）',
   },
   {
     id: 'moonshot',
@@ -137,11 +138,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 45,
     modality: 'chat',
     models:
-      'doubao-seed-2.0-pro,doubao-seed-2.0-lite,doubao-seed-2.0-mini,doubao-pro-32k,doubao-pro-128k',
+      'doubao-seed-2-1-pro-260628,doubao-seed-2-1-turbo-260628,doubao-seed-2.0-pro,doubao-seed-2.0-lite,doubao-seed-2.0-mini,doubao-pro-32k,doubao-pro-128k',
     testModel: 'doubao-seed-2.0-mini',
     docsUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
     description:
-      '对话 / 豆包 Seed 2.0 Pro · Lite · Mini（价格为估值，请同步核对）',
+      '对话 / 豆包 Seed 2.1 Pro · Turbo · 2.0 Mini（价格为估值，请同步核对）',
   },
   {
     id: 'mistral',
@@ -149,11 +150,10 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     type: 42,
     modality: 'chat',
     models:
-      'mistral-large-latest,mistral-medium-latest,mistral-small-latest,codestral-latest',
+      'mistral-medium-2604,mistral-small-2603,mistral-large-2512,codestral-2508,mistral-medium-latest,mistral-small-latest',
     testModel: 'mistral-small-latest',
     docsUrl: 'https://console.mistral.ai/api-keys',
-    description:
-      '对话 / large · medium · small · codestral（价格为估值，请同步核对）',
+    description: '对话 / Medium 3.5 · Small 4 · Large 3 · Codestral',
   },
   // ── Image ───────────────────────────────────────────────────────────────
   {

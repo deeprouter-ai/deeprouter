@@ -35,6 +35,7 @@ channels:
       - gpt-6-astra
       - gpt-6.1-sol
       - gpt-6-sol
+      - gpt-6-luna
       # GPT-5.6 系列（gpt-5.6 = gpt-5.6-sol 的别名）
       - gpt-5.6
       - gpt-5.6-sol
@@ -84,6 +85,9 @@ channels:
     tag: anthropic
     models:
       # Claude 5 系列（当前）—— 官方 ID 不带日期后缀
+      - claude-opus-5-5
+      - claude-sonnet-5-5
+      - claude-fable-5-1
       - claude-opus-5
       - claude-sonnet-5
       - claude-fable-5
@@ -126,10 +130,12 @@ channels:
     tag: google
     models:
       # Gemini 3.x（当前）
+      - gemini-3.8-flash
       - gemini-3.7-flash
       - gemini-3.6-flash
       - gemini-3.5-flash
       - gemini-3.1-flash-lite
+      - gemini-3.5-flash-lite
       - gemini-3.1-pro-preview
       # 图像
       - gemini-3-pro-image
@@ -140,6 +146,7 @@ channels:
       - gemini-2.5-flash-lite
       # 向量（gemini-1.5-* 已下线，不再种子化）
       - gemini-embedding-001
+      - gemini-embedding-2
 
   - name: xAI Grok
     type: 48
@@ -149,6 +156,7 @@ channels:
     test_model: grok-4.6
     tag: xai
     models:
+      - grok-4.7
       - grok-4.6
       - grok-4.5
       - grok-4.3
@@ -169,6 +177,10 @@ channels:
       - mistral-medium-latest
       - mistral-small-latest
       - codestral-latest
+      - mistral-medium-2604
+      - mistral-small-2603
+      - mistral-large-2512
+      - codestral-2508
       - pixtral-large-latest
 
   - name: Cohere
@@ -209,11 +221,12 @@ channels:
     enabled: true
     key_env: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com
-    test_model: deepseek-v4-pro
+    test_model: deepseek-flash
     tag: deepseek
     # deepseek-chat / deepseek-reasoner 已于 2026-07-24 下线，不再种子化。
     models:
       - deepseek-v4-pro
+      - deepseek-flash
 
   - name: Moonshot Kimi 月之暗面
     type: 25
@@ -246,6 +259,9 @@ channels:
       - qwen3.7-max
       - qwen3.7-plus
       - qwen3.7-flash
+      - qwen3.8-flash
+      - qwen3-coder-flash
+      - qwen3-vl-plus
       - qwen3-coder-plus
       # 多模态
       - qwen-vl-max
@@ -267,6 +283,8 @@ channels:
     models:
       # GLM-5 系列（当前）
       - glm-5.3
+      - glm-5.3-flash
+      - glm-5.3-flashx
       - glm-5.2
       - glm-5.1
       - glm-5
@@ -290,6 +308,8 @@ channels:
     tag: doubao
     models:
       # Doubao Seed 2.0（当前）
+      - doubao-seed-2-1-pro-260628
+      - doubao-seed-2-1-turbo-260628
       - doubao-seed-2.0-pro
       - doubao-seed-2.0-lite
       - doubao-seed-2.0-mini
@@ -382,6 +402,7 @@ channels:
     models:
       - MiniMax-M3
       - MiniMax-M2.7
+      - MiniMax-M2.7-highspeed
       - MiniMax-M2
 
   # MiniMax 国际站视频生成（海螺 / Hailuo 3.0）。type 35 = ChannelTypeMiniMax ——
