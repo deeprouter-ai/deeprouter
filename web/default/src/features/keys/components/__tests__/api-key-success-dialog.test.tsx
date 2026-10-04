@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 /*
 Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
@@ -6,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 // AC-G). A video-purpose key's next step is the video page's paste-prompt;
 // showing it the chat story (Base URL / model name / self-check) is exactly
 // the void the boss fell into ("搞不懂怎么用", 2026-10-04).
-import { render, screen } from '@testing-library/react'
+import { render as testingRender, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiKeySuccessDialog } from '../api-key-success-dialog'
 
@@ -17,6 +18,16 @@ vi.mock('react-i18next', () => ({
 vi.mock('../api-key-integration-dialog', () => ({
   ApiKeyIntegrationDialog: () => null,
 }))
+
+function render(element: React.ReactNode) {
+  return testingRender(
+    <QueryClientProvider client={new QueryClient()}>
+      {element}
+    </QueryClientProvider>
+  )
+}
+
+vi.mock('../media-key-setup', () => ({ MediaKeySetup: () => null }))
 
 describe('ApiKeySuccessDialog purpose split', () => {
   it('routes a video-purpose key to the video page, not the chat story', () => {

@@ -2,6 +2,12 @@
 
 ## 2026-10-04
 
+- 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
+
+- 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+
+
+
 - **修复:建 key 成功弹窗从未弹出过——AddToken 不返回 key**(@sam 验证 P7 弹窗时发现):
   - 前端"密钥只显示一次"成功弹窗(simple-advanced PRD §4.2)的开门条件是 `result.data.key`,而后端 `AddToken` 成功响应只有 `{success:true}`——**弹窗自交付起就是死代码**,所有人建完 key 只见过兜底 toast(老板"建完 key 然后呢"体感的又一块拼图;P7 的 video 分流也被这扇门挡着)。
   - 修复:`AddToken` 成功响应补 `data: {id, key}`(裸 key 与存储一致,创建时返回一次是行业惯例;该函数本就是 fork 已动过的);前端抽屉按密钥页同款口径给显示值加 `sk-` 前缀。
