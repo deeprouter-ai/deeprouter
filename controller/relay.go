@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/internal/discovery"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
@@ -468,7 +469,8 @@ func RelayNotImplemented(c *gin.Context) {
 
 func RelayNotFound(c *gin.Context) {
 	err := types.OpenAIError{
-		Message: fmt.Sprintf("Invalid URL (%s %s)", c.Request.Method, c.Request.URL.Path),
+		// DeepRouter: name the guide so an AI tool that guessed a path can recover.
+		Message: discovery.WithGuide(fmt.Sprintf("Invalid URL (%s %s)", c.Request.Method, c.Request.URL.Path)),
 		Type:    "invalid_request_error",
 		Param:   "",
 		Code:    "",
