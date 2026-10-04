@@ -2,6 +2,8 @@
 
 ## 2026-10-04
 
+- 新增控制台 Simple 模式（原生手机 App 样式）：非技术用户登录后进入 `/simple`——底部标签栏（首页 / 记录 / 我的）、余额卡片 + 底部弹出充值面板、用途网格（视频/图片/对话/配音/写代码），点用途自动找到或创建该用途的 Simple key 并生成一次性令牌话术「复制给 AI」；可添加到主屏幕（PWA manifest）。模式沿用已存的 persona：casual/未设置 → Simple，dev/team → Advanced；「我的」页与头像菜单可互相切换。修复登录后 casual 用户落到其侧栏隐藏的概览页（`/dashboard` 入口按模式分流）。钱包充值逻辑抽为 `RechargePanel` 供钱包页和 Simple 充值面板共用，不复制支付代码（`features/simple`、`routes/simple`、`features/wallet/components/recharge-panel.tsx`、`lib/auth-guard.ts`；PRD：meta-repo `docs/console-simple-advanced-prd.md`）。
+
 - 修复 Simple Key 编辑模式：用途自动授权的模型集合不再触发 Advanced；手动权限、IP/速率/分组限制仍保留高级编辑。
 
 - 修复 Simple 密钥创建后的引导断点：创建接口向当前用户返回刚创建的 Key 和 ID，禁止响应缓存；增加实际创建、权限快照和后续读取脱敏回归。验收标准见 meta-repo docs/simple-key-acceptance-prd.md。

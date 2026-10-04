@@ -12,15 +12,19 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as UserAgreementRouteImport } from './routes/user-agreement'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as SimpleRouteRouteImport } from './routes/simple/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SimpleIndexRouteImport } from './routes/simple/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as ResourcesIndexRouteImport } from './routes/resources/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
 import { Route as MarketplaceIndexRouteImport } from './routes/marketplace/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as SimpleRecordsRouteImport } from './routes/simple/records'
+import { Route as SimpleMeRouteImport } from './routes/simple/me'
 import { Route as ResourcesSlugRouteImport } from './routes/resources/$slug'
 import { Route as OnboardingSlugRouteImport } from './routes/onboarding/$slug'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
@@ -55,6 +59,7 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedHomeIndexRouteImport } from './routes/_authenticated/home/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
+import { Route as SimpleUsePurposeRouteImport } from './routes/simple/use.$purpose'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedKeysTestRouteImport } from './routes/_authenticated/keys/test'
@@ -98,6 +103,11 @@ const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
   path: '/privacy-policy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SimpleRouteRoute = SimpleRouteRouteImport.update({
+  id: '/simple',
+  path: '/simple',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -110,6 +120,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SimpleIndexRoute = SimpleIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SimpleRouteRoute,
 } as any)
 const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/setup/',
@@ -140,6 +155,16 @@ const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SimpleRecordsRoute = SimpleRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
+  getParentRoute: () => SimpleRouteRoute,
+} as any)
+const SimpleMeRoute = SimpleMeRouteImport.update({
+  id: '/me',
+  path: '/me',
+  getParentRoute: () => SimpleRouteRoute,
 } as any)
 const ResourcesSlugRoute = ResourcesSlugRouteImport.update({
   id: '/resources/$slug',
@@ -322,6 +347,11 @@ const AuthenticatedChannelsIndexRoute =
     path: '/channels/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const SimpleUsePurposeRoute = SimpleUsePurposeRouteImport.update({
+  id: '/use/$purpose',
+  path: '/use/$purpose',
+  getParentRoute: () => SimpleRouteRoute,
+} as any)
 const AuthenticatedUsageLogsSectionRoute =
   AuthenticatedUsageLogsSectionRouteImport.update({
     id: '/usage-logs/$section',
@@ -483,6 +513,7 @@ const AuthenticatedAdminSkillsIdEditRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/simple': typeof SimpleRouteRouteWithChildren
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/welcome': typeof WelcomeRoute
@@ -505,12 +536,15 @@ export interface FileRoutesByFullPath {
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
+  '/simple/me': typeof SimpleMeRoute
+  '/simple/records': typeof SimpleRecordsRoute
   '/about/': typeof AboutIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/resources/': typeof ResourcesIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/simple/': typeof SimpleIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -520,6 +554,7 @@ export interface FileRoutesByFullPath {
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
+  '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/home/': typeof AuthenticatedHomeIndexRoute
@@ -577,12 +612,15 @@ export interface FileRoutesByTo {
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
+  '/simple/me': typeof SimpleMeRoute
+  '/simple/records': typeof SimpleRecordsRoute
   '/about': typeof AboutIndexRoute
   '/marketplace': typeof MarketplaceIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/resources': typeof ResourcesIndexRoute
   '/setup': typeof SetupIndexRoute
+  '/simple': typeof SimpleIndexRoute
   '/user/reset': typeof authUserResetRoute
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -592,6 +630,7 @@ export interface FileRoutesByTo {
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
+  '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/home': typeof AuthenticatedHomeIndexRoute
@@ -631,6 +670,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/(auth)': typeof authRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/simple': typeof SimpleRouteRouteWithChildren
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/welcome': typeof WelcomeRoute
@@ -653,12 +693,15 @@ export interface FileRoutesById {
   '/oauth/$provider': typeof OauthProviderRoute
   '/onboarding/$slug': typeof OnboardingSlugRoute
   '/resources/$slug': typeof ResourcesSlugRoute
+  '/simple/me': typeof SimpleMeRoute
+  '/simple/records': typeof SimpleRecordsRoute
   '/about/': typeof AboutIndexRoute
   '/marketplace/': typeof MarketplaceIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/resources/': typeof ResourcesIndexRoute
   '/setup/': typeof SetupIndexRoute
+  '/simple/': typeof SimpleIndexRoute
   '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
@@ -668,6 +711,7 @@ export interface FileRoutesById {
   '/_authenticated/keys/test': typeof AuthenticatedKeysTestRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
+  '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/home/': typeof AuthenticatedHomeIndexRoute
@@ -706,6 +750,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/simple'
     | '/privacy-policy'
     | '/user-agreement'
     | '/welcome'
@@ -728,12 +773,15 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
+    | '/simple/me'
+    | '/simple/records'
     | '/about/'
     | '/marketplace/'
     | '/pricing/'
     | '/rankings/'
     | '/resources/'
     | '/setup/'
+    | '/simple/'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -743,6 +791,7 @@ export interface FileRouteTypes {
     | '/keys/test'
     | '/models/$section'
     | '/usage-logs/$section'
+    | '/simple/use/$purpose'
     | '/channels/'
     | '/dashboard/'
     | '/home/'
@@ -800,12 +849,15 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
+    | '/simple/me'
+    | '/simple/records'
     | '/about'
     | '/marketplace'
     | '/pricing'
     | '/rankings'
     | '/resources'
     | '/setup'
+    | '/simple'
     | '/user/reset'
     | '/chat/$chatId'
     | '/dashboard/$section'
@@ -815,6 +867,7 @@ export interface FileRouteTypes {
     | '/keys/test'
     | '/models/$section'
     | '/usage-logs/$section'
+    | '/simple/use/$purpose'
     | '/channels'
     | '/dashboard'
     | '/home'
@@ -853,6 +906,7 @@ export interface FileRouteTypes {
     | '/'
     | '/(auth)'
     | '/_authenticated'
+    | '/simple'
     | '/privacy-policy'
     | '/user-agreement'
     | '/welcome'
@@ -875,12 +929,15 @@ export interface FileRouteTypes {
     | '/oauth/$provider'
     | '/onboarding/$slug'
     | '/resources/$slug'
+    | '/simple/me'
+    | '/simple/records'
     | '/about/'
     | '/marketplace/'
     | '/pricing/'
     | '/rankings/'
     | '/resources/'
     | '/setup/'
+    | '/simple/'
     | '/(auth)/user/reset'
     | '/_authenticated/chat/$chatId'
     | '/_authenticated/dashboard/$section'
@@ -890,6 +947,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/test'
     | '/_authenticated/models/$section'
     | '/_authenticated/usage-logs/$section'
+    | '/simple/use/$purpose'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
     | '/_authenticated/home/'
@@ -929,6 +987,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   authRouteRoute: typeof authRouteRouteWithChildren
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  SimpleRouteRoute: typeof SimpleRouteRouteWithChildren
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   UserAgreementRoute: typeof UserAgreementRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -975,6 +1034,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyPolicyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/simple': {
+      id: '/simple'
+      path: '/simple'
+      fullPath: '/simple'
+      preLoaderRoute: typeof SimpleRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -995,6 +1061,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/simple/': {
+      id: '/simple/'
+      path: '/'
+      fullPath: '/simple/'
+      preLoaderRoute: typeof SimpleIndexRouteImport
+      parentRoute: typeof SimpleRouteRoute
     }
     '/setup/': {
       id: '/setup/'
@@ -1037,6 +1110,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/simple/records': {
+      id: '/simple/records'
+      path: '/records'
+      fullPath: '/simple/records'
+      preLoaderRoute: typeof SimpleRecordsRouteImport
+      parentRoute: typeof SimpleRouteRoute
+    }
+    '/simple/me': {
+      id: '/simple/me'
+      path: '/me'
+      fullPath: '/simple/me'
+      preLoaderRoute: typeof SimpleMeRouteImport
+      parentRoute: typeof SimpleRouteRoute
     }
     '/resources/$slug': {
       id: '/resources/$slug'
@@ -1275,6 +1362,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/channels/'
       preLoaderRoute: typeof AuthenticatedChannelsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/simple/use/$purpose': {
+      id: '/simple/use/$purpose'
+      path: '/use/$purpose'
+      fullPath: '/simple/use/$purpose'
+      preLoaderRoute: typeof SimpleUsePurposeRouteImport
+      parentRoute: typeof SimpleRouteRoute
     }
     '/_authenticated/usage-logs/$section': {
       id: '/_authenticated/usage-logs/$section'
@@ -1614,10 +1708,29 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface SimpleRouteRouteChildren {
+  SimpleMeRoute: typeof SimpleMeRoute
+  SimpleRecordsRoute: typeof SimpleRecordsRoute
+  SimpleIndexRoute: typeof SimpleIndexRoute
+  SimpleUsePurposeRoute: typeof SimpleUsePurposeRoute
+}
+
+const SimpleRouteRouteChildren: SimpleRouteRouteChildren = {
+  SimpleMeRoute: SimpleMeRoute,
+  SimpleRecordsRoute: SimpleRecordsRoute,
+  SimpleIndexRoute: SimpleIndexRoute,
+  SimpleUsePurposeRoute: SimpleUsePurposeRoute,
+}
+
+const SimpleRouteRouteWithChildren = SimpleRouteRoute._addFileChildren(
+  SimpleRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   authRouteRoute: authRouteRouteWithChildren,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  SimpleRouteRoute: SimpleRouteRouteWithChildren,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   UserAgreementRoute: UserAgreementRoute,
   WelcomeRoute: WelcomeRoute,

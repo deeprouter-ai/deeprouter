@@ -18,8 +18,9 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { User, Wallet, LogOut, Settings } from 'lucide-react'
+import { User, Wallet, LogOut, Settings, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { ROLE } from '@/lib/roles'
@@ -35,6 +36,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SignOutDialog } from '@/components/sign-out-dialog'
+import { persistPersona } from '@/features/profile/lib/persist-persona'
+import { SIMPLE_HOME } from '@/features/simple/lib/mode'
 
 const avatarFallbackClassName = 'font-semibold text-white'
 
@@ -107,6 +110,22 @@ export function ProfileDropdown() {
           <DropdownMenuItem onClick={() => navigate({ to: '/wallet' })}>
             <Wallet className='size-4' />
             {t('Wallet')}
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={async () => {
+              const error = await persistPersona('casual').catch(
+                () => 'save failed'
+              )
+              if (error) {
+                toast.error(t('Could not switch. Please try again.'))
+                return
+              }
+              navigate({ to: SIMPLE_HOME })
+            }}
+          >
+            <Smartphone className='size-4' />
+            {t('Switch to simple mode')}
           </DropdownMenuItem>
 
           {isSuperAdmin && (

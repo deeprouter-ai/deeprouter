@@ -37,6 +37,7 @@ import { takeWelcomeHandoff } from '@/features/auth/lib/storage'
 import type { RegisterResponseData } from '@/features/auth/types'
 import { updateUserSettings } from '@/features/profile/api'
 import { PERSONA_PRESETS } from '@/features/profile/lib/persona-presets'
+import { SIMPLE_HOME } from '@/features/simple/lib/mode'
 import type { Persona, UserSettings } from '@/features/profile/types'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
@@ -155,6 +156,17 @@ export function Welcome() {
         } catch {
           /* private mode — host may still redirect; setUser usually wins */
         }
+      }
+      // Casual users live in the Simple console (Console Simple/Advanced
+      // PRD D5): send them to its home, opening the top-up sheet when they
+      // asked to add credit.
+      if (finalPersona === 'casual') {
+        navigate({
+          to: SIMPLE_HOME,
+          search: target === '/wallet' ? { topup: true } : {},
+          replace: true,
+        })
+        return
       }
       navigate({ to: target as never, replace: true })
     } catch {

@@ -1,0 +1,229 @@
+// Copyright (C) 2026 DeepRouter
+// SPDX-License-Identifier: AGPL-3.0-or-later
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  Loader2,
+  RotateCw,
+} from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { useStatus } from '@/hooks/use-status'
+import { issueConnectToken } from '@/features/keys/api'
+import type { PromptLanguage } from '@/features/video/lib/prompt-template'
+import { buildPurposePrompt } from '../lib/prompt'
+import { ensurePurposeKey } from '../lib/purpose-key'
+import type { SimplePurpose } from '../lib/purposes'
+
+type Phase =
+  | { state: 'preparing' }
+  | { state: 'ready'; scriptUrl: string }
+  | { state: 'failed'; message: string }
+
+/**
+ * A purpose's pushed page: one big "Copy for my AI" button. Behind it the
+ * page finds or creates this purpose's key and mints a one-time token, so the
+ * copied text never carries the key itself (same machinery as the video
+ * page). Naming Claude / Codex is the deliberate CLAUDE.md §0 exception the
+ * video page records: "paste it into your AI" cannot be acted on otherwise.
+ */
+export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
+  const { t, i18n } = useTranslation()
+  const { status, loading: statusLoading } = useStatus()
+  // Wait for the system status before creating a key: its auto-group default
+  // decides which group a new key lands in, and creating early would pin it.
+  const statusReady = !statusLoading || !!status
+  const defaultUseAutoGroup = status?.default_use_auto_group === true
+  const [phase, setPhase] = useState<Phase>({ state: 'preparing' })
+  const [attempt, setAttempt] = useState(0)
+  const [copied, setCopied] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+
+  useEffect(() => {
+    if (!statusReady) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const key = await ensurePurposeKey(purpose.id, defaultUseAutoGroup)
+        const res = await issueConnectToken(key.id, ['claude-code'])
+        if (!res.success || !res.data) {
+          throw new Error(res.message || '')
+        }
+        const base = res.data.base_url.replace(/\/+$/, '')
+        if (!cancelled) {
+          setPhase({
+            state: 'ready',
+            scriptUrl: `${base}${res.data.script_path}`,
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPhase({
+            state: 'failed',
+            message: error instanceof Error ? error.message : '',
+          })
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [purpose.id, defaultUseAutoGroup, statusReady, attempt])
+
+  const language: PromptLanguage = i18n.language?.startsWith('zh') ? 'zh' : 'en'
+  const prompt = useMemo(
+    () =>
+      phase.state === 'ready'
+        ? buildPurposePrompt({
+            purpose: purpose.id,
+            scriptUrl: phase.scriptUrl,
+            language,
+          })
+        : '',
+    [phase, purpose.id, language]
+  )
+
+  const handleCopy = async () => {
+    if (!prompt) return
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopied(true)
+      navigator.vibrate?.(12)
+      toast.success(t('Copied — now paste it into your AI'))
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error(t('Copy failed'))
+    }
+  }
+
+  const Icon = purpose.icon
+
+  return (
+    <div className='animate-in slide-in-from-right-8 fade-in flex min-h-dvh flex-col duration-200'>
+      <header className='bg-background/95 sticky top-0 z-10 flex h-12 items-center px-2 backdrop-blur'>
+        <Link
+          to='/simple'
+          className='text-accent dark:text-foreground inline-flex h-11 items-center gap-0.5 rounded-full pr-3 pl-1 text-[15px] font-medium active:opacity-60'
+        >
+          <ChevronLeft className='size-6' />
+          {t('Back')}
+        </Link>
+        <h1 className='absolute left-1/2 -translate-x-1/2 text-[15px] font-semibold'>
+          {t(purpose.title)}
+        </h1>
+      </header>
+
+      <main className='flex flex-1 flex-col items-center px-6 pt-10 text-center'>
+        <span className='bg-accent/10 text-accent dark:bg-muted dark:text-foreground inline-flex size-20 items-center justify-center rounded-3xl'>
+          <Icon className='size-10' />
+        </span>
+        <h2 className='mt-5 text-2xl font-semibold'>{t(purpose.title)}</h2>
+        <p className='text-muted-foreground mt-2 max-w-xs text-sm leading-relaxed'>
+          {t(
+            'Tap the button, then paste into Claude or Codex. Your AI sets itself up and runs a first test.'
+          )}
+        </p>
+
+        <div className='mt-10 w-full'>
+          {phase.state === 'failed' ? (
+            <div className='flex flex-col items-center gap-3'>
+              <p className='text-destructive text-sm'>
+                {phase.message
+                  ? t('Could not get this ready: {{message}}', {
+                      message: phase.message,
+                    })
+                  : t('Could not get this ready. Please try again.')}
+              </p>
+              <button
+                type='button'
+                onClick={() => {
+                  setPhase({ state: 'preparing' })
+                  setAttempt((n) => n + 1)
+                }}
+                className='border-border bg-card inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-medium active:scale-95'
+              >
+                <RotateCw className='size-4' />
+                {t('Try again')}
+              </button>
+            </div>
+          ) : (
+            <button
+              type='button'
+              onClick={handleCopy}
+              disabled={phase.state !== 'ready'}
+              className={cn(
+                'inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold transition-transform active:scale-[0.98] disabled:opacity-60',
+                copied
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-primary text-primary-foreground'
+              )}
+            >
+              {phase.state === 'preparing' ? (
+                <>
+                  <Loader2 className='size-5 animate-spin' />
+                  {t('Getting ready…')}
+                </>
+              ) : copied ? (
+                <>
+                  <Check className='size-5' />
+                  {t('Copied')}
+                </>
+              ) : (
+                <>
+                  <Copy className='size-5' />
+                  {t('Copy for my AI')}
+                </>
+              )}
+            </button>
+          )}
+          <p className='text-muted-foreground mt-3 text-xs'>
+            {t('The link inside works once and expires in 30 minutes.')}
+          </p>
+        </div>
+      </main>
+
+      <footer className='px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]'>
+        <button
+          type='button'
+          onClick={() => setManualOpen((v) => !v)}
+          className='text-muted-foreground mx-auto flex items-center gap-1 text-sm'
+          aria-expanded={manualOpen}
+        >
+          {t('I want to set it up myself')}
+          <ChevronDown
+            className={cn(
+              'size-4 transition-transform',
+              manualOpen && 'rotate-180'
+            )}
+          />
+        </button>
+        {manualOpen && (
+          <div className='bg-card border-border mt-3 rounded-2xl border p-4 text-left text-sm'>
+            <p className='text-muted-foreground'>
+              {t(
+                'A step-by-step guide for every AI app, if you prefer to do it by hand.'
+              )}
+            </p>
+            <a
+              href={
+                language === 'zh'
+                  ? 'https://deeprouter.co/docs/integrations/GUIDE.zh.md'
+                  : 'https://deeprouter.co/docs/integrations/GUIDE.md'
+              }
+              target='_blank'
+              rel='noreferrer'
+              className='text-accent dark:text-foreground mt-2 inline-block font-medium underline-offset-4 hover:underline'
+            >
+              {t('Open the setup guide')}
+            </a>
+          </div>
+        )}
+      </footer>
+    </div>
+  )
+}
