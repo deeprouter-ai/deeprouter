@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { describe, expect, it } from 'vitest'
+import { MODEL_PRESETS } from '@/features/models/lib/model-presets'
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
@@ -110,6 +111,19 @@ describe('buildVideoPrompt (both languages)', () => {
     for (const model of VIDEO_MODELS) {
       expect(model.testRun.zh.length).toBeGreaterThan(0)
       expect(model.testRun.en.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('every video-page model has a Quick Import metadata preset', () => {
+    // The admin Models page backfills metadata cards via Quick Import; a
+    // model the page sells but the preset table lacks means the operator
+    // cannot one-click its card (Video First Wave AC-F — MiniMax-H3 and
+    // seedance 2.5 were missing on 2026-10-04).
+    for (const model of VIDEO_MODELS) {
+      expect(
+        MODEL_PRESETS.some((preset) => preset.model_name === model.id),
+        `${model.id} missing from MODEL_PRESETS`
+      ).toBe(true)
     }
   })
 })

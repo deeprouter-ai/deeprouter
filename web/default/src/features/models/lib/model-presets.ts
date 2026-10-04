@@ -196,11 +196,30 @@ export const MODEL_PRESETS: ModelPreset[] = [
   },
 
   // ── Video Generation ─────────────────────────────────────────────────
+  // The three models the video page sells (MiniMax-H3 + both seedance) must
+  // all be present here — prompt-template.test.ts pins that, so Quick Import
+  // can always backfill their metadata cards in one click.
   {
     model_name: 'veo-3.0-generate-001',
     description: 'Google Veo 3 — text-to-video.',
     group: 'video',
     tags: ['video'],
+    endpoints: 'video',
+  },
+  {
+    model_name: 'MiniMax-H3',
+    description:
+      'MiniMax Hailuo 3.0 — text-to-video with sound, 4–15 s, up to 2K.',
+    group: 'video',
+    tags: ['video', 'chinese'],
+    endpoints: 'video',
+  },
+  {
+    model_name: 'doubao-seedance-2-5-260628',
+    description:
+      'Doubao Seedance 2.5 — Volcengine text-to-video, up to 30 s / 4K, synced audio.',
+    group: 'video',
+    tags: ['video', 'chinese'],
     endpoints: 'video',
   },
   {
