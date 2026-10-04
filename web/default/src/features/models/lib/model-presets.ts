@@ -47,6 +47,14 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'gpt-6-luna',
+    description:
+      'OpenAI GPT-6 Luna (2026-09-22) — fastest, cheapest GPT-6 tier.',
+    group: 'chat',
+    tags: ['fast', 'cheap', 'tools'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'gpt-5.6-luna',
     description:
       'OpenAI GPT-5.6 Luna — fastest, cheapest GPT-5.6 tier; DeepRouter auto-routing default.',
@@ -76,15 +84,37 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'claude-opus-5-5',
+    description: 'Anthropic Opus 5.5 (2026-09) — current flagship reasoning.',
+    group: 'reasoning',
+    tags: ['reasoning', 'thinking', 'long-context'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'claude-sonnet-5-5',
+    description:
+      'Anthropic Sonnet 5.5 (2026-09) — current balanced quality + cost.',
+    group: 'chat',
+    tags: ['tools', 'long-context'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'claude-fable-5-1',
+    description: 'Anthropic Fable 5.1 (2026-09) — top tier above Opus.',
+    group: 'reasoning',
+    tags: ['reasoning', 'thinking'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'claude-opus-5',
-    description: 'Anthropic Opus 5 — current flagship reasoning.',
+    description: 'Anthropic Opus 5 — previous-gen flagship reasoning.',
     group: 'reasoning',
     tags: ['reasoning', 'thinking', 'long-context'],
     endpoints: 'chat',
   },
   {
     model_name: 'claude-sonnet-5',
-    description: 'Anthropic Sonnet 5 — current balanced quality + cost.',
+    description: 'Anthropic Sonnet 5 — previous-gen balanced quality + cost.',
     group: 'chat',
     tags: ['tools', 'long-context'],
     endpoints: 'chat',
@@ -118,8 +148,17 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'gemini-3.8-flash',
+    description:
+      'Google Gemini 3.8 Flash (GA 2026-09-02) — current fast multimodal model.',
+    group: 'chat',
+    tags: ['fast', 'vision', 'multimodal'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'gemini-3.7-flash',
-    description: 'Google Gemini 3.7 Flash — current fast multimodal model.',
+    description:
+      'Google Gemini 3.7 Flash — previous-gen fast multimodal model.',
     group: 'chat',
     tags: ['fast', 'vision', 'multimodal'],
     endpoints: 'chat',
@@ -147,6 +186,13 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
+    model_name: 'deepseek-flash',
+    description: 'DeepSeek V4.1 Flash (2026-09-10) — fast, cheap, 1M context.',
+    group: 'chat',
+    tags: ['open-source', 'fast', 'cheap'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'deepseek-v4-pro',
     description: 'DeepSeek V4 Pro — flagship, 1M context.',
     group: 'chat',
@@ -159,6 +205,13 @@ export const MODEL_PRESETS: ModelPreset[] = [
       '阿里 Qwen 3.8 Max — current domestic flagship, strong Chinese.',
     group: 'chat',
     tags: ['chinese', 'tools'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'qwen3.8-flash',
+    description: '阿里 Qwen 3.8 Flash — fast, cheap current-gen Chinese chat.',
+    group: 'chat',
+    tags: ['chinese', 'fast', 'cheap'],
     endpoints: 'chat',
   },
   {
@@ -211,15 +264,37 @@ export const MODEL_PRESETS: ModelPreset[] = [
     endpoints: 'chat',
   },
   {
-    model_name: 'grok-4.6',
-    description: 'xAI Grok 4.6 — current flagship.',
+    model_name: 'glm-5.3-flash',
+    description: '智谱 GLM-5.3 Flash — fast, cheap GLM-5.3 tier.',
+    group: 'chat',
+    tags: ['chinese', 'fast', 'cheap'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'grok-4.7',
+    description: 'xAI Grok 4.7 (2026-09-21) — current flagship.',
     group: 'chat',
     tags: ['tools', 'reasoning'],
     endpoints: 'chat',
   },
   {
+    model_name: 'grok-4.6',
+    description: 'xAI Grok 4.6 — previous-gen flagship.',
+    group: 'chat',
+    tags: ['tools', 'reasoning'],
+    endpoints: 'chat',
+  },
+  {
+    model_name: 'doubao-seed-2-1-pro-260628',
+    description:
+      'Doubao Seed 2.1 Pro (2026-06-23) — Volcengine current flagship.',
+    group: 'chat',
+    tags: ['chinese', 'tools'],
+    endpoints: 'chat',
+  },
+  {
     model_name: 'doubao-seed-2.0-pro',
-    description: 'Doubao Seed 2.0 Pro — Volcengine current flagship.',
+    description: 'Doubao Seed 2.0 Pro — Volcengine previous-gen flagship.',
     group: 'chat',
     tags: ['chinese', 'tools'],
     endpoints: 'chat',

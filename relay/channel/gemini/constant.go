@@ -2,7 +2,7 @@ package gemini
 
 var ModelList = []string{
 	// stable version — Gemini 3.x
-	"gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash",
+	"gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash",
 	"gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
 	"gemini-3.1-flash-image", "gemini-3.1-flash-lite-image", "gemini-3-pro-image",
 	// stable version — Gemini 2.x
@@ -27,7 +27,7 @@ var ModelList = []string{
 	"gemma-3-1b-it", "gemma-3-4b-it", "gemma-3-12b-it",
 	"gemma-3-27b-it", "gemma-3n-e4b-it", "gemma-3n-e2b-it",
 	// embedding models
-	"gemini-embedding-001", "gemini-embedding-2-preview",
+	"gemini-embedding-2", "gemini-embedding-001", "gemini-embedding-2-preview",
 	// veo models (veo-2.0 / veo-3.0 and all imagen-* were retired in 2026)
 	"veo-3.1-generate-preview", "veo-3.1-fast-generate-preview",
 	// other models
