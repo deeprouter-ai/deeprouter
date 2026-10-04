@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Check, Copy, TriangleAlert } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -33,6 +33,7 @@ import {
 import { SectionPageLayout } from '@/components/layout'
 import { getApiKeys, issueConnectToken } from '@/features/keys/api'
 import { API_KEY_STATUS } from '@/features/keys/constants'
+import { keyPermitsModel } from '@/features/keys/lib/model-limits'
 import type { ApiKey } from '@/features/keys/types'
 import {
   buildVideoPrompt,
@@ -77,24 +78,20 @@ export function VideoPage() {
 
   // Only enabled keys are offered: a disabled one configures the project just
   // as happily and then answers 401 from inside the tool, with nothing here to
-  // explain it. The list arrives newest-first, and the newest is the default —
-  // the same choice the key page's setup card makes.
+  // explain it. The list arrives newest-first.
   useEffect(() => {
     let cancelled = false
     void (async () => {
       try {
         const res = await getApiKeys({ p: 1, size: 100 })
         if (cancelled) return
-        const enabled = (res.data?.items ?? []).filter(
-          (k) => k.status === API_KEY_STATUS.ENABLED
+        setKeys(
+          (res.data?.items ?? []).filter(
+            (k) => k.status === API_KEY_STATUS.ENABLED
+          )
         )
-        setKeys(enabled)
-        setSelectedKeyId(enabled[0]?.id ?? null)
       } catch {
-        if (!cancelled) {
-          setKeys([])
-          setSelectedKeyId(null)
-        }
+        if (!cancelled) setKeys([])
       } finally {
         if (!cancelled) setKeysLoaded(true)
       }
@@ -104,24 +101,44 @@ export function VideoPage() {
     }
   }, [])
 
-  const apiKey = useMemo(
-    () => keys.find((k) => k.id === selectedKeyId) ?? null,
-    [keys, selectedKeyId]
+  const model =
+    VIDEO_MODELS.find((m) => m.id === modelId) ?? DEFAULT_VIDEO_MODEL
+
+  // A key qualifies only if the gateway would let it call the model currently
+  // selected (AC-G): a chat-limited Simple key otherwise binds fine here and
+  // fails with a 403 buried inside the agent's flow on the first generation.
+  const capableKeys = useMemo(
+    () => keys.filter((k) => keyPermitsModel(k, model.id)),
+    [keys, model.id]
   )
 
-  // `label` is what the closed trigger renders, so the restriction hint has to
-  // be baked into it there; inside the open list it is a separate muted span.
+  // The binding is derived, not reconciled in an effect: `selectedKeyId`
+  // records the user's pick, and the effective key falls back to the newest
+  // capable one whenever that pick is absent or invalidated by a model
+  // switch. Switching back restores the user's original choice.
+  const apiKey = useMemo(
+    () =>
+      capableKeys.find((k) => k.id === selectedKeyId) ?? capableKeys[0] ?? null,
+    [capableKeys, selectedKeyId]
+  )
+
+  // All enabled keys stay visible — hiding the unusable ones would read as
+  // "my key is gone". They are disabled with the reason instead; `label` is
+  // what the closed trigger renders, and only capable keys can be selected.
   const keyOptions = useMemo(
     () =>
-      keys.map((key) => ({
-        value: String(key.id),
-        name: key.name,
-        limited: key.model_limits_enabled,
-        label: key.model_limits_enabled
-          ? `${key.name} ${t('(limited to some models)')}`
-          : key.name,
-      })),
-    [keys, t]
+      keys.map((key) => {
+        const capable = keyPermitsModel(key, model.id)
+        return {
+          value: String(key.id),
+          name: key.name,
+          capable,
+          label: capable
+            ? key.name
+            : `${key.name} ${t("(can't run video models)")}`,
+        }
+      }),
+    [keys, model.id, t]
   )
 
   // Mint the one-time token once the key is known (same lifecycle as the
@@ -155,9 +172,6 @@ export function VideoPage() {
       cancelled = true
     }
   }, [apiKey])
-
-  const model =
-    VIDEO_MODELS.find((m) => m.id === modelId) ?? DEFAULT_VIDEO_MODEL
 
   // The prompt follows the UI locale: an English-mode user must not be handed
   // a block of Chinese they cannot read (and vice versa).
@@ -246,7 +260,13 @@ export function VideoPage() {
 
             {keysLoaded && !apiKey ? (
               <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
-                {t('You need a key first — one click on the keys page:')}{' '}
+                {keys.length > 0
+                  ? t(
+                      'None of your keys can run video models — create one with the "Video generation" purpose first:'
+                    )
+                  : t(
+                      'You need a key first — one click on the keys page:'
+                    )}{' '}
                 <Link
                   to='/keys'
                   className='text-foreground underline underline-offset-2'
@@ -274,7 +294,7 @@ export function VideoPage() {
                           and ignores the app's theme. */}
                       <Select
                         items={keyOptions}
-                        value={String(selectedKeyId ?? '')}
+                        value={String(apiKey?.id ?? '')}
                         onValueChange={(v) =>
                           v !== null && setSelectedKeyId(Number(v))
                         }
@@ -291,11 +311,12 @@ export function VideoPage() {
                               <SelectItem
                                 key={option.value}
                                 value={option.value}
+                                disabled={!option.capable}
                               >
                                 <span className='truncate'>{option.name}</span>
-                                {option.limited && (
+                                {!option.capable && (
                                   <span className='text-muted-foreground ml-1.5'>
-                                    {t('(limited to some models)')}
+                                    {t("(can't run video models)")}
                                   </span>
                                 )}
                               </SelectItem>
@@ -313,20 +334,10 @@ export function VideoPage() {
                     </p>
                   ))}
 
-                {/* A key restricted to a few models is a legitimate thing to
-                    own and a poor thing to generate video with — say so here
-                    rather than letting it surface as a failed clip. */}
-                {apiKey?.model_limits_enabled && (
-                  <p className='text-muted-foreground mt-2 flex items-start gap-1.5 text-xs'>
-                    <TriangleAlert className='mt-px h-3 w-3 shrink-0' />
-                    <span>
-                      {t(
-                        'This key is limited to certain models. Tools configured with it will only work for those — pick an unrestricted key if you want everything to work.'
-                      )}
-                    </span>
-                  </p>
-                )}
-
+                {/* No generic "limited key" warning here anymore: the picker
+                    only binds keys that CAN run the selected model (a video-
+                    purpose key is limited by design and perfectly fine), and
+                    incapable ones are disabled with the reason in place. */}
                 <div className='border-border bg-card mt-3 rounded-[7px] border'>
                   <pre className='max-h-72 overflow-auto p-4 text-xs leading-5 whitespace-pre-wrap'>
                     {prompt || (issuing ? t('Preparing…') : '')}

@@ -47,7 +47,7 @@ vi.mock('@/components/ui/select', () => ({
     value,
     onValueChange,
   }: {
-    items: { value: string; label: string }[]
+    items: { value: string; label: string; capable?: boolean }[]
     value: string
     onValueChange: (v: string) => void
   }) => (
@@ -57,7 +57,11 @@ vi.mock('@/components/ui/select', () => ({
       onChange={(e) => onValueChange(e.target.value)}
     >
       {items.map((item) => (
-        <option key={item.value} value={item.value}>
+        <option
+          key={item.value}
+          value={item.value}
+          disabled={item.capable === false}
+        >
           {item.label}
         </option>
       ))}
@@ -176,17 +180,100 @@ describe('VideoPage — which key the prompt configures', () => {
     )
   })
 
-  it('warns when the chosen key is restricted to some models', async () => {
+  it('refuses a chat-limited key: guidance instead of a doomed binding', async () => {
+    // AC-G regression: this key used to bind silently and the project 403'd
+    // on its very first generation, deep inside the agent's flow.
     mockGetApiKeys.mockResolvedValue(
       keysResponse([
-        key({ id: 31, name: 'limited key', model_limits_enabled: true }),
+        key({
+          id: 31,
+          name: 'chat key',
+          model_limits_enabled: true,
+          model_limits: 'gpt-4o,claude-*,deeprouter',
+        }),
       ])
     )
 
     render(<VideoPage />)
 
     expect(
-      await screen.findByText(/This key is limited to certain models/)
+      await screen.findByText(/None of your keys can run video models/)
+    ).toBeInTheDocument()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('binds a video-purpose whitelisted key without any warning', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 32,
+          name: 'video key',
+          model_limits_enabled: true,
+          model_limits: 'MiniMax-H3,doubao-seedance-*,deeprouter-video',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    expect(await screen.findByText('video key')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(32, ['claude-code'])
+    )
+    expect(
+      screen.queryByText(/None of your keys can run video models/)
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers incapable keys disabled and binds the first capable one', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 41,
+          name: 'chat key',
+          model_limits_enabled: true,
+          model_limits: 'gpt-4o',
+        }),
+        key({ id: 42, name: 'open key' }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    const select =
+      await screen.findByLabelText<HTMLSelectElement>('Key to set up')
+    expect(select.value).toBe('42')
+    expect(screen.getByRole('option', { name: /chat key/ })).toBeDisabled()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(42, ['claude-code'])
+    )
+  })
+
+  it('re-evaluates capability when the model changes', async () => {
+    // Whitelisted for H3 only: fine on the default model, unusable the
+    // moment the user picks Seedance — the page must say so, not mint a
+    // token that configures a 403.
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 51,
+          name: 'h3-only key',
+          model_limits_enabled: true,
+          model_limits: 'MiniMax-H3',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(51, ['claude-code'])
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /Seedance 2\.5/ }))
+
+    expect(
+      await screen.findByText(/None of your keys can run video models/)
     ).toBeInTheDocument()
   })
 })

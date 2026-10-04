@@ -20,6 +20,7 @@ import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,10 +31,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { defaultBaseUrl, modelNameForPurpose } from '../lib/integration'
-import { ApiKeyIntegrationDialog } from './api-key-integration-dialog'
 import type { SimplePurposeId } from '../types'
+import { ApiKeyIntegrationDialog } from './api-key-integration-dialog'
 
 type ApiKeySuccessDialogProps = {
   open: boolean
@@ -47,6 +47,13 @@ type ApiKeySuccessDialogProps = {
  * drawer's noisy toast path: the key is only revealed once, here, with one-tap
  * copy and a row of client-tutorial entry points. PRD docs/tasks/
  * api-key-simple-advanced-prd.md §4.2.
+ *
+ * The video purpose gets its own branch (Video First Wave AC-G): its next
+ * step is the video page's paste-prompt, not "paste Base URL + model into
+ * your client's settings" — and the self-check runs a chat call via
+ * deeprouter-auto, which does not fit a video-whitelisted key. The boss hit
+ * exactly this void ("搞不懂怎么用", 2026-10-04): he created a video key and
+ * the dialog told him the chat story.
  */
 export function ApiKeySuccessDialog({
   open,
@@ -58,15 +65,18 @@ export function ApiKeySuccessDialog({
   const baseUrl = defaultBaseUrl()
   const modelName = modelNameForPurpose(purpose)
   const [showGuide, setShowGuide] = useState(false)
+  const isVideoPurpose = purpose === 'video'
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent className='!max-w-md sm:!max-w-lg'>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('Your new API key is ready')}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t(
-              'Copy these values into your AI client now — the full key is only shown once.'
-            )}
+            {isVideoPurpose
+              ? t('Save your key now — the full key is only shown once.')
+              : t(
+                  'Copy these values into your AI client now — the full key is only shown once.'
+                )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className='space-y-3'>
@@ -76,45 +86,68 @@ export function ApiKeySuccessDialog({
             secret
             warning={t('Only shown once. Copy and store it securely.')}
           />
-          <CopyField label={t('Base URL')} value={baseUrl} />
-          <CopyField
-            label={t('Model name')}
-            value={modelName}
-            hint={t(
-              'Use this in your client. We route it to the right model based on this key.'
-            )}
-          />
-          <div className='border-t pt-3'>
-            <p className='text-foreground text-xs font-medium'>
-              {t('How to use this key')}
-            </p>
-            <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
-              {t(
-                'Paste it into the AI tool you already use — find the "API Key" field in its settings.'
-              )}
-            </p>
-            {/* Primary action is the self-check (onboarding-v2 §7.6) — it
-              * proves "my money turns into AI replies", which is the decisive
-              * casual step. Code examples are a developer extra, demoted to a
-              * quiet secondary link so non-coders aren't pushed toward code. */}
-            <div className='mt-2 flex flex-wrap gap-2'>
-              <Button
-                size='sm'
-                className='rounded-full text-xs'
-                render={
-                  <a href='/keys/test'>{t('Test this key →')}</a>
-                }
-              />
-              <Button
-                size='sm'
-                variant='ghost'
-                className='rounded-full text-xs'
-                onClick={() => setShowGuide(true)}
-              >
-                {t('Setup guide')}
-              </Button>
+          {isVideoPurpose && (
+            <div className='border-t pt-3'>
+              <p className='text-foreground text-xs font-medium'>
+                {t('How to use this key')}
+              </p>
+              <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                {t(
+                  'This key is for video. The next step happens on the video page — copy one block of text into your AI tool and it makes your first clip.'
+                )}
+              </p>
+              <div className='mt-2'>
+                <Button
+                  size='sm'
+                  className='rounded-full text-xs'
+                  render={<a href='/video'>{t('Go to Make videos →')}</a>}
+                />
+              </div>
             </div>
-          </div>
+          )}
+          {!isVideoPurpose && (
+            <CopyField label={t('Base URL')} value={baseUrl} />
+          )}
+          {!isVideoPurpose && (
+            <CopyField
+              label={t('Model name')}
+              value={modelName}
+              hint={t(
+                'Use this in your client. We route it to the right model based on this key.'
+              )}
+            />
+          )}
+          {!isVideoPurpose && (
+            <div className='border-t pt-3'>
+              <p className='text-foreground text-xs font-medium'>
+                {t('How to use this key')}
+              </p>
+              <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                {t(
+                  'Paste it into the AI tool you already use — find the "API Key" field in its settings.'
+                )}
+              </p>
+              {/* Primary action is the self-check (onboarding-v2 §7.6) — it
+               * proves "my money turns into AI replies", which is the decisive
+               * casual step. Code examples are a developer extra, demoted to a
+               * quiet secondary link so non-coders aren't pushed toward code. */}
+              <div className='mt-2 flex flex-wrap gap-2'>
+                <Button
+                  size='sm'
+                  className='rounded-full text-xs'
+                  render={<a href='/keys/test'>{t('Test this key →')}</a>}
+                />
+                <Button
+                  size='sm'
+                  variant='ghost'
+                  className='rounded-full text-xs'
+                  onClick={() => setShowGuide(true)}
+                >
+                  {t('Setup guide')}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         <AlertDialogFooter>
           <AlertDialogAction onClick={onClose}>{t('Done')}</AlertDialogAction>
@@ -160,7 +193,7 @@ function CopyField({
       <div className='flex items-baseline justify-between'>
         <span className='text-foreground text-xs font-medium'>{label}</span>
         {warning && (
-          <span className='text-amber-600 text-[11px] dark:text-amber-400'>
+          <span className='text-[11px] text-amber-600 dark:text-amber-400'>
             {warning}
           </span>
         )}
@@ -190,9 +223,7 @@ function CopyField({
           )}
         </Button>
       </div>
-      {hint && (
-        <p className='text-muted-foreground text-[11px]'>{hint}</p>
-      )}
+      {hint && <p className='text-muted-foreground text-[11px]'>{hint}</p>}
     </div>
   )
 }
