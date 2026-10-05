@@ -32,6 +32,12 @@ export const STATIC_I18N_KEYS = [
   'United States',
   'Europe',
   'Other / Global',
+  // Simple purpose pages — example requests passed to t()
+  'Make a video: a cup of milk tea spinning in the sunlight, 10 seconds',
+  'Make a poster: summer special, iced lemon tea, bright colours',
+  'Write a short shop notice about our new summer opening hours',
+  "Make a voice-over: Welcome! Today's special is iced lemon tea",
+  'Build a one-page website for my shop with the menu and opening hours',
   // Home video examples — model caption passed to t()
   'Seedance video model',
   // Simple console — tab labels and purpose cards (features/simple)

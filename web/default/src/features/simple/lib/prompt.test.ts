@@ -63,6 +63,28 @@ describe('buildPurposePrompt', () => {
     expect(text).not.toContain('MiniMax-H3')
   })
 
+  it('video honours the model picked on the page, if the key holds it', () => {
+    const apiKey = {
+      model_limits_enabled: true,
+      model_limits: 'doubao-seedance-2-0-260128,doubao-seedance-2-5-260628',
+    }
+    const pick = (videoModelId: string) =>
+      buildPurposePrompt({
+        purpose: 'video',
+        scriptUrl: URL,
+        language: 'en',
+        apiKey,
+        videoModelId,
+      })
+    expect(pick('doubao-seedance-2-5-260628')).toContain(
+      'Default model: doubao-seedance-2-5-260628'
+    )
+    // A model the key does not hold falls back to the key's default.
+    expect(pick('MiniMax-H3')).toContain(
+      'Default model: doubao-seedance-2-0-260128'
+    )
+  })
+
   it('writes a prompt for every purpose on the home grid', () => {
     for (const p of SIMPLE_PURPOSES) {
       expect(

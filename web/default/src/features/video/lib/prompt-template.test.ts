@@ -23,6 +23,7 @@ import {
   DEFAULT_VIDEO_MODEL,
   VIDEO_MODELS,
   videoModelsForKey,
+  friendlyVideoName,
   type PromptLanguage,
 } from './prompt-template'
 
@@ -200,5 +201,23 @@ describe('videoModelsForKey', () => {
     expect(
       videoModelsForKey({ model_limits_enabled: true, model_limits: '' })
     ).toBeNull()
+  })
+})
+
+describe('friendlyVideoName', () => {
+  it('turns Seedance ids into readable names and leaves others alone', () => {
+    expect(friendlyVideoName('doubao-seedance-1-0-lite-t2v-250428')).toBe(
+      'Seedance 1.0 Lite T2V'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-fast-260128')).toBe(
+      'Seedance 2.0 Fast'
+    )
+    expect(friendlyVideoName('doubao-seedance-1-5-pro-251215')).toBe(
+      'Seedance 1.5 Pro'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-260128')).toBe('Seedance 2.0')
+    expect(friendlyVideoName('brand-new-video-2027')).toBe(
+      'brand-new-video-2027'
+    )
   })
 })

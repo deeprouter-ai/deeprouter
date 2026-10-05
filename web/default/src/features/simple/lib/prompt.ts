@@ -119,13 +119,16 @@ export function buildPurposePrompt(options: {
   language: PromptLanguage
   /** The key the token redeems to; video lists only the models it holds. */
   apiKey?: { model_limits_enabled?: boolean; model_limits?: string | null }
+  /** The video model the user picked on the page; must be one the key holds. */
+  videoModelId?: string
 }): string {
-  const { purpose, scriptUrl, language, apiKey } = options
+  const { purpose, scriptUrl, language, apiKey, videoModelId } = options
   if (purpose === 'video') {
     const fromKey = apiKey ? videoModelsForKey(apiKey) : null
+    const picked = fromKey?.models.find((m) => m.id === videoModelId)
     return buildVideoPrompt({
       scriptUrl,
-      model: fromKey?.defaultModel ?? DEFAULT_VIDEO_MODEL,
+      model: picked ?? fromKey?.defaultModel ?? DEFAULT_VIDEO_MODEL,
       models: fromKey?.models,
       language,
     })

@@ -98,11 +98,29 @@ const COST_ORDER = [
   'doubao-seedance-2-5-260628',
 ]
 
+/**
+ * A readable label for vendor ids shown to non-technical owners:
+ * `doubao-seedance-1-0-lite-t2v-250428` → "Seedance 1.0 Lite T2V". Ids that do
+ * not follow the Seedance pattern are shown as they are.
+ */
+export function friendlyVideoName(id: string): string {
+  const m = /^doubao-seedance-(\d+)-(\d+)((?:-[a-z0-9]+)*?)-\d{6}$/.exec(id)
+  if (!m) return id
+  const variant = m[3]
+    .split('-')
+    .filter(Boolean)
+    .map((w) =>
+      /^[ti]2v$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)
+    )
+    .join(' ')
+  return `Seedance ${m[1]}.${m[2]}${variant ? ` ${variant}` : ''}`
+}
+
 /** A model the key holds but this page has no price sheet for. */
 function unknownVideoModel(id: string): VideoModelOption {
   return {
     id,
-    name: id,
+    name: friendlyVideoName(id),
     traits: '',
     price: '',
     testRun: {
