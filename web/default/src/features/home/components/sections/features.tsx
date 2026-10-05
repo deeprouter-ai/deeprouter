@@ -169,7 +169,6 @@ export function Features(_props: FeaturesProps) {
             </AnimateInView>
           ))}
         </div>
-
       </div>
     </section>
   )

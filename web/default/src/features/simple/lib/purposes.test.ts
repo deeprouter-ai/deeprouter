@@ -28,8 +28,8 @@ describe('Simple purposes', () => {
 
 describe('clipsAffordable', () => {
   it('counts whole reference clips', () => {
-    // $10 at 500000 quota per USD, $0.48 per clip → 20 clips
-    expect(clipsAffordable(5_000_000, 500_000)).toBe(20)
+    // $10 at 500000 quota per USD, $1.0 per clip → 10 clips
+    expect(clipsAffordable(5_000_000, 500_000)).toBe(10)
   })
 
   it('returns null when not even one clip is covered', () => {

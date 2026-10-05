@@ -22,6 +22,8 @@ import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
   VIDEO_MODELS,
+  videoModelsForKey,
+  friendlyVideoName,
   type PromptLanguage,
 } from './prompt-template'
 
@@ -129,5 +131,93 @@ describe('buildVideoPrompt (both languages)', () => {
         `${model.id} missing from MODEL_PRESETS`
       ).toBe(true)
     }
+  })
+})
+
+describe('size field note', () => {
+  it('is rendered as plain JSON field names, only when MiniMax-H3 is offered', () => {
+    const withH3 = build('en')
+    expect(withH3).toContain('; "size" (MiniMax-H3 only, "768P" or "2K")')
+    expect(withH3).not.toContain('\\"size')
+  })
+})
+
+describe('videoModelsForKey', () => {
+  it('lists only the models the key holds, cheapest known first', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits:
+        'doubao-seedance-2-5-260628,doubao-seedance-1-0-lite-t2v-250428,doubao-seedance-2-0-260128',
+    })
+    expect(got?.models.map((m) => m.id)).toEqual([
+      'doubao-seedance-2-0-260128',
+      'doubao-seedance-2-5-260628',
+      'doubao-seedance-1-0-lite-t2v-250428',
+    ])
+    expect(got?.defaultModel.id).toBe('doubao-seedance-2-0-260128')
+  })
+
+  it('never defaults to a model the key does not hold (MiniMax-H3 absent)', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits: 'doubao-seedance-2-5-260628',
+    })
+    expect(got?.defaultModel.id).toBe('doubao-seedance-2-5-260628')
+    const prompt = buildVideoPrompt({
+      scriptUrl: SCRIPT_URL,
+      model: got!.defaultModel,
+      models: got!.models,
+      language: 'en',
+    })
+    expect(prompt).not.toContain('MiniMax-H3')
+    expect(prompt).toContain('Default model: doubao-seedance-2-5-260628')
+  })
+
+  it('describes unknown models without inventing a price', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits: 'brand-new-video-2027',
+    })
+    const prompt = buildVideoPrompt({
+      scriptUrl: SCRIPT_URL,
+      model: got!.defaultModel,
+      models: got!.models,
+      language: 'zh',
+    })
+    expect(prompt).toContain('- brand-new-video-2027：按条计费')
+    expect(prompt).not.toMatch(/brand-new-video-2027[^\n]*\$/)
+  })
+
+  it('returns null for unrestricted keys, wildcards only or empty grants', () => {
+    expect(
+      videoModelsForKey({ model_limits_enabled: false, model_limits: 'x' })
+    ).toBeNull()
+    expect(
+      videoModelsForKey({
+        model_limits_enabled: true,
+        model_limits: 'doubao-*',
+      })
+    ).toBeNull()
+    expect(
+      videoModelsForKey({ model_limits_enabled: true, model_limits: '' })
+    ).toBeNull()
+  })
+})
+
+describe('friendlyVideoName', () => {
+  it('turns Seedance ids into readable names and leaves others alone', () => {
+    expect(friendlyVideoName('doubao-seedance-1-0-lite-t2v-250428')).toBe(
+      'Seedance 1.0 Lite T2V'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-fast-260128')).toBe(
+      'Seedance 2.0 Fast'
+    )
+    expect(friendlyVideoName('doubao-seedance-1-5-pro-251215')).toBe(
+      'Seedance 1.5 Pro'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-260128')).toBe('Seedance 2.0')
+    expect(friendlyVideoName('brand-new-video-2027')).toBe(
+      'brand-new-video-2027'
+    )
   })
 })

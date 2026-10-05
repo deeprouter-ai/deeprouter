@@ -1,6 +1,6 @@
 // Copyright (C) 2026 DeepRouter
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import {
   Check,
@@ -15,14 +15,18 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { issueConnectToken } from '@/features/keys/api'
-import type { PromptLanguage } from '@/features/video/lib/prompt-template'
+import type { ApiKey } from '@/features/keys/types'
+import {
+  videoModelsForKey,
+  type PromptLanguage,
+} from '@/features/video/lib/prompt-template'
 import { buildPurposePrompt } from '../lib/prompt'
 import { ensurePurposeKey } from '../lib/purpose-key'
 import type { SimplePurpose } from '../lib/purposes'
 
 type Phase =
   | { state: 'preparing' }
-  | { state: 'ready'; scriptUrl: string }
+  | { state: 'ready'; scriptUrl: string; key: ApiKey }
   | { state: 'failed'; message: string }
 
 /**
@@ -43,6 +47,7 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   const [attempt, setAttempt] = useState(0)
   const [copied, setCopied] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const [pickedModel, setPickedModel] = useState<string | null>(null)
 
   useEffect(() => {
     if (!statusReady) return
@@ -59,6 +64,7 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           setPhase({
             state: 'ready',
             scriptUrl: `${base}${res.data.script_path}`,
+            key,
           })
         }
       } catch (error) {
@@ -76,6 +82,19 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   }, [purpose.id, defaultUseAutoGroup, statusReady, attempt])
 
   const language: PromptLanguage = i18n.language?.startsWith('zh') ? 'zh' : 'en'
+  // Video models this key can call (its grant snapshot), cheapest first.
+  // The owner picks one here; the copied prompt makes it the default.
+  const videoChoices = useMemo(
+    () =>
+      purpose.id === 'video' && phase.state === 'ready'
+        ? videoModelsForKey(phase.key)
+        : null,
+    [purpose.id, phase]
+  )
+  const videoModel =
+    videoChoices?.models.find((m) => m.id === pickedModel) ??
+    videoChoices?.defaultModel
+
   const prompt = useMemo(
     () =>
       phase.state === 'ready'
@@ -83,9 +102,11 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
             purpose: purpose.id,
             scriptUrl: phase.scriptUrl,
             language,
+            apiKey: phase.key,
+            videoModelId: videoModel?.id,
           })
         : '',
-    [phase, purpose.id, language]
+    [phase, purpose.id, language, videoModel?.id]
   )
 
   const handleCopy = async () => {
@@ -126,6 +147,70 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
         <p className='text-muted-foreground mt-2 max-w-xs text-sm leading-relaxed'>
           {t(
             'Tap the button, then paste into Claude or Codex. Your AI sets itself up and runs a first test.'
+          )}
+        </p>
+        {videoChoices && videoModel && (
+          <div className='mt-5 w-full text-left'>
+            {videoChoices.models.length > 1 ? (
+              <>
+                <p className='text-muted-foreground mb-2 px-1 text-xs'>
+                  {t('Pick a video model — you can switch any time')}
+                </p>
+                <ul className='flex flex-col gap-2' role='radiogroup'>
+                  {videoChoices.models.map((m) => {
+                    const active = m.id === videoModel.id
+                    return (
+                      <li key={m.id}>
+                        <button
+                          type='button'
+                          role='radio'
+                          aria-checked={active}
+                          onClick={() => setPickedModel(m.id)}
+                          className={cn(
+                            'bg-card flex min-h-12 w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-transform active:scale-[0.99]',
+                            active
+                              ? 'border-accent ring-accent/30 dark:border-foreground dark:ring-foreground/20 ring-2'
+                              : 'border-border'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'mt-1 inline-flex size-4 shrink-0 items-center justify-center rounded-full border',
+                              active
+                                ? 'border-accent bg-accent dark:border-foreground dark:bg-foreground'
+                                : 'border-muted-foreground/40'
+                            )}
+                          >
+                            {active && (
+                              <Check className='text-accent-foreground dark:text-background size-3' />
+                            )}
+                          </span>
+                          <span className='min-w-0'>
+                            <span className='block text-[15px] font-medium'>
+                              {m.name}
+                            </span>
+                            <span className='text-muted-foreground block text-xs'>
+                              {m.promptLine[language]}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            ) : (
+              <p className='bg-card border-border rounded-full border px-4 py-1.5 text-center text-sm'>
+                {t('One clip: {{cost}}', {
+                  cost: videoModel.promptLine[language],
+                })}
+              </p>
+            )}
+          </div>
+        )}
+        <p className='text-muted-foreground mt-4 max-w-xs text-xs leading-relaxed'>
+          {t(
+            'You need Claude Code or Codex (AI assistants that work on a computer). Chat apps like ChatGPT or Doubao on your phone cannot do this step.'
           )}
         </p>
 
@@ -185,6 +270,45 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
             {t('The link inside works once and expires in 30 minutes.')}
           </p>
         </div>
+
+        <section className='bg-card border-border mt-8 w-full rounded-2xl border p-4 text-left'>
+          <h3 className='text-[15px] font-semibold'>
+            {t('How to use it afterwards')}
+          </h3>
+          <ol className='mt-3 flex flex-col gap-3 text-sm'>
+            <UsageStep n={1}>
+              {t(
+                'On your computer, open Claude Code or Codex in a folder for this work.'
+              )}
+            </UsageStep>
+            <UsageStep n={2}>
+              {t(
+                'Paste what you copied and wait — it sets itself up and makes one test.'
+              )}
+            </UsageStep>
+            <UsageStep n={3}>
+              {t('From then on, just tell it what you want, for example:')}
+              <span className='bg-muted mt-1.5 block rounded-xl px-3 py-2 text-[13px]'>
+                “{t(purpose.example)}”
+              </span>
+            </UsageStep>
+            {videoChoices && videoChoices.models.length > 1 && videoModel && (
+              <UsageStep n={4}>
+                {t('To use a different model, name it:')}
+                <span className='bg-muted mt-1.5 block rounded-xl px-3 py-2 text-[13px]'>
+                  “
+                  {t('Use {{model}} for this one', {
+                    model: (
+                      videoChoices.models.find((m) => m.id !== videoModel.id) ??
+                      videoModel
+                    ).name,
+                  })}
+                  ”
+                </span>
+              </UsageStep>
+            )}
+          </ol>
+        </section>
       </main>
 
       <footer className='px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]'>
@@ -209,21 +333,27 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
                 'A step-by-step guide for every AI app, if you prefer to do it by hand.'
               )}
             </p>
-            <a
-              href={
-                language === 'zh'
-                  ? 'https://deeprouter.co/docs/integrations/GUIDE.zh.md'
-                  : 'https://deeprouter.co/docs/integrations/GUIDE.md'
-              }
-              target='_blank'
-              rel='noreferrer'
+            <Link
+              to='/resources/$slug'
+              params={{ slug: 'GUIDE' }}
               className='text-accent dark:text-foreground mt-2 inline-block font-medium underline-offset-4 hover:underline'
             >
               {t('Open the setup guide')}
-            </a>
+            </Link>
           </div>
         )}
       </footer>
     </div>
+  )
+}
+
+function UsageStep(props: { n: number; children: ReactNode }) {
+  return (
+    <li className='flex gap-3'>
+      <span className='bg-accent/10 text-accent dark:bg-muted dark:text-foreground inline-flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold'>
+        {props.n}
+      </span>
+      <span className='min-w-0 flex-1 leading-relaxed'>{props.children}</span>
+    </li>
   )
 }

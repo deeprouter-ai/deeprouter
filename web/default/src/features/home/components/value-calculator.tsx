@@ -19,8 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState } from 'react'
 import { Image, MessageSquare, Video } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { AnimateInView } from '@/components/animate-in-view'
-import { Slider } from '@/components/ui/slider'
 import {
   estimateChats,
   estimateImages,
@@ -28,6 +26,8 @@ import {
   estimateCharsByModel,
   formatCount,
 } from '@/lib/usage-estimate'
+import { Slider } from '@/components/ui/slider'
+import { AnimateInView } from '@/components/animate-in-view'
 
 // home-motion-interactive-prd.md I4 — interactive value calculator.
 // Slider over a USD top-up → live, order-of-magnitude usage estimates, reusing

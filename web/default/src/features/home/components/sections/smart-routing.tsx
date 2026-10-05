@@ -16,9 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useEffect, useState } from 'react'
 import { Sparkles, TrendingDown } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
@@ -89,7 +89,7 @@ function RoutingFlow() {
       </div>
 
       {/* connector with a travelling dot */}
-      <div className='relative mx-auto my-2 h-8 w-px bg-gradient-to-b from-border to-transparent'>
+      <div className='from-border relative mx-auto my-2 h-8 w-px bg-gradient-to-b to-transparent'>
         {!reduce && (
           <motion.span
             key={active}
@@ -108,12 +108,21 @@ function RoutingFlow() {
             <motion.span
               className='border-accent/40 absolute inset-0 rounded-xl border'
               animate={{ opacity: [0.6, 0, 0.6], scale: [1, 1.12, 1] }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+              transition={{
+                duration: 2.4,
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }}
             />
           )}
-          <Sparkles className='text-accent-foreground size-4' strokeWidth={1.75} />
+          <Sparkles
+            className='text-accent-foreground size-4'
+            strokeWidth={1.75}
+          />
           <span className='font-mono text-sm font-semibold'>auto</span>
-          <span className='text-muted-foreground text-xs'>{t('Smart Routing')}</span>
+          <span className='text-muted-foreground text-xs'>
+            {t('Smart Routing')}
+          </span>
         </div>
       </div>
 
@@ -168,7 +177,7 @@ function RoutingFlow() {
           <span className='text-foreground font-semibold'>
             {t('With smart routing')}
           </span>
-          <span className='text-emerald-600 font-mono font-semibold'>~22%</span>
+          <span className='font-mono font-semibold text-emerald-600'>~22%</span>
         </div>
         <div className='bg-muted h-2.5 w-full overflow-hidden rounded-full'>
           <motion.div

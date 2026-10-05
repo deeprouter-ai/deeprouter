@@ -25,7 +25,7 @@ const VIDEO_EXAMPLES = [
     src: '/home-media/ai-video-product-demo.mp4',
     title: 'Product motion clip',
     desc: 'Generate short marketing videos from a text prompt.',
-    model: 'Kling / Jimeng route',
+    model: 'Seedance video model',
   },
   {
     src: '/home-media/ai-video-scene-demo.mp4',
