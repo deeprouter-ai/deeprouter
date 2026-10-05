@@ -136,7 +136,8 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 把下面整段规则原样写进项目记忆文件——Claude Code 写 CLAUDE.md，Codex 写 AGENTS.md（不存在就创建，存在就追加）：
 
 ## 生成视频（DeepRouter）
-当用户要求生成视频时，按以下流程执行。凭证从 .env 读取 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY，所有请求都带 Header「Authorization: Bearer {DEEPROUTER_API_KEY}」。
+当用户要求生成视频时，按以下流程执行。凭证从 .env 读取 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY，所有请求都带 Header「Authorization: Bearer {DEEPROUTER_API_KEY}」。完整接口说明：https://deeprouter.co/llms.txt（自建网关则在 {DEEPROUTER_BASE_URL}/llms.txt）——遇到下面没写到的参数、状态、报错，先读它。
+0. 先确认：GET {DEEPROUTER_BASE_URL}/v1/models，要用的模型必须在返回列表里，且它的 supported_endpoint_types 含 video-generation；不在列表里就告诉用户这把密钥没有开通该模型，不要换别的接口去试。
 1. 提交：POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<模型>","prompt":"<用户的描述，翻成英文效果更好>"}
    可选字段：\"duration\"（秒）${sizeNote}。响应里的 id 即任务号。
@@ -147,7 +148,6 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 本密钥可用的模型与大约花费（生成前先告诉用户本次预计花多少；不在此列的模型本密钥调不了，不要试）：
 ${menu}
 默认用 ${model.id}。
-其它细节（参数、状态、报错）以 {DEEPROUTER_BASE_URL}/llms.txt 为准，遇到上面没写到的情况先读它。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
 【第 3 步：验证一次（可选，这一步会花钱）】
@@ -183,7 +183,8 @@ Make sure .env is listed in .gitignore (add it if missing). The key must never a
 Write the following rules verbatim into the project memory file — CLAUDE.md for Claude Code, AGENTS.md for Codex (create it if missing, append if it exists):
 
 ## Video generation (DeepRouter)
-When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY from .env; every request carries the header "Authorization: Bearer {DEEPROUTER_API_KEY}".
+When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY from .env; every request carries the header "Authorization: Bearer {DEEPROUTER_API_KEY}". Full API reference: https://deeprouter.co/llms.txt (on a self-hosted gateway, {DEEPROUTER_BASE_URL}/llms.txt) — read it first for any parameter, status or error not covered below.
+0. Check first: GET {DEEPROUTER_BASE_URL}/v1/models — the model you will use must be listed and its supported_endpoint_types must include video-generation; if it is not listed, tell the user this key has no access to it instead of trying another endpoint.
 1. Submit: POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<model>","prompt":"<the user's description>"}
    Optional fields: \"duration\" (seconds)${sizeNote}. The id in the response is the task id.
@@ -194,7 +195,6 @@ When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_U
 Models this key can use and their approximate cost (tell the user the expected cost before generating; anything not listed here this key cannot call, so do not try):
 ${menu}
 Default model: ${model.id}.
-For anything not covered here (parameters, statuses, errors), read {DEEPROUTER_BASE_URL}/llms.txt first.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 
 [Step 3: Verify once (optional — this step costs money)]

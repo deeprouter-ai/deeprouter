@@ -32,6 +32,14 @@ func MediaEndpoints(channelType int, name string, endpoints []constant.EndpointT
 		}
 	case constant.ChannelTypeKling, constant.ChannelTypeJimeng, constant.ChannelTypeVidu, constant.ChannelTypeDoubaoVideo:
 		return []constant.EndpointType{VideoGeneration}
+	case constant.ChannelTypeVolcEngine:
+		// Seedream is Volcengine's image family; the adapter sends it to
+		// /api/v3/images/generations. Without this it inherits the channel's
+		// chat label, so the catalog tells AI tools to call chat completions
+		// and image keys never receive it. Doubao chat models are untouched.
+		if strings.HasPrefix(strings.ToLower(name), "doubao-seedream") {
+			return []constant.EndpointType{constant.EndpointTypeImageGeneration}
+		}
 	case constant.ChannelTypeMiniMax:
 		lower := strings.ToLower(name)
 		if strings.HasPrefix(lower, "minimax-h") || strings.HasPrefix(lower, "t2v-") || strings.HasPrefix(lower, "i2v-") || strings.HasPrefix(lower, "s2v-") {

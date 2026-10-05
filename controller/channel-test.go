@@ -899,7 +899,7 @@ func TestChannel(c *gin.Context) {
 		"success":    true,
 		"message":    "",
 		"time":       consumedTime,
-		"test_scope": channelTestScope(channel),
+		"test_scope": channelTestScope(channel, testModel),
 	})
 }
 
@@ -916,8 +916,12 @@ func isMiniMaxVideoTest(channel *model.Channel, testModel string) bool {
 	return channeltest.IsMiniMaxVideoModel(testModel)
 }
 
-func channelTestScope(channel *model.Channel) string {
-	if channel.Type == constant.ChannelTypeDoubaoVideo || isMiniMaxVideoTest(channel, "") {
+func channelTestScope(channel *model.Channel, selectedModel ...string) string {
+	testModel := ""
+	if len(selectedModel) > 0 {
+		testModel = strings.TrimSpace(selectedModel[0])
+	}
+	if channel != nil && (channel.Type == constant.ChannelTypeDoubaoVideo || isMiniMaxVideoTest(channel, testModel)) {
 		return "connection_only"
 	}
 	return "model_request"

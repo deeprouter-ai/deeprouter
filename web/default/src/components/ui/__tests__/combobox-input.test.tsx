@@ -3,7 +3,7 @@ Copyright (C) 2026 DeepRouter
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
 import { useState } from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ComboboxInput } from '../combobox-input'
@@ -71,7 +71,15 @@ describe('ComboboxInput', () => {
     const input = screen.getByRole('combobox')
     await userEvent.click(input)
     // The seeded text is selected on focus, so typing replaces it. ("max"
-    // rather than "mini" — "mini" also matches Gemini.)
+    // rather than "mini" — "mini" also matches Gemini.) The select-all runs
+    // in a requestAnimationFrame after focus; wait for it, or under load the
+    // frame lands after the first keystroke, selects the "m" and the next key
+    // replaces it ("ax" → two matches).
+    await waitFor(() => {
+      const el = input as HTMLInputElement
+      expect(el.selectionStart).toBe(0)
+      expect(el.selectionEnd).toBe(el.value.length)
+    })
     await userEvent.keyboard('max')
 
     const options = screen.getAllByRole('option')

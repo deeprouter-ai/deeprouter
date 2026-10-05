@@ -34,7 +34,12 @@ vi.mock('../../lib', () => ({
   },
 }))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  fixture.channel.type = 54
+  fixture.channel.models = 'doubao-seedance-2-5-260628'
+  fixture.success = true
+})
 
 describe('Seedance connection-test scope', () => {
   it('labels successful connectivity without claiming generation and disables irrelevant controls', async () => {
@@ -45,9 +50,7 @@ describe('Seedance connection-test scope', () => {
     expect(
       screen.getByRole('combobox', { name: 'Endpoint Type' })
     ).toBeDisabled()
-    await userEvent.click(
-      screen.getByRole('button', { name: /^Test$/ })
-    )
+    await userEvent.click(screen.getByRole('button', { name: /^Test$/ }))
     await waitFor(() =>
       expect(
         screen.getByText('Connected — model generation not tested')
@@ -61,12 +64,27 @@ describe('Seedance connection-test scope', () => {
   it('keeps provider authentication failures visible', async () => {
     fixture.success = false
     render(<ChannelTestDialog open onOpenChange={() => {}} />)
-    await userEvent.click(
-      screen.getByRole('button', { name: /^Test$/ })
-    )
+    await userEvent.click(screen.getByRole('button', { name: /^Test$/ }))
     await waitFor(() =>
       expect(screen.getByText('AuthenticationError')).toBeInTheDocument()
     )
     expect(screen.getByText('Failed')).toBeInTheDocument()
+  })
+})
+
+describe('Mixed MiniMax channel test scope', () => {
+  it('shows video connectivity separately from chat success', async () => {
+    fixture.channel.type = 35
+    fixture.channel.models = 'MiniMax-M3,MiniMax-H3'
+    render(<ChannelTestDialog open onOpenChange={() => {}} />)
+    const buttons = screen.getAllByRole('button', { name: /^Test$/ })
+    await userEvent.click(buttons[0])
+    await userEvent.click(screen.getAllByRole('button', { name: /^Test$/ })[1])
+    await waitFor(() => {
+      expect(screen.getByText('Success', { exact: true })).toBeInTheDocument()
+      expect(
+        screen.getByText('Connected — model generation not tested')
+      ).toBeInTheDocument()
+    })
   })
 })

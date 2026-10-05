@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/controller"
+	"github.com/QuantumNous/new-api/internal/discovery"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/static"
@@ -29,11 +30,20 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	// DeepRouter: non-browser GET / (curl, SDKs, AI tools) gets a JSON
+	// pointer to llms.txt; browsers fall through to the web app.
+	router.Use(discovery.RootForAgents())
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
 		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
 			controller.RelayNotFound(c)
+			return
+		}
+		// DeepRouter: machine probes (/openapi.json, /mcp, /.well-known/...)
+		// get a JSON 404 pointing at llms.txt, not the web app with a 200.
+		if discovery.IsAgentProbe(c.Request.URL.Path) {
+			discovery.NotFound(c)
 			return
 		}
 		c.Header("Cache-Control", "no-cache")

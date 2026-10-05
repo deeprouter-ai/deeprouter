@@ -74,3 +74,22 @@ func TestMediaEndpointsCoverElevenLabsAdapterModels(t *testing.T) {
 		}
 	}
 }
+
+func TestMediaEndpointsLabelSeedreamAsImageGeneration(t *testing.T) {
+	chat := []constant.EndpointType{constant.EndpointTypeOpenAI}
+	image := []constant.EndpointType{constant.EndpointTypeImageGeneration}
+	for _, name := range []string{"doubao-seedream-4-0-250828", "doubao-seedream-4-5-251128", "doubao-seedream-5-0-260128", "doubao-seedream-5-0-pro-260628"} {
+		if actual := MediaEndpoints(constant.ChannelTypeVolcEngine, name, chat); !reflect.DeepEqual(actual, image) {
+			t.Fatalf("%s: got %v, want %v", name, actual, image)
+		}
+	}
+	// Volcengine chat models keep their configured label.
+	if actual := MediaEndpoints(constant.ChannelTypeVolcEngine, "doubao-seed-2-1-pro-260628", chat); !reflect.DeepEqual(actual, chat) {
+		t.Fatalf("chat model relabelled: %v", actual)
+	}
+	// The image key purpose now picks Seedream up from the catalog.
+	got := Models("image", []Candidate{{"doubao-seedream-5-0-260128", MediaEndpoints(constant.ChannelTypeVolcEngine, "doubao-seedream-5-0-260128", chat)}})
+	if !reflect.DeepEqual(got, []string{"doubao-seedream-5-0-260128"}) {
+		t.Fatalf("image purpose missed Seedream: %v", got)
+	}
+}

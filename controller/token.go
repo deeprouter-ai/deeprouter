@@ -238,16 +238,16 @@ func AddToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	// The full key is returned exactly once, here: the create flow's
-	// "shown once" success dialog gates on data.key, and without it the
-	// dialog never opened and every create fell back to a toast. Raw key,
-	// same as stored — the frontend adds the "sk-" display prefix.
+	// Reveal only the credential just created for this authenticated owner.
+	// The Simple-mode setup dialog needs it; subsequent reads remain masked.
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data": gin.H{
 			"id":  cleanToken.Id,
-			"key": cleanToken.Key,
+			"key": cleanToken.GetFullKey(),
 		},
 	})
 }

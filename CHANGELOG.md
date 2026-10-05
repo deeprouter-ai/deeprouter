@@ -45,6 +45,8 @@
   - 测试:provider 新增 3 个(最新是视频 key 时默认落到下一把可用 key 且视频 key 不在候选、全是媒体 key 时无候选、原有「跳过停用 key」规则仍成立),卡片新增 1 个(单一候选也显示选择框和说明);撤掉对应修改时均变红。前端 207 全绿。
 
 - **修复:前端类型检查失败——视频页残留一个未使用的变量**(`web/default/src/features/video/index.tsx`):`cdf026a0a` 把话术改为按 key 传可调模型列表后,`const model` 成了孤儿;CI 的 `tsc -b` 开着 `noUnusedLocals` 会报错。本地当时误用了不带 `-b` 的 `tsc`——对这种只有 references 的 tsconfig 它什么都不查,所以没发现。
+- 补齐 AI 文档入口的两处缺口：视频「复制给 AI」话术增加「先 `GET /v1/models` 确认模型及 `video-generation` 接口」一步和 `llms.txt` 链接（此前只有其余四个用途有）；非浏览器访问 `GET /`（curl、SDK、AI 工具）返回指向 `llms.txt` 的 JSON，浏览器仍看到网站，响应带 `Vary: Accept`（`internal/discovery.RootForAgents`）。
+
 
 ## 2026-10-04
 
@@ -67,11 +69,42 @@
   - 修复:`/i/:token?format=env` 新形态——与 UA 无关,固定几行 `KEY='VALUE'`(复用 posixValues),令牌失效时返回机器可读的 `DR_ERROR` 行(仍 HTTP 200,PowerShell irm 会丢弃非 2xx 的响应体);prompt 第 1 步改走 env 形态,加失败分支(见 DR_ERROR 即停,请用户回视频页重新复制)和开头环境防线(无法读写用户本机文件的网页版 AI 必须拒执行并引导);视频页**每次复制都重新铸令牌**;副标题点名「电脑上的 AI 编程工具(Claude Code 或 Codex)」,页脚文案改为「每次复制都是新链接」。
   - 第 3 步测试视频改为**可选**:它花的是真钱,prompt 现在让 AI 先把参数和预计花费报给用户、同意才生成,拒绝就跳过(配置不受影响);结尾向用户讲明「这段话只在最开始粘一次,以后直接说『生成视频』,不用再跑配置」。页面脚注同步(「每个项目只粘一次……跳过测试不花钱」)。
   - 测试:Go 侧 3 个(两种 UA 下 env 响应一致、死令牌 env 形态、二次抓取拿 DR_ERROR——一次性语义),前端 4 个(prompt env 合约+失败分支、环境防线、复制重铸且剪贴板里是新令牌、测试可选+只跑一次话术)。internal/connect 整包与前端 184 测试全绿。
+- 让拿到 key 的 AI 工具找得到文档：`llms.txt` 新增「拿到 key 先查 `/v1/models`」、视频（异步提交→轮询→下载）/图片/配音/转写调用方法和常见报错；`/openapi.json`、`/mcp`、`/.well-known/*` 等探测路径改回 JSON 404 并指向 `llms.txt`（原先返回网页且状态 200）；`/v1` 路径 404 与无效 key 的 401 报错附上文档地址（`internal/discovery`）。修复 Seedream（火山 `doubao-seedream-*`）在模型目录中被标成聊天接口、图片用途 key 拿不到它的问题（`internal/keypurpose`）。
+
+- 新增控制台 Simple 模式（原生手机 App 样式）：非技术用户登录后进入 `/simple`——底部标签栏（首页 / 记录 / 我的）、余额卡片 + 底部弹出充值面板、用途网格（视频/图片/对话/配音/写代码），点用途自动找到或创建该用途的 Simple key 并生成一次性令牌话术「复制给 AI」；可添加到主屏幕（PWA manifest）。模式沿用已存的 persona：casual/未设置 → Simple，dev/team → Advanced；「我的」页与头像菜单可互相切换。修复登录后 casual 用户落到其侧栏隐藏的概览页（`/dashboard` 入口按模式分流）。钱包充值逻辑抽为 `RechargePanel` 供钱包页和 Simple 充值面板共用，不复制支付代码（`features/simple`、`routes/simple`、`features/wallet/components/recharge-panel.tsx`、`lib/auth-guard.ts`；PRD：meta-repo `docs/console-simple-advanced-prd.md`）。
+
+- 修复 Simple Key 编辑模式：用途自动授权的模型集合不再触发 Advanced；手动权限、IP/速率/分组限制仍保留高级编辑。
+
+- 修复 Simple 密钥创建后的引导断点：创建接口向当前用户返回刚创建的 Key 和 ID，禁止响应缓存；增加实际创建、权限快照和后续读取脱敏回归。验收标准见 meta-repo docs/simple-key-acceptance-prd.md。
+
+- 修复混合聊天/视频渠道测试结果的范围标注：按实际所测模型区分连通性与模型请求；补齐 Seedance 重定向、超大响应及错误信息脱敏回归，两个 CI 流程同步执行渠道测试。
 
 - 补齐 2026-08/09 新模型并按官方价修正价格（2026-10-04 核对）。新增：`gpt-6-luna`（$0.10/$0.50）、`claude-opus-5-5`（$4/$20）、`claude-sonnet-5-5`（$2/$10）、`claude-fable-5-1`（$10/$50）、`gemini-3.8-flash`、`gemini-3.5-flash-lite`、`gemini-embedding-2`、`grok-4.7`、`deepseek-flash`（V4.1，DeepSeek 渠道测试模型改为它）、Mistral 带日期型号（`mistral-medium-2604` / `small-2603` / `large-2512` / `codestral-2508`）、`qwen3.8-flash` / `qwen3-coder-flash` / `qwen3-vl-plus`、`glm-5.3-flash` / `flashx`、`doubao-seed-2-1-pro/turbo-260628`、`MiniMax-M2.7-highspeed`；同步各服务商模型列表、种子渠道和两个快速导入。修正：`gpt-5.6`/`-sol` $5/$30→$4/$20（输出 5×）、`gpt-5.6-cyber` 估价→$12.5/$75、`claude-sonnet-5` $3/$15→$2/$10、`MiniMax-M3` $0.6/$2.4→$0.3/$1.2、`deepseek-v4-pro` $0.435/$0.87→$1.32/$3.96（此前少收约 3 倍）、`mistral-medium/small-latest` 改为 Medium 3.5 / Small 4 官方价并修正输出倍率、`qwen3.7-max/plus/flash` 估价改为官方价、`glm-5.3` 标注已核实。
 - 补齐模型导入的官方目录/API 来源、ElevenLabs TTS 模型预设与 seed 模板；所有 key 引导提供鉴权模型发现入口，添加规则/共享 skills 和只读查询工具；修复媒体 curl 示例多余加号。
 
 - 修复快速媒体密钥：Video/Image/Voice 从账号当前可用目录自动授权全部同用途模型，空目录拒绝创建；补齐视频与语音接口标签，媒体使用指引展示实际模型和对应接口，不再套用聊天自动路由（`internal/keypurpose`、`controller/airbotix_key_purpose`、`features/keys`；PRD：meta-repo `docs/quick-media-key-prd.md`）。
+
+
+- 优化快速导入：支持按厂商展开并勾选部分模型，测试模型自动落在所选范围内；阻止空模型提交，部分导入成功后刷新列表并仅保留失败项待重试，避免重复创建渠道（`quick-import-providers-dialog.tsx`、中英文文案、交互回归测试；meta-repo ElevenLabs PRD 更新）。
+- 新增 MiniMax 多媒体快速导入：独立海螺视频（含 H3）、图片和 Speech 2.8 / 2.6 / 02 语音预设，补充图片及按字符语音定价；修复 TTS 输出格式、默认语速和结算字符数；视频测试改用只读任务列表并标明仅验证连通性。
+
+- 新增 ElevenLabs 全部 TTS 模型目录（v4、v4 Turbo、v3、v3 Conversational、Multilingual v2、Flash v2/v2.5、Turbo v2/v2.5）：补齐语音、Dialogue HTTP 与 WebSocket 单次音频转换和新模型字符计费，拒绝停用 v1；新增协议、错误、取消与计费回归测试。v4 Turbo 上游文档存在矛盾，真实账号验证待完成（`relay/channel/elevenlabs`、渠道预设、`setting/ratio_setting`；meta-repo PRD 更新）。
+
+- 新增 OpenAI 最新模型：GPT-6 系列 `gpt-6-astra`（$10/$50）、`gpt-6-sol`（$2/$10）、`gpt-6.1-sol`（$2/$10，缓存 $0.10，2026-09-29 发布），输出统一 5× 计价；图片模型 `gpt-image-2.5-flare` / `gpt-image-2.5-sunburst`（2026-09-08，沿用 gpt-image-2 的 token 价）。gpt-6 复用 gpt-5 的推理参数规则（`max_tokens`→`max_completion_tokens`、去掉 temperature/top_p、system→developer），否则上游 400。同步种子渠道、渠道/模型预设；OpenAI 画图预设移除已下线的 `dall-e-3`。
+
+- 统一渠道测试的图片、语音、embedding、rerank、Responses 端点检测与 DTO，修复 MiniMax 语音/图片和 ElevenLabs 显式端点误测；拒绝未知测试端点及空 HTTP 响应。
+
+- 新增 MiniMax 对话快速导入预设：使用官方国际站 OpenAI 兼容接口和已有定价的 M3 / M2.7 / M2，保留禁用状态及占位密钥；新增 meta-repo `docs/minimax-quick-import-prd.md` 记录范围和验证。
+- 优化添加渠道默认流程：主按钮先打开供应商快速导入预设，弹窗保留“手动配置”入口。
+
+- 修复图片模型渠道测试走错端点：自动模式下 `gpt-image-*` / `dall-e-*` / `imagen-*` / `flux-*` 改测 `/v1/images/generations`（原先发 chat completions，上游返回 404 "only supported in v1/responses"）；`o3-pro` 等 responses-only 模型改测 `/v1/responses`；图片模型识别从 `gpt-image-1` 放宽到 `gpt-image-`，覆盖 `gpt-image-2`。
+
+- 修复 Seedream 渠道自动测试端点与请求类型不一致：统一使用图片请求，2048x2048 测试尺寸并关闭图片测试流式校验；覆盖 4 个型号及显式端点选择。
+
+- 修复 ElevenLabs 默认模型目录与渠道导入预设：移除上游已停用的 `eleven_multilingual_v1`，保留已通过连接测试的三个模型；新增 meta-repo `docs/elevenlabs-model-catalog-prd.md` 记录范围和验证边界。
+
+- 修复 Seedance 视频渠道连接测试：用只读任务列表检查鉴权和连通性，支持渠道代理与启用密钥；标明未验证模型生成，避免批量测试产生付费视频。新增实际测试入口的错误响应回归覆盖。
+
 
 - **修复:建 key 成功弹窗从未弹出过——AddToken 不返回 key**(@sam 验证 P7 弹窗时发现):
   - 前端"密钥只显示一次"成功弹窗(simple-advanced PRD §4.2)的开门条件是 `result.data.key`,而后端 `AddToken` 成功响应只有 `{success:true}`——**弹窗自交付起就是死代码**,所有人建完 key 只见过兜底 toast(老板"建完 key 然后呢"体感的又一块拼图;P7 的 video 分流也被这扇门挡着)。
