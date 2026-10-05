@@ -66,3 +66,49 @@ func TestNotFoundAnswersJSON404WithDocs(t *testing.T) {
 		t.Fatalf("unexpected body: %s", w.Body.String())
 	}
 }
+
+func TestRootForAgents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(RootForAgents())
+	r.GET("/", func(c *gin.Context) { c.String(http.StatusOK, "<html>app</html>") })
+	r.GET("/keys", func(c *gin.Context) { c.String(http.StatusOK, "keys page") })
+
+	get := func(path, accept string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w
+	}
+
+	// curl / SDKs / agents: JSON pointing at the guide.
+	for _, accept := range []string{"", "*/*", "application/json"} {
+		w := get("/", accept)
+		if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
+			t.Fatalf("accept %q: %d %s", accept, w.Code, w.Header().Get("Content-Type"))
+		}
+		var body struct {
+			Docs string `json:"docs"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Docs != GuideURL {
+			t.Fatalf("accept %q: body %s", accept, w.Body.String())
+		}
+		if w.Header().Get("Vary") != "Accept" {
+			t.Fatalf("accept %q: missing Vary: Accept", accept)
+		}
+	}
+
+	// A browser still gets the web app, and caches know the response varies.
+	w := get("/", "text/html,application/xhtml+xml,*/*;q=0.8")
+	if w.Body.String() != "<html>app</html>" || w.Header().Get("Vary") != "Accept" {
+		t.Fatalf("browser got %q (Vary %q)", w.Body.String(), w.Header().Get("Vary"))
+	}
+
+	// Other paths are untouched, whatever the Accept header.
+	if w := get("/keys", "*/*"); w.Body.String() != "keys page" {
+		t.Fatalf("non-root path intercepted: %q", w.Body.String())
+	}
+}
