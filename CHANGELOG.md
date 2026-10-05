@@ -8,6 +8,12 @@
   - 修复:只对「按任务号查询视频」(`RelayModeVideoFetchByID`)跳过白名单——它不带模型,`GetByTaskId` 也只读调用者自己的任务;提交、remix 等照常检查。改动 5 行,注释标明是 DeepRouter 改动,方便上游同步时识别。
   - 测试:新增 `middleware/distributor_task_fetch_test.go`(两条查询路径都必须放行;提交白名单外的模型仍必须 403),修复前红、修复后绿;`TestDistributeTaskFetch` 已接进 `unit-test.yml` 与 `airbotix-internal.yml` 的 middleware 过滤器。本地真机复验:视频 key 查成功、失败两条种子任务均正常返回,提交 `sora-2` 仍 403。
 
+- **修复:视频话术让 AI 等一个永远不会出现的状态**(与上一条同时实测发现):
+  - 话术让 AI 轮询 `GET /v1/video/generations/{任务号}`、等 `status` 变成 `"completed"`。但这个接口对 MiniMax/豆包返回的是通用任务格式——状态嵌在 `data.status`,取值 `SUCCESS`/`FAILURE`;`"completed"`/`"failed"` 只出现在 OpenAI 格式的 `GET /v1/videos/{id}`(两家适配器都实现了转换)。照字面执行的 AI 会一直轮询下去,失败时也等不到 `"failed"`。
+  - 修复:轮询改走 `/v1/videos/{任务号}`,并指明失败原因在 `error.message`;下载本来就是 `/v1/videos/{任务号}/content`,三步现在同属一族接口。
+  - 项目记忆补一行:话术没写到的参数、状态、报错,先读 `{DEEPROUTER_BASE_URL}/llms.txt`(跟着存下的地址走,不写死域名)。
+  - 测试:原「方法层」测试只做子串检查,错误地址照样能过——收紧为「不得出现 `/v1/video/generations/{`」并断言 `error.message`;新增文档指针测试。两条都是修复前红、修复后绿。PRD 流程图里的旧轮询地址在 meta 仓另行修正。
+
 - **视频页加新手说明:什么是密钥、为什么需要、怎么生成视频**(@sam 拍板 2026-10-05,面向非技术用户):
   - 标题下新增一张三栏说明卡(手机上竖排):**什么是密钥(API Key)**——只属于你的一串字符,相当于「通行证 + 付款卡」,AI 工具替你做视频时出示它,费用从余额扣;**为什么需要**——AI 工具自己不会做视频,要替你去请视频 AI,密钥告诉我们是谁在用、记在谁账上,要像密码一样保管;**怎么生成视频**——四步:一键建密钥 → 在电脑上新建一个文件夹(这就是「项目」,配置和做好的视频都放在里面;@sam 复看时指出原稿默认用户懂「项目」)→ 用 Claude Code/Codex 打开这个文件夹,粘贴下方复制的那段话 → 以后每次打开**同一个**文件夹直接说「生成视频：海边日出」(配置写在这个文件夹里,换个文件夹就不认)。按 CLAUDE.md §0 术语禁令,「API Key」只在括号里出现一次。
   - 顺带发现:页面原先传给 `SectionPageLayout.Description` 的那句引导语**从来没显示过**——该布局只渲染 Title/Actions/Content/Breadcrumb,Description 槽位被直接丢弃。新说明卡取代了它,那句死文案及其 i18n 词条一并删除(其他页面的 Description 未动)。

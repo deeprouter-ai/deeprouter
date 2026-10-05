@@ -140,13 +140,14 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 1. 提交：POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<模型>","prompt":"<用户的描述，翻成英文效果更好>"}
    可选字段：\"duration\"（秒）${sizeNote}。响应里的 id 即任务号。
-2. 轮询：每 10 秒 GET {DEEPROUTER_BASE_URL}/v1/video/generations/{任务号}，
-   status 为 "completed" 即完成；为 "failed" 则把错误信息告诉用户并停止。
+2. 轮询：每 10 秒 GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}，
+   status 为 "completed" 即完成；为 "failed" 则把 error.message 告诉用户并停止。
 3. 下载：GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}/content，存为 videos/<日期时间>.mp4。
 4. 交付：尝试用系统默认播放器打开（Windows 用 start，macOS 用 open，Linux 用 xdg-open）；无论是否打开成功，都必须输出文件的绝对路径。
 本密钥可用的模型与大约花费（生成前先告诉用户本次预计花多少；不在此列的模型本密钥调不了，不要试）：
 ${menu}
 默认用 ${model.id}。
+其它细节（参数、状态、报错）以 {DEEPROUTER_BASE_URL}/llms.txt 为准，遇到上面没写到的情况先读它。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
 【第 3 步：验证一次（可选，这一步会花钱）】
@@ -186,13 +187,14 @@ When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_U
 1. Submit: POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<model>","prompt":"<the user's description>"}
    Optional fields: \"duration\" (seconds)${sizeNote}. The id in the response is the task id.
-2. Poll: GET {DEEPROUTER_BASE_URL}/v1/video/generations/{task id} every 10 seconds.
-   Status "completed" means done; on "failed", tell the user the error message and stop.
+2. Poll: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id} every 10 seconds.
+   Status "completed" means done; on "failed", tell the user what error.message says and stop.
 3. Download: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id}/content and save it as videos/<timestamp>.mp4.
 4. Deliver: try to open it with the system default player (start on Windows, open on macOS, xdg-open on Linux); whether or not that works, always print the file's absolute path.
 Models this key can use and their approximate cost (tell the user the expected cost before generating; anything not listed here this key cannot call, so do not try):
 ${menu}
 Default model: ${model.id}.
+For anything not covered here (parameters, statuses, errors), read {DEEPROUTER_BASE_URL}/llms.txt first.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 
 [Step 3: Verify once (optional — this step costs money)]

@@ -82,9 +82,14 @@ describe('buildVideoPrompt (both languages)', () => {
       const prompt = build(language)
       expect(prompt).toContain('/v1/video/generations')
       expect(prompt).toContain('/v1/videos/')
-      // Poll terminal states must match dto.VideoStatus* on the gateway.
+      // Poll terminal states must match dto.VideoStatus* on the gateway, and
+      // only GET /v1/videos/{id} reports those. /v1/video/generations/{id}
+      // answers data.status "SUCCESS"/"FAILURE", so an agent told to wait for
+      // "completed" there polls forever (measured locally 2026-10-05).
+      expect(prompt).not.toContain('/v1/video/generations/{')
       expect(prompt).toContain('"completed"')
       expect(prompt).toContain('"failed"')
+      expect(prompt).toContain('error.message')
       // Player fallback: open on each OS, and always print the absolute path.
       expect(prompt).toContain('start')
       expect(prompt).toContain('xdg-open')
@@ -105,6 +110,14 @@ describe('buildVideoPrompt (both languages)', () => {
     // a fresh session without guessing what was written where.
     expect(build('zh')).toContain('若用户要求移除视频配置')
     expect(build('en')).toContain('asks to remove the video setup')
+  })
+
+  it('memory layer: points at the full reference for what the rules skip', () => {
+    // Relative to the stored base URL, not a hardcoded host: llms.txt is
+    // served on every host the gateway answers on.
+    for (const language of LANGUAGES) {
+      expect(build(language)).toContain('{DEEPROUTER_BASE_URL}/llms.txt')
+    }
   })
 
   it('test run is opt-in (it costs money) and the prompt says it runs once', () => {
