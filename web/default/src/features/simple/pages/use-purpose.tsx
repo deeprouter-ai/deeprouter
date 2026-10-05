@@ -15,14 +15,18 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { issueConnectToken } from '@/features/keys/api'
-import type { PromptLanguage } from '@/features/video/lib/prompt-template'
+import type { ApiKey } from '@/features/keys/types'
+import {
+  videoModelsForKey,
+  type PromptLanguage,
+} from '@/features/video/lib/prompt-template'
 import { buildPurposePrompt } from '../lib/prompt'
 import { ensurePurposeKey } from '../lib/purpose-key'
 import type { SimplePurpose } from '../lib/purposes'
 
 type Phase =
   | { state: 'preparing' }
-  | { state: 'ready'; scriptUrl: string }
+  | { state: 'ready'; scriptUrl: string; key: ApiKey }
   | { state: 'failed'; message: string }
 
 /**
@@ -59,6 +63,7 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           setPhase({
             state: 'ready',
             scriptUrl: `${base}${res.data.script_path}`,
+            key,
           })
         }
       } catch (error) {
@@ -83,6 +88,7 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
             purpose: purpose.id,
             scriptUrl: phase.scriptUrl,
             language,
+            apiKey: phase.key,
           })
         : '',
     [phase, purpose.id, language]
@@ -100,6 +106,13 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
       toast.error(t('Copy failed'))
     }
   }
+
+  // What one clip costs with the model the prompt will use — shown before
+  // the copy so the owner knows the price without reading the prompt.
+  const videoCost =
+    purpose.id === 'video' && phase.state === 'ready'
+      ? videoModelsForKey(phase.key)?.defaultModel.promptLine[language]
+      : undefined
 
   const Icon = purpose.icon
 
@@ -126,6 +139,16 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
         <p className='text-muted-foreground mt-2 max-w-xs text-sm leading-relaxed'>
           {t(
             'Tap the button, then paste into Claude or Codex. Your AI sets itself up and runs a first test.'
+          )}
+        </p>
+        {videoCost && (
+          <p className='bg-card border-border mt-4 rounded-full border px-4 py-1.5 text-sm'>
+            {t('One clip: {{cost}}', { cost: videoCost })}
+          </p>
+        )}
+        <p className='text-muted-foreground mt-4 max-w-xs text-xs leading-relaxed'>
+          {t(
+            'You need Claude Code or Codex (AI assistants that work on a computer). Chat apps like ChatGPT or Doubao on your phone cannot do this step.'
           )}
         </p>
 
@@ -209,18 +232,13 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
                 'A step-by-step guide for every AI app, if you prefer to do it by hand.'
               )}
             </p>
-            <a
-              href={
-                language === 'zh'
-                  ? 'https://deeprouter.co/docs/integrations/GUIDE.zh.md'
-                  : 'https://deeprouter.co/docs/integrations/GUIDE.md'
-              }
-              target='_blank'
-              rel='noreferrer'
+            <Link
+              to='/resources/$slug'
+              params={{ slug: 'GUIDE' }}
               className='text-accent dark:text-foreground mt-2 inline-block font-medium underline-offset-4 hover:underline'
             >
               {t('Open the setup guide')}
-            </a>
+            </Link>
           </div>
         )}
       </footer>

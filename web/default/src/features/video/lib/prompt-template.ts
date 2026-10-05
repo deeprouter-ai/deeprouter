@@ -37,6 +37,8 @@ export interface VideoModelOption {
   price: string
   /** The verification-run line inside the prompt: params + expected cost. */
   testRun: Record<PromptLanguage, string>
+  /** This model's entry in the prompt's "available models" list. */
+  promptLine: Record<PromptLanguage, string>
 }
 
 export const VIDEO_MODELS: VideoModelOption[] = [
@@ -49,6 +51,10 @@ export const VIDEO_MODELS: VideoModelOption[] = [
       zh: '6 秒、768P（约 $0.48）',
       en: '6 seconds, 768P (≈ $0.48)',
     },
+    promptLine: {
+      zh: '4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效',
+      en: '4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included',
+    },
   },
   {
     id: 'doubao-seedance-2-5-260628',
@@ -58,6 +64,10 @@ export const VIDEO_MODELS: VideoModelOption[] = [
     testRun: {
       zh: '默认档（约 $5.4，此模型单条较贵）',
       en: 'default settings (≈ $5.4 — this model is pricey per clip)',
+    },
+    promptLine: {
+      zh: '最长 30 秒、4K、同步音轨，约 $5.4/条',
+      en: 'up to 30 s, 4K, synced audio, ≈ $5.4/clip',
     },
   },
   {
@@ -69,10 +79,73 @@ export const VIDEO_MODELS: VideoModelOption[] = [
       zh: '默认档（约 $1.0）',
       en: 'default settings (≈ $1.0)',
     },
+    promptLine: {
+      zh: '5 秒 1080p，约 $1.0/条',
+      en: '5 s 1080p, ≈ $1.0/clip',
+    },
   },
 ]
 
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
+
+/**
+ * Cheapest first: the model a key's verification run uses when the caller
+ * did not pick one. A first test clip should cost the least it can.
+ */
+const COST_ORDER = [
+  'MiniMax-H3',
+  'doubao-seedance-2-0-260128',
+  'doubao-seedance-2-5-260628',
+]
+
+/** A model the key holds but this page has no price sheet for. */
+function unknownVideoModel(id: string): VideoModelOption {
+  return {
+    id,
+    name: id,
+    traits: '',
+    price: '',
+    testRun: {
+      zh: '默认参数（此模型按条计费，生成前先提醒用户）',
+      en: 'default settings (billed per clip — tell the user before generating)',
+    },
+    promptLine: {
+      zh: '按条计费，价格以 DeepRouter 账单为准',
+      en: 'billed per clip; see the DeepRouter bill for the price',
+    },
+  }
+}
+
+/**
+ * The video models a key can really call, from its exact grant snapshot
+ * (media keys store every granted model in `model_limits`), cheapest known
+ * first. Returns null when the key is unrestricted or holds no video model —
+ * the caller then keeps the static menu.
+ *
+ * Why: the paste-prompt used to name MiniMax-H3 as the default whether or not
+ * the key held it. Production had no MiniMax-H3 channel (2026-10-05), so the
+ * agent's first step refused and the student never got a clip.
+ */
+export function videoModelsForKey(key: {
+  model_limits_enabled?: boolean
+  model_limits?: string | null
+}): { models: VideoModelOption[]; defaultModel: VideoModelOption } | null {
+  if (!key.model_limits_enabled) return null
+  const granted = (key.model_limits ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry && !entry.endsWith('*'))
+  if (granted.length === 0) return null
+  const known = new Map(VIDEO_MODELS.map((m) => [m.id, m]))
+  const rank = (id: string) => {
+    const i = COST_ORDER.indexOf(id)
+    return i === -1 ? COST_ORDER.length : i
+  }
+  const models = [...granted]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((id) => known.get(id) ?? unknownVideoModel(id))
+  return { models, defaultModel: models[0] }
+}
 
 /**
  * Build the paste-prompt: one block of text a student pastes into Claude Code
@@ -91,15 +164,38 @@ export function buildVideoPrompt(options: {
   scriptUrl: string
   model: VideoModelOption
   language: PromptLanguage
+  /** Models listed as available; defaults to the static menu. */
+  models?: VideoModelOption[]
 }): string {
   const { scriptUrl, model, language } = options
+  const models = options.models ?? VIDEO_MODELS
   return language === 'zh'
-    ? buildZhPrompt(scriptUrl, model)
-    : buildEnPrompt(scriptUrl, model)
+    ? buildZhPrompt(scriptUrl, model, models)
+    : buildEnPrompt(scriptUrl, model, models)
+}
+
+function modelList(models: VideoModelOption[], language: PromptLanguage) {
+  const separator = language === 'zh' ? '：' : ': '
+  return models
+    .map((m) => `- ${m.id}${separator}${m.promptLine[language]}`)
+    .join('\n')
+}
+
+// The "size" field only exists for MiniMax-H3; mention it only when the key
+// can use that model, or the agent learns a parameter it can never send.
+function sizeNote(models: VideoModelOption[], language: PromptLanguage) {
+  if (!models.some((m) => m.id === 'MiniMax-H3')) return ''
+  return language === 'zh'
+    ? '；"size"（仅 MiniMax-H3，"768P" 或 "2K"）'
+    : '; "size" (MiniMax-H3 only, "768P" or "2K")'
 }
 
 // buildZhPrompt renders the Chinese prompt (UI locale zh).
-function buildZhPrompt(scriptUrl: string, model: VideoModelOption): string {
+function buildZhPrompt(
+  scriptUrl: string,
+  model: VideoModelOption,
+  models: VideoModelOption[]
+): string {
   return `请严格按下面三步，为当前项目配置「用 DeepRouter 生成视频」的能力。除这些步骤外不要做其他改动。
 
 【第 1 步：取得凭证】
@@ -119,15 +215,13 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 0. 先确认：GET {DEEPROUTER_BASE_URL}/v1/models，要用的模型必须在返回列表里，且它的 supported_endpoint_types 含 video-generation；不在列表里就告诉用户这把密钥没有开通该模型，不要换别的接口去试。
 1. 提交：POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<模型>","prompt":"<用户的描述，翻成英文效果更好>"}
-   可选字段：\"duration\"（秒）；\"size\"（仅 MiniMax-H3，"768P" 或 "2K"）。响应里的 id 即任务号。
+   可选字段："duration"（秒）${sizeNote(models, 'zh')}。响应里的 id 即任务号。
 2. 轮询：每 10 秒 GET {DEEPROUTER_BASE_URL}/v1/video/generations/{任务号}，
    status 为 "completed" 即完成；为 "failed" 则把错误信息告诉用户并停止。
 3. 下载：GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}/content，存为 videos/<日期时间>.mp4。
 4. 交付：尝试用系统默认播放器打开（Windows 用 start，macOS 用 open，Linux 用 xdg-open）；无论是否打开成功，都必须输出文件的绝对路径。
 可选模型与大约花费（生成前先告诉用户本次预计花多少）：
-- MiniMax-H3：4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效
-- doubao-seedance-2-5-260628：最长 30 秒、4K、同步音轨，约 $5.4/条
-- doubao-seedance-2-0-260128：5 秒 1080p，约 $1.0/条
+${modelList(models, 'zh')}
 默认用 ${model.id}。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
@@ -138,7 +232,11 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 }
 
 // buildEnPrompt renders the English prompt (any non-zh UI locale).
-function buildEnPrompt(scriptUrl: string, model: VideoModelOption): string {
+function buildEnPrompt(
+  scriptUrl: string,
+  model: VideoModelOption,
+  models: VideoModelOption[]
+): string {
   return `Follow these three steps exactly to set up "video generation via DeepRouter" for the current project. Do not make any other changes.
 
 [Step 1: Get the credential]
@@ -158,15 +256,13 @@ When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_U
 0. Check first: GET {DEEPROUTER_BASE_URL}/v1/models — the model you will use must be listed and its supported_endpoint_types must include video-generation; if it is not listed, tell the user this key has no access to it instead of trying another endpoint.
 1. Submit: POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<model>","prompt":"<the user's description>"}
-   Optional fields: \"duration\" (seconds); \"size\" (MiniMax-H3 only, "768P" or "2K"). The id in the response is the task id.
+   Optional fields: "duration" (seconds)${sizeNote(models, 'en')}. The id in the response is the task id.
 2. Poll: GET {DEEPROUTER_BASE_URL}/v1/video/generations/{task id} every 10 seconds.
    Status "completed" means done; on "failed", tell the user the error message and stop.
 3. Download: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id}/content and save it as videos/<timestamp>.mp4.
 4. Deliver: try to open it with the system default player (start on Windows, open on macOS, xdg-open on Linux); whether or not that works, always print the file's absolute path.
 Available models and approximate cost (tell the user the expected cost before generating):
-- MiniMax-H3: 4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included
-- doubao-seedance-2-5-260628: up to 30 s, 4K, synced audio, ≈ $5.4/clip
-- doubao-seedance-2-0-260128: 5 s 1080p, ≈ $1.0/clip
+${modelList(models, 'en')}
 Default model: ${model.id}.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 

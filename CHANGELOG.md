@@ -2,6 +2,7 @@
 
 ## 2026-10-05
 
+- 按非技术老板走查修复（PRD：meta-repo `docs/console-simple-advanced-prd.md`）：视频「复制给 AI」默认模型改为这把 key 实际授权的模型（取已知最便宜者），列表只列 key 真有的模型，未知模型不编价格；此前固定为线上不存在的 `MiniMax-H3`，AI 第一步就会拒绝。Simple 视频页显示一条视频的大约价格，并说明需要电脑上的 Claude Code / Codex（手机聊天 App 做不了）；「我想自己配置」改为站内渲染的教程页。欢迎页对「日常使用」改讲 Simple 流程（选用途 → 复制给 AI），不再展示密钥，试用额度与控制台统一货币显示。首页补齐 60 余条中文翻译、地区名翻译，视频模型由不存在的 Kling/即梦改为线上实际提供的 Seedance；注册/登录同意条款去除中英混杂。余额换算参考价改为 Seedance 2.0（约 $1.0/条）。
 - 补齐 AI 文档入口的两处缺口：视频「复制给 AI」话术增加「先 `GET /v1/models` 确认模型及 `video-generation` 接口」一步和 `llms.txt` 链接（此前只有其余四个用途有）；非浏览器访问 `GET /`（curl、SDK、AI 工具）返回指向 `llms.txt` 的 JSON，浏览器仍看到网站，响应带 `Vary: Accept`（`internal/discovery.RootForAgents`）。
 
 ## 2026-10-04
