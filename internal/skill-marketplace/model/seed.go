@@ -71,9 +71,9 @@ var initialSkills = []initialSkill{
 
 // seedInitialSkills writes initialSkills once per database, recorded in
 // skill_seed_runs so that an Admin later deleting or editing a seeded skill
-// is never undone by a restart. An existing slug is left alone. With no root
-// admin yet (fresh install) it skips without recording, so the next start
-// retries.
+// is never undone by a restart. An existing slug is left alone. With no
+// admin user yet (a fresh install before setup) it skips without recording,
+// so the next start retries.
 func seedInitialSkills(db *gorm.DB) error {
 	if err := db.Exec(`CREATE TABLE IF NOT EXISTS skill_seed_runs (
 		seed_key   VARCHAR(100) PRIMARY KEY,
@@ -90,19 +90,20 @@ func seedInitialSkills(db *gorm.DB) error {
 		return nil
 	}
 
-	rootQuery := `SELECT id FROM users WHERE role >= ?`
+	// Root first, else the earliest admin: created_by must name a real user.
+	adminQuery := `SELECT id FROM users WHERE role >= ?`
 	if db.Migrator().HasColumn("users", "deleted_at") {
-		rootQuery += ` AND deleted_at IS NULL`
+		adminQuery += ` AND deleted_at IS NULL`
 	}
-	var rootIDs []int64
-	if err := db.Raw(rootQuery+` ORDER BY id LIMIT 1`, common.RoleRootUser).Scan(&rootIDs).Error; err != nil {
+	var adminIDs []int64
+	if err := db.Raw(adminQuery+` ORDER BY role DESC, id LIMIT 1`, common.RoleAdminUser).Scan(&adminIDs).Error; err != nil {
 		return err
 	}
-	if len(rootIDs) == 0 {
-		common.SysLog("skill marketplace: no root admin yet, initial skills will be seeded on a later start")
+	if len(adminIDs) == 0 {
+		common.SysLog("skill marketplace: no admin user yet, initial skills will be seeded on a later start")
 		return nil
 	}
-	adminID := rootIDs[0]
+	adminID := adminIDs[0]
 
 	return db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()

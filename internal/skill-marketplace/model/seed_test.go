@@ -82,9 +82,22 @@ func TestSeedInitialSkills_RunsOnlyOnce(t *testing.T) {
 	assert.Len(t, seededSlugs(t, db), len(initialSkills)-1)
 }
 
-// No root admin yet (a brand-new install before first login): skip without
-// recording the run, so the next start tries again.
-func TestSeedInitialSkills_NoRootAdminSkipsAndRetriesLater(t *testing.T) {
+// A deployment whose admins are all role 10 (no role-100 root) still seeds,
+// attributed to the earliest admin.
+func TestSeedInitialSkills_FallsBackToEarliestAdmin(t *testing.T) {
+	db := newSeedTestDB(t)
+	require.NoError(t, db.Exec(`INSERT INTO users (id, role) VALUES (1, 1), (4, 10), (9, 10)`).Error)
+
+	require.NoError(t, seedInitialSkills(db))
+
+	var createdBy []int
+	require.NoError(t, db.Raw(`SELECT DISTINCT created_by FROM skills`).Scan(&createdBy).Error)
+	assert.Equal(t, []int{4}, createdBy)
+}
+
+// No admin yet (a brand-new install before setup): skip without recording
+// the run, so the next start tries again.
+func TestSeedInitialSkills_NoAdminSkipsAndRetriesLater(t *testing.T) {
 	db := newSeedTestDB(t)
 	require.NoError(t, db.Exec(`INSERT INTO users (id, role) VALUES (1, 1)`).Error)
 
