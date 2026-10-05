@@ -55,6 +55,10 @@ describe('buildVideoPrompt (both languages)', () => {
     for (const language of LANGUAGES) {
       const prompt = build(language)
       expect(prompt).toContain('/v1/video/generations')
+      // Discover before calling, and know where the full reference lives.
+      expect(prompt).toContain('/v1/models')
+      expect(prompt).toContain('supported_endpoint_types')
+      expect(prompt).toContain('https://deeprouter.co/llms.txt')
       expect(prompt).toContain('/v1/videos/')
       // Poll terminal states must match dto.VideoStatus* on the gateway.
       expect(prompt).toContain('"completed"')

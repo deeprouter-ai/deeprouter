@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-05
+
+- 补齐 AI 文档入口的两处缺口：视频「复制给 AI」话术增加「先 `GET /v1/models` 确认模型及 `video-generation` 接口」一步和 `llms.txt` 链接（此前只有其余四个用途有）；非浏览器访问 `GET /`（curl、SDK、AI 工具）返回指向 `llms.txt` 的 JSON，浏览器仍看到网站，响应带 `Vary: Accept`（`internal/discovery.RootForAgents`）。
+
 ## 2026-10-04
 
 - 让拿到 key 的 AI 工具找得到文档：`llms.txt` 新增「拿到 key 先查 `/v1/models`」、视频（异步提交→轮询→下载）/图片/配音/转写调用方法和常见报错；`/openapi.json`、`/mcp`、`/.well-known/*` 等探测路径改回 JSON 404 并指向 `llms.txt`（原先返回网页且状态 200）；`/v1` 路径 404 与无效 key 的 401 报错附上文档地址（`internal/discovery`）。修复 Seedream（火山 `doubao-seedream-*`）在模型目录中被标成聊天接口、图片用途 key 拿不到它的问题（`internal/keypurpose`）。

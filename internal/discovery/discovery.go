@@ -58,3 +58,38 @@ func NotFound(c *gin.Context) {
 		"docs": GuideURL,
 	})
 }
+
+// RootForAgents answers `GET /` with a JSON pointer to the guide when the
+// caller is not a browser (no text/html in Accept) — curl, SDKs and AI tools
+// exploring `https://api.deeprouter.co/`. Browsers still get the web app.
+// The gateway serves every host from one router, so content negotiation, not
+// the Host header, is what tells the two apart.
+func RootForAgents() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method != http.MethodGet || c.Request.URL.Path != "/" {
+			c.Next()
+			return
+		}
+		c.Header("Vary", "Accept")
+		if wantsHTML(c.GetHeader("Accept")) {
+			c.Next()
+			return
+		}
+		c.Header("Cache-Control", "no-cache")
+		c.AbortWithStatusJSON(http.StatusOK, gin.H{
+			"name": "DeepRouter",
+			"docs": GuideURL,
+			"api": gin.H{
+				"openai":    "/v1",
+				"anthropic": "/v1/messages",
+				"gemini":    "/v1beta",
+				"models":    "/v1/models",
+			},
+			"message": "This is an API host. Send your key as `Authorization: Bearer sk-...`, list what it can use with GET /v1/models, and read " + GuideURL + " for every endpoint.",
+		})
+	}
+}
+
+func wantsHTML(accept string) bool {
+	return strings.Contains(strings.ToLower(accept), "text/html")
+}

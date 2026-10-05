@@ -30,6 +30,9 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.GlobalWebRateLimit())
 	router.Use(middleware.Cache())
+	// DeepRouter: non-browser GET / (curl, SDKs, AI tools) gets a JSON
+	// pointer to llms.txt; browsers fall through to the web app.
+	router.Use(discovery.RootForAgents())
 	router.Use(static.Serve("/", themeFS))
 	router.NoRoute(func(c *gin.Context) {
 		c.Set(middleware.RouteTagKey, "web")
