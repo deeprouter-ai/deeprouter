@@ -4980,6 +4980,7 @@
     "Windows — PowerShell or Terminal": "Windows —— PowerShell 或「终端」",
     "macOS / Linux — Terminal (also WSL and Git Bash)": "macOS / Linux —— 终端（WSL、Git Bash 也用这条）",
     "(limited to some models)": "（仅限部分模型）",
+    "Video, image and voice keys can't be used for one-click setup — the tools it configures only run chat models.": "视频、图像、语音密钥不能用于一键配置——这里配置的工具只能用聊天模型。",
     "Changed your mind later? One line puts everything back:": "以后想撤销？一行命令把所有改动还原：",
     "After it finishes — how to open each tool": "装好之后 —— 每个工具怎么打开",
     "Works right away — nothing to reopen.": "现在就能用,什么都不用重开。",

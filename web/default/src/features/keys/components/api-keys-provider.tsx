@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 import useDialogState from '@/hooks/use-dialog'
 import { fetchTokenKey, fetchTokenKeysBatch, getApiKeys } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES } from '../constants'
+import { isMediaPurpose } from '../lib/media-integration'
 import { type ApiKey, type ApiKeysDialogType } from '../types'
 
 type ApiKeysContextType = {
@@ -94,7 +95,16 @@ export function ApiKeysProvider({ children }: { children: React.ReactNode }) {
         // tool days later, with nothing on this page to explain it.
         const res = await getApiKeys({ p: 1, size: 50 })
         if (cancelled) return
-        const items = res.data?.items ?? []
+        // Media keys (video/image/voice) are not candidates at all: the setup
+        // card configures coding tools, which call chat models, so a media key
+        // fails on its first request. Excluding them here — rather than hiding
+        // the card when the default pick is one — keeps the picker reachable:
+        // the newest key is the default, and after the video page's one-click
+        // create it is a video key, which used to make the whole card (picker
+        // included) vanish even with a usable chat key right below it.
+        const items = (res.data?.items ?? []).filter(
+          (k) => !isMediaPurpose(k.simple_purpose)
+        )
         setSetupKeys(items)
         setSetupKeyId((prev) =>
           prev !== null && items.some((k) => k.id === prev)

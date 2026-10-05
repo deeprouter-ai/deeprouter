@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useMemo, useState } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { Info, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   Select,
@@ -30,7 +30,6 @@ import {
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { chatPresetAction } from '@/features/chat/lib/chat-links'
 import { getConnectTools } from '../api'
-import { isMediaPurpose } from '../lib/media-integration'
 import type { ConnectTool } from '../types'
 import { ApiKeysAskAiSection } from './api-keys-ask-ai-section'
 import { ApiKeysOneClickSection } from './api-keys-one-click-card'
@@ -106,7 +105,8 @@ export function ApiKeysSetupCard() {
 
   // No key yet means there is nothing to configure; the create flow above is
   // the right next step, and a disabled block here would only add noise.
-  if (!setupKey || isMediaPurpose(setupKey.simple_purpose)) return null
+  // Media keys never get here — the provider leaves them out of the candidates.
+  if (!setupKey) return null
   if (tools.length === 0 && appPresets.length === 0) return null
 
   return (
@@ -118,45 +118,54 @@ export function ApiKeysSetupCard() {
         )}
       </p>
 
-      {/* Which key everything below configures. With one key there is nothing
-          to decide, so the row is not shown at all; with several, leaving it
+      {/* Which key everything below configures — always shown, even with a
+          single candidate (@sam, 2026-10-05). Media keys are left out of this
+          list, so someone who just made a video key has to be able to see it is
+          NOT the one being configured, and why. With several keys, leaving it
           implicit would bake whichever sorts first into the command and only
-          surface as a 403 inside some tool days later. */}
-      {setupKeys.length > 1 && (
-        <div className='mt-3'>
-          <label htmlFor='setup-key' className='text-xs font-medium'>
-            {t('Key to set up')}
-          </label>
-          {/* Not a native <select>: its popup is drawn by the OS and ignores
-              the app's theme, so it showed up as a white list on a dark page. */}
-          <Select
-            items={keyOptions}
-            value={String(setupKeyId ?? '')}
-            onValueChange={(v) => v !== null && setSetupKeyId(Number(v))}
+          surface as a 403 inside some tool days later. The card itself hides
+          when there is no candidate at all. */}
+      <div className='mt-3'>
+        <label htmlFor='setup-key' className='text-xs font-medium'>
+          {t('Key to set up')}
+        </label>
+        {/* Not a native <select>: its popup is drawn by the OS and ignores
+            the app's theme, so it showed up as a white list on a dark page. */}
+        <Select
+          items={keyOptions}
+          value={String(setupKeyId ?? '')}
+          onValueChange={(v) => v !== null && setSetupKeyId(Number(v))}
+        >
+          <SelectTrigger
+            id='setup-key'
+            className='mt-1.5 w-full text-xs sm:max-w-sm'
           >
-            <SelectTrigger
-              id='setup-key'
-              className='mt-1.5 w-full text-xs sm:max-w-sm'
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              <SelectGroup>
-                {keyOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className='truncate'>{option.name}</span>
-                    {option.limited && (
-                      <span className='text-muted-foreground ml-1.5'>
-                        {t('(limited to some models)')}
-                      </span>
-                    )}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectGroup>
+              {keyOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  <span className='truncate'>{option.name}</span>
+                  {option.limited && (
+                    <span className='text-muted-foreground ml-1.5'>
+                      {t('(limited to some models)')}
+                    </span>
+                  )}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <p className='text-muted-foreground mt-1.5 flex items-start gap-1.5 text-[11px]'>
+          <Info className='mt-px h-3 w-3 shrink-0' />
+          <span>
+            {t(
+              "Video, image and voice keys can't be used for one-click setup — the tools it configures only run chat models."
+            )}
+          </span>
+        </p>
+      </div>
 
       {/* A key restricted to a few models is a legitimate thing to own and a
           poor thing to configure every tool with — say so here rather than

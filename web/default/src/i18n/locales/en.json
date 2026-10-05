@@ -4980,6 +4980,7 @@
     "Windows — PowerShell or Terminal": "Windows — PowerShell or Terminal",
     "macOS / Linux — Terminal (also WSL and Git Bash)": "macOS / Linux — Terminal (also WSL and Git Bash)",
     "(limited to some models)": "(limited to some models)",
+    "Video, image and voice keys can't be used for one-click setup — the tools it configures only run chat models.": "Video, image and voice keys can't be used for one-click setup — the tools it configures only run chat models.",
     "Changed your mind later? One line puts everything back:": "Changed your mind later? One line puts everything back:",
     "After it finishes — how to open each tool": "After it finishes — how to open each tool",
     "Works right away — nothing to reopen.": "Works right away — nothing to reopen.",
