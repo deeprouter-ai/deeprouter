@@ -326,4 +326,24 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
     expect(copied).toContain('/i/tok_mint2?format=env')
     expect(copied).not.toContain('tok_mint1')
   })
+  it('opens with a plain-language primer: what a key is, why, and how', async () => {
+    // The page's only intro — the layout drops the Description slot, so the
+    // one this page used to pass never rendered. Pinned so a refactor cannot
+    // quietly strip the part first-timers actually read.
+    mockGetApiKeys.mockResolvedValue(keysResponse([]))
+
+    render(<VideoPage />)
+
+    expect(
+      await screen.findByText('What is a key (API Key)?')
+    ).toBeInTheDocument()
+    expect(screen.getByText('Why do I need one?')).toBeInTheDocument()
+    expect(screen.getByText('How do I make a video?')).toBeInTheDocument()
+    // "Project" is jargon to this audience: the steps must say it is a folder
+    // they make themselves, and that next time they reopen the same one —
+    // the setup lives in it, so any other folder knows nothing.
+    expect(screen.getByText(/That folder is your "project"/)).toBeInTheDocument()
+    expect(screen.getByText(/open the same folder/)).toBeInTheDocument()
+  })
+
 })

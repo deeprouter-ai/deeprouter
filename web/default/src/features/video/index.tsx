@@ -258,13 +258,71 @@ export function VideoPage() {
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Make videos')}</SectionPageLayout.Title>
-      <SectionPageLayout.Description>
-        {t(
-          'Copy one block of text, paste it into an AI coding tool on your computer (Claude Code or Codex) — it sets itself up and makes your first clip. After that, just say "生成视频".'
-        )}
-      </SectionPageLayout.Description>
       <SectionPageLayout.Content>
         <div className='space-y-6'>
+          {/* Plain-language primer for people who have never held a key
+              (@sam, 2026-10-05). It is the page's only intro: the layout
+              drops the Description slot, so the one this page used to pass
+              was never rendered. "API Key" is named once, in parentheses,
+              per the jargon rule (CLAUDE.md §0). */}
+          <section className='bg-card rounded-[7px] border p-4'>
+            <h3 className='text-sm font-semibold'>
+              {t('New here? The short version')}
+            </h3>
+            <div className='mt-3 grid gap-4 sm:grid-cols-3'>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('What is a key (API Key)?')}
+                </p>
+                <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                  {t(
+                    'A private string of characters that is yours alone — a pass and a payment card in one. Your AI tool shows it when it asks for a video, and the cost comes out of your balance.'
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('Why do I need one?')}
+                </p>
+                <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                  {t(
+                    "Your AI tool can't make videos on its own — it asks a video AI to do it for you. The key tells us who is asking and whose balance to charge. Keep it private, like a password."
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('How do I make a video?')}
+                </p>
+                <ol className='text-muted-foreground mt-1 list-decimal space-y-0.5 ps-4 text-xs leading-relaxed'>
+                  <li>
+                    {t(
+                      'Create a video key below (skip if you already have one).'
+                    )}
+                  </li>
+                  {/* "Project" means a folder to these tools, and it is where
+                      the setup lives — so the user has to know to make one,
+                      and to reopen the SAME one next time (@sam, 2026-10-05). */}
+                  <li>
+                    {t(
+                      'Make a new folder on your computer, e.g. "My videos" on your desktop. That folder is your "project" — the setup and every video you make live inside it.'
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      'Open that folder in Claude Code or Codex, paste the text you copy below, and press Enter — it sets itself up.'
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      'Next time, open the same folder in Claude Code or Codex and just ask, e.g. "make a video of a sunrise over the sea". The clip is saved in that folder.'
+                    )}
+                  </li>
+                </ol>
+              </div>
+            </div>
+          </section>
+
           {/* Step 1 — the video key. One click mints a Simple video-purpose
               key (backend derives a whitelist covering every video model);
               below it, every existing video-capable key, keys-page style, so
