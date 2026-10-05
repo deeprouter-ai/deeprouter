@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-05
+
+- **修复:前端类型检查失败——视频页残留一个未使用的变量**(`web/default/src/features/video/index.tsx`):`cdf026a0a` 把话术改为按 key 传可调模型列表后,`const model` 成了孤儿;CI 的 `tsc -b` 开着 `noUnusedLocals` 会报错。本地当时误用了不带 `-b` 的 `tsc`——对这种只有 references 的 tsconfig 它什么都不查,所以没发现。
+
 ## 2026-10-04
 
 - **对齐快速媒体密钥:视频页不再要求「三个模型全可调」,话术只教这把 key 真能调的模型**(与 Lightman 的 `internal/keypurpose` 合并后立刻暴露的两处打架):

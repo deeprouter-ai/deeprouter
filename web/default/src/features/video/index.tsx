@@ -38,7 +38,6 @@ import type { ApiKey } from '@/features/keys/types'
 import { useStatus } from '@/hooks/use-status'
 import {
   buildVideoPrompt,
-  DEFAULT_VIDEO_MODEL,
   VIDEO_MODELS,
   type PromptLanguage,
 } from './lib/prompt-template'
@@ -129,7 +128,6 @@ export function VideoPage() {
       apiKey ? VIDEO_MODELS.filter((m) => keyPermitsModel(apiKey, m.id)) : [],
     [apiKey]
   )
-  const model = allowedModels[0] ?? DEFAULT_VIDEO_MODEL
 
   // Mint a one-time redeem link for the bound key. The tools list only
   // matters to someone who *runs* the redeemed script; the prompt has the
