@@ -2,7 +2,8 @@
 
 > One API key for many models (Claude, Qwen, GLM, DeepSeek, Kimi and more) behind one
 > OpenAI-, Anthropic- and Gemini-compatible gateway. Point the tool you already use at
-> DeepRouter by changing two things: a base URL and an API key.
+> DeepRouter by changing two things: a base URL and an API key. The same key can also
+> make videos, images and speech when it has been granted those models.
 
 ## Read this first
 
@@ -17,9 +18,41 @@ watch the three tools that append the version segment themselves:
 Adding the version segment when the tool already does gives a doubled path and a
 `404 Invalid URL` whose message does not name the cause.
 
+`deeprouter.co` and `api.deeprouter.co` are the same gateway: a base URL on either host
+works.
+
+Which models a key can call: `GET https://api.deeprouter.co/v1/models` with that key
+(`Authorization: Bearer sk-...`). That list is the source of truth: a model not on it
+will not work with this key, whatever a provider's own docs say.
+
 Every guide below starts with a machine-readable `Facts for AI assistants` block
 holding the exact base URL, endpoint, auth header and model for that tool.
 Append `.zh.md` instead of `.md` for the Chinese version of any guide.
+
+## Video, images and speech
+
+Same key, same `Authorization: Bearer sk-...` header, base `https://api.deeprouter.co/v1`.
+Every generation is billed to the key's account. Pick the model from `GET /v1/models`:
+each entry's `supported_endpoint_types` names the endpoint it takes.
+
+- `video-generation` -> POST /v1/video/generations (JSON body)
+- `openai-video` -> POST /v1/videos (OpenAI Videos API)
+- `image-generation` -> POST /v1/images/generations (OpenAI Images API)
+- `audio-speech` -> POST /v1/audio/speech (OpenAI speech API; the response body is the audio)
+- `audio-transcription` -> POST /v1/audio/transcriptions (OpenAI transcription API, multipart `file`)
+
+Video is asynchronous - submit, poll, download:
+
+1. Submit `{"model":"<id>","prompt":"..."}` (optional `"duration"` in seconds). The
+   response is `{"id":"task_...","status":"queued",...}`; keep the `id`.
+2. Poll `GET /v1/videos/{id}` every ~10 s until `status` is `completed` or `failed`
+   (until then it reads `unknown`, `queued` or `in_progress`); on `failed` the reason is
+   in `error.message`. Poll this path, not `/v1/video/generations/{id}`, which reports
+   different values (`SUCCESS`, `FAILURE`).
+3. Once `completed`: `GET /v1/videos/{id}/content` returns the video file (MP4).
+
+Speech: `voice` is optional for ElevenLabs (`eleven_*`) and MiniMax (`speech-*`) models,
+which fall back to a default voice; OpenAI `tts-*` models need one, e.g. `"voice":"alloy"`.
 
 ## Guides
 

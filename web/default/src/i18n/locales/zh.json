@@ -5161,7 +5161,10 @@
     "Choose models ({{selected}}/{{total}})": "选择模型（{{selected}}/{{total}}）",
     "Models for {{provider}}": "{{provider}} 的模型",
     "Clear models": "清空模型",
-    "Pick at least one model for each selected provider": "每个已选厂商至少选择一个模型"
+    "Pick at least one model for each selected provider": "每个已选厂商至少选择一个模型",
+    "For your AI assistant": "交给 AI 助手",
+    "I use DeepRouter, an AI API gateway. Read {{docsUrl}} before calling it: it explains chat, video, image and speech requests. Base URL: {{baseUrl}}. API key: {{apiKey}}. List the models this key can call with GET {{baseUrl}}/models. Keep the key in an environment variable or .env and never print it.": "我在用 DeepRouter（一个 AI 接口网关）。调用前请先读 {{docsUrl}}，里面写了聊天、视频、图像、语音的调用方法。Base URL：{{baseUrl}}；API Key：{{apiKey}}。这把密钥能调用哪些模型，用 GET {{baseUrl}}/models 查。密钥请存进环境变量或 .env，不要明文输出。",
+    "Contains the key — only paste it into tools you trust.": "含密钥，只发给你信任的工具。"
   },
   "Use this key in a tool that supports video generation. Submit a video task, then check its status until the video is ready.": "把密钥粘贴到支持视频生成的工具中。提交视频任务后，查询进度，直到视频生成完成。",
   "Use this key in a tool that supports image generation. Choose one of the included models below.": "把密钥粘贴到支持图片生成的工具中，再选择下方已包含的模型。",

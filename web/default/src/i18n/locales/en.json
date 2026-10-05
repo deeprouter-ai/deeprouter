@@ -5161,7 +5161,10 @@
     "Choose models ({{selected}}/{{total}})": "Choose models ({{selected}}/{{total}})",
     "Models for {{provider}}": "Models for {{provider}}",
     "Clear models": "Clear models",
-    "Pick at least one model for each selected provider": "Pick at least one model for each selected provider"
+    "Pick at least one model for each selected provider": "Pick at least one model for each selected provider",
+    "For your AI assistant": "For your AI assistant",
+    "I use DeepRouter, an AI API gateway. Read {{docsUrl}} before calling it: it explains chat, video, image and speech requests. Base URL: {{baseUrl}}. API key: {{apiKey}}. List the models this key can call with GET {{baseUrl}}/models. Keep the key in an environment variable or .env and never print it.": "I use DeepRouter, an AI API gateway. Read {{docsUrl}} before calling it: it explains chat, video, image and speech requests. Base URL: {{baseUrl}}. API key: {{apiKey}}. List the models this key can call with GET {{baseUrl}}/models. Keep the key in an environment variable or .env and never print it.",
+    "Contains the key — only paste it into tools you trust.": "Contains the key — only paste it into tools you trust."
   },
   "Use this key in a tool that supports video generation. Submit a video task, then check its status until the video is ready.": "Use this key in a tool that supports video generation. Submit a video task, then check its status until the video is ready.",
   "Use this key in a tool that supports image generation. Choose one of the included models below.": "Use this key in a tool that supports image generation. Choose one of the included models below.",

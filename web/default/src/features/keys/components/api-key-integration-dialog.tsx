@@ -62,6 +62,14 @@ const LANGUAGES: Array<{ id: IntegrationLanguage; label: string }> = [
 
 const TOTAL_STEPS = 3
 
+/** Masks a key like the keys table does: first 4 + ********** + last 4. */
+function maskKey(key: string): string {
+  const prefix = key.startsWith('sk-') ? 'sk-' : ''
+  const bare = key.slice(prefix.length)
+  if (bare.length <= 8) return prefix + '*'.repeat(bare.length)
+  return `${prefix}${bare.slice(0, 4)}**********${bare.slice(-4)}`
+}
+
 /**
  * Step-by-step "how do I actually use my key" wizard. Closes the gap where a
  * customer creates a key and has no idea what code to write — the success
@@ -86,6 +94,12 @@ export function ApiKeyIntegrationDialog({
   const model = modelNameForPurpose(purpose)
   const hasRealKey = Boolean(apiKey)
   const snippets = buildIntegrationSnippets({ baseUrl, model, apiKey })
+  // The guide shows the key masked everywhere (screen sharing, shoulder
+  // surfing); every copy button still copies the real value.
+  const shownKey = apiKey ? maskKey(apiKey) : undefined
+  const shownSnippets = apiKey
+    ? buildIntegrationSnippets({ baseUrl, model, apiKey: shownKey })
+    : snippets
 
   // Reset the wizard on close so the next open starts at step 1 — avoids a
   // setState-in-effect on `open`.
@@ -98,7 +112,7 @@ export function ApiKeyIntegrationDialog({
   if (isMediaPurpose(purpose)) {
     return (
       <Dialog open={open} onOpenChange={(value) => !value && handleClose()}>
-        <DialogContent className='max-h-[85dvh] !max-w-lg overflow-y-auto sm:!max-w-xl'>
+        <DialogContent className='max-h-[calc(100dvh-2rem)] !max-w-lg overflow-y-auto sm:!max-w-xl'>
           <DialogHeader>
             <DialogTitle>{t('Setup guide')}</DialogTitle>
             <DialogDescription>
@@ -110,9 +124,15 @@ export function ApiKeyIntegrationDialog({
           <CopyField
             label={t('API key')}
             value={apiKey ?? API_KEY_PLACEHOLDER}
+            display={shownKey}
             copyable={hasRealKey}
             secret
           />
+          {/* Video keys skip this: their path is the video page's one-time
+           * paste-prompt. Image and voice keys have no such prompt. */}
+          {apiKey && purpose !== 'video' && (
+            <AiHandoffField apiKey={apiKey} baseUrl={baseUrl} />
+          )}
           <MediaKeySetup apiKey={apiKey} purpose={purpose!} />
           <DialogFooter>
             <Button onClick={handleClose}>{t('Done')}</Button>
@@ -124,7 +144,7 @@ export function ApiKeyIntegrationDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className='max-h-[85dvh] !max-w-lg overflow-y-auto sm:!max-w-xl'>
+      <DialogContent className='max-h-[calc(100dvh-2rem)] !max-w-lg overflow-y-auto sm:!max-w-xl'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {t('Setup guide')}
@@ -145,12 +165,15 @@ export function ApiKeyIntegrationDialog({
 
         <StepDots step={step} />
 
-        <div className='min-h-[18rem]'>
+        {/* min-w-0: a grid item never shrinks below its content's min width,
+         * so the long one-line handoff would widen the whole dialog. */}
+        <div className='min-h-[18rem] min-w-0'>
           {step === 1 && (
             <div className='space-y-3'>
               <CopyField
                 label={t('API key')}
                 value={apiKey ?? API_KEY_PLACEHOLDER}
+                display={shownKey}
                 copyable={hasRealKey}
                 secret
                 hint={
@@ -161,16 +184,21 @@ export function ApiKeyIntegrationDialog({
                       )
                 }
               />
+              {apiKey && <AiHandoffField apiKey={apiKey} baseUrl={baseUrl} />}
               <KeyModelDiscovery apiKey={apiKey} />
-              <CopyField label={t('Base URL')} value={baseUrl} copyable />
-              <CopyField
-                label={t('Model name')}
-                value={model}
-                copyable
-                hint={t(
-                  'Use this model name. We route it to the best underlying model for this key.'
-                )}
-              />
+              {/* Side by side on wider screens so step 1 fits without
+               * scrolling; they are filled in together anyway. */}
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <CopyField label={t('Base URL')} value={baseUrl} copyable />
+                <CopyField
+                  label={t('Model name')}
+                  value={model}
+                  copyable
+                  hint={t(
+                    'Use this model name. We route it to the best underlying model for this key.'
+                  )}
+                />
+              </div>
             </div>
           )}
 
@@ -192,7 +220,10 @@ export function ApiKeyIntegrationDialog({
 
               {LANGUAGES.map((l) => (
                 <TabsContent key={l.id} value={l.id} className='mt-3'>
-                  <CodeBlock code={snippets[l.id]} />
+                  <CodeBlock
+                    code={snippets[l.id]}
+                    display={shownSnippets[l.id]}
+                  />
                   {!hasRealKey && (
                     <p className='text-muted-foreground mt-2 text-[11px]'>
                       {t('Replace')}{' '}
@@ -274,6 +305,35 @@ export function ApiKeyIntegrationDialog({
   )
 }
 
+/**
+ * One sentence to paste into an AI assistant. A bare key tells an AI nothing
+ * (it looks like any sk- key), so the docs and base URL travel with it.
+ */
+function AiHandoffField({
+  apiKey,
+  baseUrl,
+}: {
+  apiKey: string
+  baseUrl: string
+}) {
+  const { t } = useTranslation()
+  // Agent-readable docs index, served on the same host as the gateway.
+  const docsUrl = baseUrl.replace(/\/v1$/, '/llms.txt')
+  const sentence = (key: string) =>
+    t(
+      'I use DeepRouter, an AI API gateway. Read {{docsUrl}} before calling it: it explains chat, video, image and speech requests. Base URL: {{baseUrl}}. API key: {{apiKey}}. List the models this key can call with GET {{baseUrl}}/models. Keep the key in an environment variable or .env and never print it.',
+      { docsUrl, baseUrl, apiKey: key }
+    )
+  return (
+    <CopyField
+      label={t('For your AI assistant')}
+      value={sentence(apiKey)}
+      display={sentence(maskKey(apiKey))}
+      hint={t('Contains the key — only paste it into tools you trust.')}
+    />
+  )
+}
+
 function StepDots({ step }: { step: number }) {
   return (
     <div className='flex items-center gap-1.5'>
@@ -290,7 +350,14 @@ function StepDots({ step }: { step: number }) {
   )
 }
 
-function CodeBlock({ code }: { code: string }) {
+function CodeBlock({
+  code,
+  display,
+}: {
+  code: string
+  /** Shown instead of code (e.g. with a masked key); copying takes code. */
+  display?: string
+}) {
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const handleCopy = async () => {
@@ -318,7 +385,7 @@ function CodeBlock({ code }: { code: string }) {
         )}
       </Button>
       <pre className='overflow-x-auto p-3 pr-12 text-[11px] leading-relaxed'>
-        <code className='font-mono'>{code}</code>
+        <code className='font-mono'>{display ?? code}</code>
       </pre>
     </div>
   )
@@ -327,12 +394,15 @@ function CodeBlock({ code }: { code: string }) {
 function CopyField({
   label,
   value,
+  display,
   hint,
   secret,
   copyable = true,
 }: {
   label: string
   value: string
+  /** Shown (and in the tooltip) instead of value, e.g. a masked key. */
+  display?: string
   hint?: string
   secret?: boolean
   copyable?: boolean
@@ -349,7 +419,8 @@ function CopyField({
     }
   }
   return (
-    <div className='space-y-1'>
+    // min-w-0: in the media branch this field is itself a grid item.
+    <div className='min-w-0 space-y-1'>
       <span className='text-foreground text-xs font-medium'>{label}</span>
       <div className='border-border bg-muted/30 flex items-center gap-2 rounded-md border px-3 py-2'>
         <code
@@ -357,9 +428,9 @@ function CopyField({
             'flex-1 truncate font-mono text-xs',
             secret && 'tracking-wide'
           )}
-          title={value}
+          title={display ?? value}
         >
-          {value || '—'}
+          {(display ?? value) || '—'}
         </code>
         {copyable && (
           <Button
