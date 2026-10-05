@@ -20,61 +20,155 @@ For commercial licensing, please contact support@quantumnous.com
 export type PromptLanguage = 'zh' | 'en'
 
 /**
- * One model the video flow can write instructions for. The page renders no
- * model menu — the menu lives inside the prompt (`menuLine`, prices from the
- * Video First Wave PRD §4 = the gateway's seeded price table) and users switch
- * by telling the AI. Both strings carry their own languages instead of going
- * through i18next, because they are embedded in the prompt text.
+ * One video model the flow can write instructions for. The Simple console
+ * renders these as a picker (`name` / `traits` / `price`); the paste-prompt
+ * embeds `promptLine` as the in-prompt model list and `testRun` as the
+ * verification-run cost, so those two carry both languages themselves
+ * instead of going through i18next.
+ *
+ * Prices are the per-clip figures from the Video First Wave PRD §4 — the same
+ * numbers P1 seeded into the gateway's price table (margin pending PRD Q3, so
+ * recalibrate here when that lands). `traits` / `price` are English i18n
+ * source strings; zh lives in the locale file like every other UI string.
  */
 export interface VideoModelOption {
   id: string
+  name: string
+  traits: string
+  price: string
   /** The verification-run line inside the prompt: params + expected cost. */
   testRun: Record<PromptLanguage, string>
-  /** The alternatives-menu line written into the project-memory rules. */
-  menuLine: Record<PromptLanguage, string>
+  /** This model's entry in the prompt's "available models" list. */
+  promptLine: Record<PromptLanguage, string>
 }
 
 // 🔴 Ordered cheapest first. A key is only granted the video models the
-// account actually has enabled (internal/keypurpose), so the caller filters
-// this list down to what the bound key may call and the first survivor becomes
+// account actually has enabled (internal/keypurpose), so callers narrow this
+// list down to what the bound key may call and the first survivor becomes
 // the default — never a hardcoded one the key would get a 403 on.
 export const VIDEO_MODELS: VideoModelOption[] = [
   {
     id: 'MiniMax-H3',
+    name: 'MiniMax-H3',
+    traits: '4–15 s · up to 2K · sound included',
+    price: '6 s ≈ $0.48 (768P) / $0.78 (2K)',
     testRun: {
       zh: '6 秒、768P（约 $0.48）',
       en: '6 seconds, 768P (≈ $0.48)',
     },
-    menuLine: {
-      zh: 'MiniMax-H3：4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效',
-      en: 'MiniMax-H3: 4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included',
+    promptLine: {
+      zh: '4–15 秒，768P（$0.08/秒）或 2K（$0.13/秒），自带音效',
+      en: '4–15 s, 768P ($0.08/s) or 2K ($0.13/s), sound included',
     },
   },
   {
     id: 'doubao-seedance-2-0-260128',
+    name: 'Seedance 2.0',
+    traits: '5 s · 1080p',
+    price: '≈ $1.0 / clip',
     testRun: {
       zh: '默认档（约 $1.0）',
       en: 'default settings (≈ $1.0)',
     },
-    menuLine: {
-      zh: 'doubao-seedance-2-0-260128：5 秒 1080p，约 $1.0/条',
-      en: 'doubao-seedance-2-0-260128: 5 s 1080p, ≈ $1.0/clip',
+    promptLine: {
+      zh: '5 秒 1080p，约 $1.0/条',
+      en: '5 s 1080p, ≈ $1.0/clip',
     },
   },
   {
     id: 'doubao-seedance-2-5-260628',
+    name: 'Seedance 2.5',
+    traits: 'up to 30 s · 4K · synced sound',
+    price: '≈ $5.4 / clip',
     testRun: {
       zh: '默认档（约 $5.4，此模型单条较贵）',
       en: 'default settings (≈ $5.4 — this model is pricey per clip)',
     },
-    menuLine: {
-      zh: 'doubao-seedance-2-5-260628：最长 30 秒、4K、同步音轨，约 $5.4/条',
-      en: 'doubao-seedance-2-5-260628: up to 30 s, 4K, synced audio, ≈ $5.4/clip',
+    promptLine: {
+      zh: '最长 30 秒、4K、同步音轨，约 $5.4/条',
+      en: 'up to 30 s, 4K, synced audio, ≈ $5.4/clip',
     },
   },
 ]
 
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
+
+/**
+ * Cheapest first: the model a key's verification run uses when the caller
+ * did not pick one. A first test clip should cost the least it can.
+ */
+const COST_ORDER = [
+  'MiniMax-H3',
+  'doubao-seedance-2-0-260128',
+  'doubao-seedance-2-5-260628',
+]
+
+/**
+ * A readable label for vendor ids shown to non-technical owners:
+ * `doubao-seedance-1-0-lite-t2v-250428` → "Seedance 1.0 Lite T2V". Ids that do
+ * not follow the Seedance pattern are shown as they are.
+ */
+export function friendlyVideoName(id: string): string {
+  const m = /^doubao-seedance-(\d+)-(\d+)((?:-[a-z0-9]+)*?)-\d{6}$/.exec(id)
+  if (!m) return id
+  const variant = m[3]
+    .split('-')
+    .filter(Boolean)
+    .map((w) =>
+      /^[ti]2v$/.test(w) ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)
+    )
+    .join(' ')
+  return `Seedance ${m[1]}.${m[2]}${variant ? ` ${variant}` : ''}`
+}
+
+/** A model the key holds but this page has no price sheet for. */
+function unknownVideoModel(id: string): VideoModelOption {
+  return {
+    id,
+    name: friendlyVideoName(id),
+    traits: '',
+    price: '',
+    testRun: {
+      zh: '默认参数（此模型按条计费，生成前先提醒用户）',
+      en: 'default settings (billed per clip — tell the user before generating)',
+    },
+    promptLine: {
+      zh: '按条计费，价格以 DeepRouter 账单为准',
+      en: 'billed per clip; see the DeepRouter bill for the price',
+    },
+  }
+}
+
+/**
+ * The video models a key can really call, from its exact grant snapshot
+ * (media keys store every granted model in `model_limits`), cheapest known
+ * first. Returns null when the key is unrestricted or holds no video model —
+ * the caller then keeps the static menu.
+ *
+ * Why: the paste-prompt used to name MiniMax-H3 as the default whether or not
+ * the key held it. Production had no MiniMax-H3 channel (2026-10-05), so the
+ * agent's first step refused and the student never got a clip.
+ */
+export function videoModelsForKey(key: {
+  model_limits_enabled?: boolean
+  model_limits?: string | null
+}): { models: VideoModelOption[]; defaultModel: VideoModelOption } | null {
+  if (!key.model_limits_enabled) return null
+  const granted = (key.model_limits ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry && !entry.endsWith('*'))
+  if (granted.length === 0) return null
+  const known = new Map(VIDEO_MODELS.map((m) => [m.id, m]))
+  const rank = (id: string) => {
+    const i = COST_ORDER.indexOf(id)
+    return i === -1 ? COST_ORDER.length : i
+  }
+  const models = [...granted]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((id) => known.get(id) ?? unknownVideoModel(id))
+  return { models, defaultModel: models[0] }
+}
 
 /**
  * Build the paste-prompt: one block of text a student pastes into Claude Code
@@ -92,33 +186,44 @@ export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
 export function buildVideoPrompt(options: {
   /** Full redeem URL (`{base}/i/{token}`) minted for the current user. */
   scriptUrl: string
-  /**
-   * The models the bound key may actually call, cheapest first. The first one
-   * becomes the default and the test run; the rest are the in-prompt menu.
-   * Empty falls back to the full list, which only happens with no key bound.
-   */
-  models: VideoModelOption[]
+  /** The default and test-run model; one of `models`. */
+  model: VideoModelOption
   language: PromptLanguage
+  /**
+   * Models the bound key may actually call, cheapest first — they become the
+   * in-prompt menu. Defaults to the static menu (no key bound / unrestricted).
+   */
+  models?: VideoModelOption[]
 }): string {
-  const { scriptUrl, language } = options
-  const models = options.models.length > 0 ? options.models : VIDEO_MODELS
+  const { scriptUrl, model, language } = options
+  const models = options.models ?? VIDEO_MODELS
   return language === 'zh'
-    ? buildZhPrompt(scriptUrl, models)
-    : buildEnPrompt(scriptUrl, models)
+    ? buildZhPrompt(scriptUrl, model, models)
+    : buildEnPrompt(scriptUrl, model, models)
+}
+
+function modelList(models: VideoModelOption[], language: PromptLanguage) {
+  const separator = language === 'zh' ? '：' : ': '
+  return models
+    .map((m) => `- ${m.id}${separator}${m.promptLine[language]}`)
+    .join('\n')
+}
+
+// The "size" field only exists for MiniMax-H3; mention it only when the key
+// can use that model, or the agent learns a parameter it can never send.
+function sizeNote(models: VideoModelOption[], language: PromptLanguage) {
+  if (!models.some((m) => m.id === 'MiniMax-H3')) return ''
+  return language === 'zh'
+    ? '；"size"（仅 MiniMax-H3，"768P" 或 "2K"）'
+    : '; "size" (MiniMax-H3 only, "768P" or "2K")'
 }
 
 // buildZhPrompt renders the Chinese prompt (UI locale zh).
 function buildZhPrompt(
   scriptUrl: string,
+  model: VideoModelOption,
   models: VideoModelOption[]
 ): string {
-  const model = models[0]
-  const menu = models.map((m) => `- ${m.menuLine.zh}`).join('\n')
-  // `size` is MiniMax-only; naming it for a key that cannot call MiniMax
-  // invites the agent to send a field the chosen model rejects.
-  const sizeNote = models.some((m) => m.id === 'MiniMax-H3')
-    ? `；\"size\"（仅 MiniMax-H3，"768P" 或 "2K"）`
-    : ''
   return `请严格按下面三步，为当前项目配置「用 DeepRouter 生成视频」的能力。除这些步骤外不要做其他改动。
 前提：这三步必须在用户的电脑上、当前项目目录里执行。如果你无法读写用户电脑上的文件（比如你是网页版 AI，没有终端），不要执行任何步骤，直接告诉用户：请在电脑上打开 Claude Code 或 Codex 这类 AI 编程工具，把这段话粘贴进去。
 
@@ -140,13 +245,13 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 0. 先确认：GET {DEEPROUTER_BASE_URL}/v1/models，要用的模型必须在返回列表里，且它的 supported_endpoint_types 含 video-generation；不在列表里就告诉用户这把密钥没有开通该模型，不要换别的接口去试。
 1. 提交：POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<模型>","prompt":"<用户的描述，翻成英文效果更好>"}
-   可选字段：\"duration\"（秒）${sizeNote}。响应里的 id 即任务号。
+   可选字段："duration"（秒）${sizeNote(models, 'zh')}。响应里的 id 即任务号。
 2. 轮询：每 10 秒 GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}，
    status 为 "completed" 即完成；为 "failed" 则把 error.message 告诉用户并停止。
 3. 下载：GET {DEEPROUTER_BASE_URL}/v1/videos/{任务号}/content，存为 videos/<日期时间>.mp4。
 4. 交付：尝试用系统默认播放器打开（Windows 用 start，macOS 用 open，Linux 用 xdg-open）；无论是否打开成功，都必须输出文件的绝对路径。
 本密钥可用的模型与大约花费（生成前先告诉用户本次预计花多少；不在此列的模型本密钥调不了，不要试）：
-${menu}
+${modelList(models, 'zh')}
 默认用 ${model.id}。
 若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
 
@@ -159,13 +264,9 @@ ${menu}
 // buildEnPrompt renders the English prompt (any non-zh UI locale).
 function buildEnPrompt(
   scriptUrl: string,
+  model: VideoModelOption,
   models: VideoModelOption[]
 ): string {
-  const model = models[0]
-  const menu = models.map((m) => `- ${m.menuLine.en}`).join('\n')
-  const sizeNote = models.some((m) => m.id === 'MiniMax-H3')
-    ? `; \"size\" (MiniMax-H3 only, "768P" or "2K")`
-    : ''
   return `Follow these three steps exactly to set up "video generation via DeepRouter" for the current project. Do not make any other changes.
 Precondition: these steps must run on the user's computer, inside the current project directory. If you cannot read or write files on the user's machine (for example, you are a web-based AI with no terminal), do not run any step — tell the user to open an AI coding tool on their computer (Claude Code or Codex) and paste this text there.
 
@@ -187,13 +288,13 @@ When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_U
 0. Check first: GET {DEEPROUTER_BASE_URL}/v1/models — the model you will use must be listed and its supported_endpoint_types must include video-generation; if it is not listed, tell the user this key has no access to it instead of trying another endpoint.
 1. Submit: POST {DEEPROUTER_BASE_URL}/v1/video/generations
    Body: {"model":"<model>","prompt":"<the user's description>"}
-   Optional fields: \"duration\" (seconds)${sizeNote}. The id in the response is the task id.
+   Optional fields: "duration" (seconds)${sizeNote(models, 'en')}. The id in the response is the task id.
 2. Poll: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id} every 10 seconds.
    Status "completed" means done; on "failed", tell the user what error.message says and stop.
 3. Download: GET {DEEPROUTER_BASE_URL}/v1/videos/{task id}/content and save it as videos/<timestamp>.mp4.
 4. Deliver: try to open it with the system default player (start on Windows, open on macOS, xdg-open on Linux); whether or not that works, always print the file's absolute path.
 Models this key can use and their approximate cost (tell the user the expected cost before generating; anything not listed here this key cannot call, so do not try):
-${menu}
+${modelList(models, 'en')}
 Default model: ${model.id}.
 If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
 

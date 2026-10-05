@@ -19,6 +19,40 @@ For commercial licensing, please contact support@quantumnous.com
 // Static translation keys that don't get picked up by the t('...') regex.
 // These cover dynamic labels (e.g. constants, configs) that are passed into t at runtime.
 export const STATIC_I18N_KEYS = [
+  // Auth terms footer — sentence picked by variant, then passed to t()
+  'By clicking sign in, you agree to our',
+  'By creating an account, you agree to our',
+  // Welcome persona card (casual) — description passed to t()
+  'Videos, pictures, voice-overs, writing. No code — the simple console hands each job to your AI.',
+  // Home access wizard — region names (flag kept outside the key)
+  'Australia',
+  'Chinese mainland',
+  'Hong Kong',
+  'Singapore',
+  'United States',
+  'Europe',
+  'Other / Global',
+  // Simple purpose pages — example requests passed to t()
+  'Make a video: a cup of milk tea spinning in the sunlight, 10 seconds',
+  'Make a poster: summer special, iced lemon tea, bright colours',
+  'Write a short shop notice about our new summer opening hours',
+  "Make a voice-over: Welcome! Today's special is iced lemon tea",
+  'Build a one-page website for my shop with the menu and opening hours',
+  // Home video examples — model caption passed to t()
+  'Seedance video model',
+  // Simple console — tab labels and purpose cards (features/simple)
+  'Records',
+  'Me',
+  'Make a video',
+  'Describe a scene, get a short clip',
+  'Make a picture',
+  'Posters, covers, illustrations',
+  'Chat & write',
+  'Write, translate, summarise',
+  'Voice-over',
+  'Turn text into speech',
+  'Write code',
+  'Let your AI build things for you',
   // Header navigation
   'Home',
   'Console',

@@ -22,14 +22,22 @@ import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
   VIDEO_MODELS,
+  videoModelsForKey,
+  friendlyVideoName,
   type PromptLanguage,
 } from './prompt-template'
 
 const SCRIPT_URL = 'https://deeprouter.example/i/tok_abc123'
 const LANGUAGES: PromptLanguage[] = ['zh', 'en']
 
+// Mirrors the video page: the cheapest permitted model is the default.
 function build(language: PromptLanguage, models = VIDEO_MODELS) {
-  return buildVideoPrompt({ scriptUrl: SCRIPT_URL, models, language })
+  return buildVideoPrompt({
+    scriptUrl: SCRIPT_URL,
+    model: models[0],
+    models,
+    language,
+  })
 }
 
 describe('buildVideoPrompt (both languages)', () => {
@@ -141,11 +149,7 @@ describe('buildVideoPrompt (both languages)', () => {
   it('the first permitted model is the default and the test run', () => {
     for (const language of LANGUAGES) {
       for (const model of VIDEO_MODELS) {
-        const p = buildVideoPrompt({
-          scriptUrl: SCRIPT_URL,
-          models: [model],
-          language,
-        })
+        const p = build(language, [model])
         if (language === 'zh') {
           expect(p).toContain(`默认用 ${model.id}`)
         } else {
@@ -162,14 +166,10 @@ describe('buildVideoPrompt (both languages)', () => {
     // call produces a 403 the moment the user switches to it by voice.
     const [cheapest, mid] = VIDEO_MODELS
     for (const language of LANGUAGES) {
-      const limited = buildVideoPrompt({
-        scriptUrl: SCRIPT_URL,
-        models: [mid],
-        language,
-      })
+      const limited = build(language, [mid])
       expect(limited).toContain(mid.id)
       expect(limited).not.toContain(cheapest.id)
-      expect(limited).toContain(mid.menuLine[language])
+      expect(limited).toContain(mid.promptLine[language])
     }
   })
 
@@ -178,11 +178,8 @@ describe('buildVideoPrompt (both languages)', () => {
     // permitted subset, so models[0] is the cheapest this key can run.
     expect(DEFAULT_VIDEO_MODEL.id).toBe('MiniMax-H3')
     const withoutH3 = VIDEO_MODELS.filter((m) => m.id !== 'MiniMax-H3')
-    const p = buildVideoPrompt({
-      scriptUrl: SCRIPT_URL,
-      models: withoutH3,
-      language: 'zh',
-    })
+    expect(withoutH3[0].id).toBe('doubao-seedance-2-0-260128')
+    const p = build('zh', withoutH3)
     expect(p).toContain(`默认用 ${withoutH3[0].id}`)
     expect(p).not.toContain('MiniMax-H3')
   })
@@ -199,13 +196,17 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
-  it('every model option carries a test-run and menu line in both languages', () => {
+  it('every model option carries a test-run and prompt line in both languages', () => {
     for (const model of VIDEO_MODELS) {
       expect(model.testRun.zh.length).toBeGreaterThan(0)
       expect(model.testRun.en.length).toBeGreaterThan(0)
-      // The menu line names the model, so the AI can switch to it by id.
-      expect(model.menuLine.zh).toContain(model.id)
-      expect(model.menuLine.en).toContain(model.id)
+      expect(model.promptLine.zh.length).toBeGreaterThan(0)
+      expect(model.promptLine.en.length).toBeGreaterThan(0)
+    }
+    // The in-prompt menu names each model by id, so the AI can switch to it.
+    for (const model of VIDEO_MODELS) {
+      expect(build('zh')).toContain(`- ${model.id}：${model.promptLine.zh}`)
+      expect(build('en')).toContain(`- ${model.id}: ${model.promptLine.en}`)
     }
   })
 
@@ -220,5 +221,93 @@ describe('buildVideoPrompt (both languages)', () => {
         `${model.id} missing from MODEL_PRESETS`
       ).toBe(true)
     }
+  })
+})
+
+describe('size field note', () => {
+  it('is rendered as plain JSON field names, only when MiniMax-H3 is offered', () => {
+    const withH3 = build('en')
+    expect(withH3).toContain('; "size" (MiniMax-H3 only, "768P" or "2K")')
+    expect(withH3).not.toContain('\\"size')
+  })
+})
+
+describe('videoModelsForKey', () => {
+  it('lists only the models the key holds, cheapest known first', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits:
+        'doubao-seedance-2-5-260628,doubao-seedance-1-0-lite-t2v-250428,doubao-seedance-2-0-260128',
+    })
+    expect(got?.models.map((m) => m.id)).toEqual([
+      'doubao-seedance-2-0-260128',
+      'doubao-seedance-2-5-260628',
+      'doubao-seedance-1-0-lite-t2v-250428',
+    ])
+    expect(got?.defaultModel.id).toBe('doubao-seedance-2-0-260128')
+  })
+
+  it('never defaults to a model the key does not hold (MiniMax-H3 absent)', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits: 'doubao-seedance-2-5-260628',
+    })
+    expect(got?.defaultModel.id).toBe('doubao-seedance-2-5-260628')
+    const prompt = buildVideoPrompt({
+      scriptUrl: SCRIPT_URL,
+      model: got!.defaultModel,
+      models: got!.models,
+      language: 'en',
+    })
+    expect(prompt).not.toContain('MiniMax-H3')
+    expect(prompt).toContain('Default model: doubao-seedance-2-5-260628')
+  })
+
+  it('describes unknown models without inventing a price', () => {
+    const got = videoModelsForKey({
+      model_limits_enabled: true,
+      model_limits: 'brand-new-video-2027',
+    })
+    const prompt = buildVideoPrompt({
+      scriptUrl: SCRIPT_URL,
+      model: got!.defaultModel,
+      models: got!.models,
+      language: 'zh',
+    })
+    expect(prompt).toContain('- brand-new-video-2027：按条计费')
+    expect(prompt).not.toMatch(/brand-new-video-2027[^\n]*\$/)
+  })
+
+  it('returns null for unrestricted keys, wildcards only or empty grants', () => {
+    expect(
+      videoModelsForKey({ model_limits_enabled: false, model_limits: 'x' })
+    ).toBeNull()
+    expect(
+      videoModelsForKey({
+        model_limits_enabled: true,
+        model_limits: 'doubao-*',
+      })
+    ).toBeNull()
+    expect(
+      videoModelsForKey({ model_limits_enabled: true, model_limits: '' })
+    ).toBeNull()
+  })
+})
+
+describe('friendlyVideoName', () => {
+  it('turns Seedance ids into readable names and leaves others alone', () => {
+    expect(friendlyVideoName('doubao-seedance-1-0-lite-t2v-250428')).toBe(
+      'Seedance 1.0 Lite T2V'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-fast-260128')).toBe(
+      'Seedance 2.0 Fast'
+    )
+    expect(friendlyVideoName('doubao-seedance-1-5-pro-251215')).toBe(
+      'Seedance 1.5 Pro'
+    )
+    expect(friendlyVideoName('doubao-seedance-2-0-260128')).toBe('Seedance 2.0')
+    expect(friendlyVideoName('brand-new-video-2027')).toBe(
+      'brand-new-video-2027'
+    )
   })
 })

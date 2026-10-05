@@ -18,6 +18,8 @@ export interface SimplePurpose {
   /** English i18n source strings; zh lives in the locale file. */
   title: string
   blurb: string
+  /** What to say to the AI once it is set up — shown under "how to use it". */
+  example: string
 }
 
 /** Order is the order of the home grid: the class demo (video) first. */
@@ -27,30 +29,37 @@ export const SIMPLE_PURPOSES: SimplePurpose[] = [
     icon: Clapperboard,
     title: 'Make a video',
     blurb: 'Describe a scene, get a short clip',
+    example:
+      'Make a video: a cup of milk tea spinning in the sunlight, 10 seconds',
   },
   {
     id: 'image',
     icon: Image,
     title: 'Make a picture',
     blurb: 'Posters, covers, illustrations',
+    example: 'Make a poster: summer special, iced lemon tea, bright colours',
   },
   {
     id: 'chat',
     icon: MessageCircle,
     title: 'Chat & write',
     blurb: 'Write, translate, summarise',
+    example: 'Write a short shop notice about our new summer opening hours',
   },
   {
     id: 'voice',
     icon: Mic,
     title: 'Voice-over',
     blurb: 'Turn text into speech',
+    example: "Make a voice-over: Welcome! Today's special is iced lemon tea",
   },
   {
     id: 'coding',
     icon: Code2,
     title: 'Write code',
     blurb: 'Let your AI build things for you',
+    example:
+      'Build a one-page website for my shop with the menu and opening hours',
   },
 ]
 

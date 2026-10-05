@@ -33,15 +33,16 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
+import { formatQuota } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { takeWelcomeHandoff } from '@/features/auth/lib/storage'
 import type { RegisterResponseData } from '@/features/auth/types'
 import { updateUserSettings } from '@/features/profile/api'
 import { PERSONA_PRESETS } from '@/features/profile/lib/persona-presets'
-import { SIMPLE_HOME } from '@/features/simple/lib/mode'
 import type { Persona, UserSettings } from '@/features/profile/types'
-import { useAuthStore } from '@/stores/auth-store'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { SIMPLE_HOME } from '@/features/simple/lib/mode'
 
 // Optional persona picker (secondary — never blocks the golden path).
 const PERSONAS: Array<{
@@ -56,7 +57,7 @@ const PERSONAS: Array<{
     icon: MessageSquare,
     titleKey: 'Everyday use',
     descKey:
-      'Chatting, writing, translation, images. No code — paste your key into the AI app you already use.',
+      'Videos, pictures, voice-overs, writing. No code — the simple console hands each job to your AI.',
     badge: 'Most users',
   },
   {
@@ -109,6 +110,9 @@ export function Welcome() {
   }, [user, navigate])
 
   const [persona, setPersona] = useState<Persona | null>('casual')
+  // Casual (the default) lands in the Simple console, so this page speaks
+  // its language: pick a purpose, copy for your AI — no key, no settings.
+  const simple = (persona ?? 'casual') === 'casual'
   const [submitting, setSubmitting] = useState(false)
 
   // Persist persona (+ its sidebar preset), then navigate to `target`.
@@ -204,7 +208,7 @@ export function Welcome() {
         <WelcomeCard
           icon={Gift}
           label={t('Free trial credit')}
-          value={trialQuota ? `¥${(trialQuota / 500000).toFixed(2)}` : '—'}
+          value={trialQuota ? formatQuota(trialQuota) : '—'}
           sub={
             trialQuota
               ? t('≈ {{count}} chats, on us', {
@@ -213,7 +217,9 @@ export function Welcome() {
               : ''
           }
         />
-        {handoff?.default_token ? (
+        {/* Simple users never handle a key — the purpose page hands it to
+            their AI as a one-time link. Developers and teams still get it. */}
+        {simple ? null : handoff?.default_token ? (
           <CopyCard
             icon={KeyRound}
             label={t('Your key (API Key)')}
@@ -230,19 +236,39 @@ export function Welcome() {
           {t('Start using it in 3 steps')}
         </h2>
         <ol className='mt-3 space-y-2.5'>
-          <Step n={1} text={t('Copy your key above.')} />
-          <Step
-            n={2}
-            text={t(
-              'Paste it into the AI tool you already use — find the field labelled “API Key” in its settings and save.'
-            )}
-          />
-          <Step
-            n={3}
-            text={t(
-              'Come back and check it works — one tap confirms your key and credit are live.'
-            )}
-          />
+          {simple ? (
+            <>
+              <Step
+                n={1}
+                text={t(
+                  'Pick what you want to make — a video, a picture, a voice-over…'
+                )}
+              />
+              <Step n={2} text={t('Tap “Copy for my AI”.')} />
+              <Step
+                n={3}
+                text={t(
+                  'Paste it into Claude Code or Codex on your computer — it sets itself up and makes a first test.'
+                )}
+              />
+            </>
+          ) : (
+            <>
+              <Step n={1} text={t('Copy your key above.')} />
+              <Step
+                n={2}
+                text={t(
+                  'Paste it into the AI tool you already use — find the field labelled “API Key” in its settings and save.'
+                )}
+              />
+              <Step
+                n={3}
+                text={t(
+                  'Come back and check it works — one tap confirms your key and credit are live.'
+                )}
+              />
+            </>
+          )}
         </ol>
       </section>
 
@@ -252,10 +278,14 @@ export function Welcome() {
           type='button'
           size='lg'
           disabled={submitting}
-          onClick={() => finishTo('/keys/test')}
+          onClick={() => finishTo(simple ? SIMPLE_HOME : '/keys/test')}
           className='sm:flex-1'
         >
-          {submitting ? t('Just a sec…') : t('Check it works')}
+          {submitting
+            ? t('Just a sec…')
+            : simple
+              ? t('Get started')
+              : t('Check it works')}
           <ArrowRight className='ml-1.5 h-4 w-4' aria-hidden='true' />
         </Button>
         <Button
@@ -270,7 +300,9 @@ export function Welcome() {
         </Button>
       </div>
       <p className='text-muted-foreground mt-2 text-xs'>
-        {t('Your free credit is enough to start — top up later when it runs out.')}
+        {t(
+          'Your free credit is enough to start — top up later when it runs out.'
+        )}
       </p>
 
       {/* Optional persona — secondary, never blocks the golden path */}

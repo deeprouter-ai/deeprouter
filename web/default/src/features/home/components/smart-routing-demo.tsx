@@ -57,8 +57,8 @@ const EXAMPLES: Example[] = [
   },
   {
     prompt: 'Make a 10-second product video',
-    target: 'kling',
-    model: 'Kling',
+    target: 'seedance',
+    model: 'Seedance',
     savings: null,
   },
 ]
@@ -68,7 +68,7 @@ const NODES: { tag: string; label: string }[] = [
   { tag: 'sonnet', label: 'Sonnet' },
   { tag: 'opus', label: 'Opus' },
   { tag: 'gemini', label: 'Gemini' },
-  { tag: 'kling', label: 'Kling' },
+  { tag: 'seedance', label: 'Seedance' },
 ]
 
 const CYCLE_MS = 3200

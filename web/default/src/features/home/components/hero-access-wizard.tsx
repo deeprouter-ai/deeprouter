@@ -21,31 +21,35 @@ import { Link } from '@tanstack/react-router'
 import { ArrowRight, Check } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
-import { Button } from '@/components/ui/button'
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 
 type RegionKey = 'au' | 'cn' | 'hk' | 'sg' | 'us' | 'eu' | 'global'
 
-const REGIONS: { value: RegionKey; label: string }[] = [
-  { value: 'au', label: '🇦🇺  Australia' },
-  { value: 'cn', label: '🇨🇳  Chinese mainland' },
-  { value: 'hk', label: '🇭🇰  Hong Kong' },
-  { value: 'sg', label: '🇸🇬  Singapore' },
-  { value: 'us', label: '🇺🇸  United States' },
-  { value: 'eu', label: '🇪🇺  Europe' },
-  { value: 'global', label: '🌍  Other / Global' },
+// The flag stays outside the translated name so zh/en share one key.
+const REGIONS: { value: RegionKey; flag: string; label: string }[] = [
+  { value: 'au', flag: '🇦🇺', label: 'Australia' },
+  { value: 'cn', flag: '🇨🇳', label: 'Chinese mainland' },
+  { value: 'hk', flag: '🇭🇰', label: 'Hong Kong' },
+  { value: 'sg', flag: '🇸🇬', label: 'Singapore' },
+  { value: 'us', flag: '🇺🇸', label: 'United States' },
+  { value: 'eu', flag: '🇪🇺', label: 'Europe' },
+  { value: 'global', flag: '🌍', label: 'Other / Global' },
 ]
 
-const MODELS = ['Claude', 'OpenAI GPT', 'Gemini', 'DeepSeek', 'Moonshot'] as const
+const MODELS = [
+  'Claude',
+  'OpenAI GPT',
+  'Gemini',
+  'DeepSeek',
+  'Moonshot',
+] as const
 
 const TASKS: { label: string; model: string }[] = [
   { label: 'Generate images', model: 'GPT-Image & Gemini' },
   { label: 'Build an assistant', model: 'Claude' },
-  { label: 'Make a video', model: 'Kling & Jimeng' },
+  { label: 'Make a video', model: 'Seedance' },
   { label: 'Write & edit', model: 'Claude' },
   { label: 'Write code', model: 'Claude' },
   { label: 'Translate', model: 'Gemini' },
@@ -78,7 +82,9 @@ export function HeroAccessWizard({
       ? t(
           "OpenAI and Anthropic don't sell directly in mainland China. With DeepRouter you use Claude, GPT and Gemini — pay in CNY via WeChat or Alipay, fapiao available."
         )
-      : t('One account for every model — top up and start using them right away.')
+      : t(
+          'One account for every model — top up and start using them right away.'
+        )
 
   let result: string | null = null
   if (picked !== null) {
@@ -123,7 +129,7 @@ export function HeroAccessWizard({
       >
         {REGIONS.map((r) => (
           <NativeSelectOption key={r.value} value={r.value}>
-            {r.label}
+            {`${r.flag}  ${t(r.label)}`}
           </NativeSelectOption>
         ))}
       </NativeSelect>

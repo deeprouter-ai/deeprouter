@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import {
   buildVideoPrompt,
+  DEFAULT_VIDEO_MODEL,
+  videoModelsForKey,
   type PromptLanguage,
 } from '@/features/video/lib/prompt-template'
 import type { SimplePurposeId } from './purposes'
@@ -115,12 +117,21 @@ export function buildPurposePrompt(options: {
   /** Full redeem URL (`{base}/i/{token}`) minted for the current user. */
   scriptUrl: string
   language: PromptLanguage
+  /** The key the token redeems to; video lists only the models it holds. */
+  apiKey?: { model_limits_enabled?: boolean; model_limits?: string | null }
+  /** The video model the user picked on the page; must be one the key holds. */
+  videoModelId?: string
 }): string {
-  const { purpose, scriptUrl, language } = options
+  const { purpose, scriptUrl, language, apiKey, videoModelId } = options
   if (purpose === 'video') {
-    // No key is bound here, so the prompt lists every video model and
-    // defaults to the cheapest one (the video page narrows this per key).
-    return buildVideoPrompt({ scriptUrl, models: [], language })
+    const fromKey = apiKey ? videoModelsForKey(apiKey) : null
+    const picked = fromKey?.models.find((m) => m.id === videoModelId)
+    return buildVideoPrompt({
+      scriptUrl,
+      model: picked ?? fromKey?.defaultModel ?? DEFAULT_VIDEO_MODEL,
+      models: fromKey?.models,
+      language,
+    })
   }
   const recipe = RECIPES[purpose]
   return language === 'zh'

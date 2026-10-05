@@ -38,6 +38,7 @@ import type { ApiKey } from '@/features/keys/types'
 import { useStatus } from '@/hooks/use-status'
 import {
   buildVideoPrompt,
+  DEFAULT_VIDEO_MODEL,
   VIDEO_MODELS,
   type PromptLanguage,
 } from './lib/prompt-template'
@@ -181,16 +182,23 @@ export function VideoPage() {
     ? 'zh'
     : 'en'
 
+  // Render the paste-prompt for a given one-time link: the cheapest model this
+  // key may call is the default and the test run, the rest are the in-prompt
+  // menu. No key bound (empty list) falls back to the full static menu.
+  const renderPrompt = useCallback(
+    (url: string) =>
+      buildVideoPrompt({
+        scriptUrl: url,
+        model: allowedModels[0] ?? DEFAULT_VIDEO_MODEL,
+        models: allowedModels.length > 0 ? allowedModels : undefined,
+        language: promptLanguage,
+      }),
+    [allowedModels, promptLanguage]
+  )
+
   const prompt = useMemo(
-    () =>
-      scriptUrl
-        ? buildVideoPrompt({
-            scriptUrl,
-            models: allowedModels,
-            language: promptLanguage,
-          })
-        : '',
-    [scriptUrl, allowedModels, promptLanguage]
+    () => (scriptUrl ? renderPrompt(scriptUrl) : ''),
+    [scriptUrl, renderPrompt]
   )
 
   const handleCopy = async () => {
@@ -204,11 +212,7 @@ export function VideoPage() {
       const fresh = await mintScriptUrl()
       if (fresh) {
         setScriptUrl(fresh)
-        text = buildVideoPrompt({
-          scriptUrl: fresh,
-          models: allowedModels,
-          language: promptLanguage,
-        })
+        text = renderPrompt(fresh)
       }
     } catch {
       // keep the currently displayed prompt
