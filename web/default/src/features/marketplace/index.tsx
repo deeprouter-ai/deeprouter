@@ -101,7 +101,7 @@ export function MarketplacePage() {
           </h1>
           <p className='text-muted-foreground mt-2 max-w-2xl'>
             {t(
-              'Hand-tested skills for Claude Code. Download one, drop it into your setup, and it runs on your DeepRouter key.'
+              "Hand-tested skills for Claude Code. Download one, drop it into your setup, and it's ready to use."
             )}
           </p>
 
