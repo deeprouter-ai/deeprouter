@@ -13,7 +13,17 @@ import (
 //
 // 🔴 Never returns an error, by design. See migrateOrReport.
 func Migrate(db *gorm.DB) error {
-	return migrateOrReport(db, migrate)
+	return migrateOrReport(db, func(db *gorm.DB) error {
+		if err := migrate(db); err != nil {
+			return err
+		}
+		// Content, not schema: a seeding failure must not be reported as a
+		// broken migration, and the next start retries it.
+		if err := seedInitialSkills(db); err != nil {
+			common.SysError("skill marketplace: initial skills not seeded, will retry on next start: " + err.Error())
+		}
+		return nil
+	})
 }
 
 // migrateOrReport downgrades a marketplace migration failure from "the gateway
