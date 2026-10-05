@@ -629,6 +629,41 @@ func TestUpdateSkill_TagsReplaced(t *testing.T) {
 	assert.Equal(t, pq.StringArray{"new", "tags"}, updated.Tags)
 }
 
+// Tags are typed free-hand by the Admin but the marketplace filter buttons
+// send fixed lowercase values, so storage is canonical: trimmed, lowercase,
+// no blanks, no duplicates, first-seen order kept.
+func TestCreateSkill_NormalizesTags(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	skill, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "norm-create", Name: "n", Description: "d",
+		Tags: []string{" Writing ", "CODE", "writing", "", "  ", "Data-Analysis"},
+	}, 1)
+	require.NoError(t, err)
+	assert.Equal(t, pq.StringArray{"writing", "code", "data-analysis"}, skill.Tags)
+
+	var reloaded model.Skill
+	require.NoError(t, db.First(&reloaded, skill.ID).Error)
+	assert.Equal(t, pq.StringArray{"writing", "code", "data-analysis"}, reloaded.Tags)
+}
+
+func TestUpdateSkill_NormalizesTags(t *testing.T) {
+	db := setupDB(t)
+	svc := mktsvc.NewAdminSkillService(db)
+
+	created, err := svc.CreateSkill(mktsvc.CreateSkillRequest{
+		Slug: "norm-update", Name: "n", Description: "d", Tags: []string{"old"},
+	}, 1)
+	require.NoError(t, err)
+
+	updated, err := svc.UpdateSkill(created.ID, mktsvc.UpdateSkillRequest{
+		Tags: []string{"Research", " research", "LEGAL"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, pq.StringArray{"research", "legal"}, updated.Tags)
+}
+
 func TestUpdateSkill_PriceUSDPointer_NilLeavesPriceUnchanged(t *testing.T) {
 	db := setupDB(t)
 	svc := mktsvc.NewAdminSkillService(db)

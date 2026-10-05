@@ -7,6 +7,23 @@ import (
 	"gorm.io/gorm"
 )
 
+// normalizeTags is the canonical stored form of Admin-typed tags: trimmed,
+// lowercase, blanks and duplicates dropped, first-seen order kept. Never
+// returns nil, so an empty list is stored as {} rather than NULL.
+func normalizeTags(tags []string) []string {
+	out := make([]string, 0, len(tags))
+	seen := make(map[string]bool, len(tags))
+	for _, t := range tags {
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "" || seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+	}
+	return out
+}
+
 // tagsOverlapWhere builds the SQL fragment + args for "the skill has at
 // least one of these tags" (OR semantics), used by both the public and
 // admin skill listing filters.

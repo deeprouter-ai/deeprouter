@@ -172,10 +172,7 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		return nil, ErrInvalidSlugFormat
 	}
 
-	tags := req.Tags
-	if tags == nil {
-		tags = []string{}
-	}
+	tags := normalizeTags(req.Tags)
 	monetization := req.MonetizationType
 	if monetization == "" {
 		monetization = "free"
@@ -276,7 +273,7 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	}
 	if req.Tags != nil {
 		// Same pq.StringArray requirement as on the model — see model.Skill.Tags.
-		updates["tags"] = pq.StringArray(req.Tags)
+		updates["tags"] = pq.StringArray(normalizeTags(req.Tags))
 	}
 	// Validate against the *effective* post-update state, not just whatever
 	// field this particular request happens to touch — a partial update that
