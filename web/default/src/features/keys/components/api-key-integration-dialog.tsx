@@ -21,6 +21,8 @@ import { Link } from '@tanstack/react-router'
 import { ArrowLeft, ArrowRight, Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -29,9 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import {
   API_KEY_PLACEHOLDER,
   buildIntegrationSnippets,
@@ -39,7 +39,10 @@ import {
   modelNameForPurpose,
   type IntegrationLanguage,
 } from '../lib/integration'
+import { isMediaPurpose } from '../lib/media-integration'
 import type { SimplePurposeId } from '../types'
+import { KeyModelDiscovery } from './key-model-discovery'
+import { MediaKeySetup } from './media-key-setup'
 
 type ApiKeyIntegrationDialogProps = {
   open: boolean
@@ -92,9 +95,36 @@ export function ApiKeyIntegrationDialog({
     setLang('claude-code')
   }
 
+  if (isMediaPurpose(purpose)) {
+    return (
+      <Dialog open={open} onOpenChange={(value) => !value && handleClose()}>
+        <DialogContent className='max-h-[85dvh] !max-w-lg overflow-y-auto sm:!max-w-xl'>
+          <DialogHeader>
+            <DialogTitle>{t('Setup guide')}</DialogTitle>
+            <DialogDescription>
+              {t(
+                'Your key includes the models for the purpose you selected. Choose one below to use it.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <CopyField
+            label={t('API key')}
+            value={apiKey ?? API_KEY_PLACEHOLDER}
+            copyable={hasRealKey}
+            secret
+          />
+          <MediaKeySetup apiKey={apiKey} purpose={purpose!} />
+          <DialogFooter>
+            <Button onClick={handleClose}>{t('Done')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className='!max-w-lg sm:!max-w-xl'>
+      <DialogContent className='max-h-[85dvh] !max-w-lg overflow-y-auto sm:!max-w-xl'>
         <DialogHeader>
           <DialogTitle className='flex items-center gap-2'>
             {t('Setup guide')}
@@ -104,11 +134,12 @@ export function ApiKeyIntegrationDialog({
           </DialogTitle>
           <DialogDescription>
             {step === 1 &&
-              t('Copy your credentials. You will paste these into your code or AI client.')}
+              t(
+                'Copy your credentials. You will paste these into your code or AI client.'
+              )}
             {step === 2 &&
               t('Pick how you want to connect, then copy the snippet.')}
-            {step === 3 &&
-              t('Run it and confirm you get a reply back.')}
+            {step === 3 && t('Run it and confirm you get a reply back.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,6 +161,7 @@ export function ApiKeyIntegrationDialog({
                       )
                 }
               />
+              <KeyModelDiscovery apiKey={apiKey} />
               <CopyField label={t('Base URL')} value={baseUrl} copyable />
               <CopyField
                 label={t('Model name')}
@@ -189,7 +221,7 @@ export function ApiKeyIntegrationDialog({
                 <p className='font-medium'>{t('What you should see')}</p>
                 <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
                   {t(
-                    'A successful call returns a JSON reply with the model\'s answer (e.g. choices[0].message.content). If you get a 401, the key is wrong; a 402/insufficient-balance means you need to top up.'
+                    "A successful call returns a JSON reply with the model's answer (e.g. choices[0].message.content). If you get a 401, the key is wrong; a 402/insufficient-balance means you need to top up."
                   )}
                 </p>
               </div>

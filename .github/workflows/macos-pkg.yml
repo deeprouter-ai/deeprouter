@@ -1,0 +1,103 @@
+# Builds the macOS one-click installer (PRD §11.7, card P8) on the free macOS
+# runner (public repo). Signing and notarization switch on automatically once
+# the six secrets below exist; until then the job produces an UNSIGNED test
+# artifact and stays green — the pipeline must never be red just because the
+# credentials have not been filled in yet.
+#
+# The six secrets (the boss fills these in himself — the private key never
+# passes through anyone's hands, rules/deployment-and-secrets.md):
+#   APPLE_INSTALLER_CERT_P12   Developer ID Installer cert + key, .p12, base64
+#   APPLE_INSTALLER_CERT_PASSWORD  the .p12's password
+#   APPLE_TEAM_ID              e.g. AB12CD34EF
+#   ASC_API_KEY_P8             App Store Connect API key, .p8 content, base64
+#   ASC_API_KEY_ID             its Key ID
+#   ASC_API_ISSUER_ID          its Issuer ID
+name: macOS Pkg
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/connect/macos-pkg/**"
+      - ".github/workflows/macos-pkg.yml"
+  pull_request:
+    paths:
+      - "internal/connect/macos-pkg/**"
+      - ".github/workflows/macos-pkg.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Secrets are not readable inside `if:`, so the presence check happens in
+      # a step and later steps key off its output.
+      - name: Decide whether signing is configured
+        id: creds
+        env:
+          CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signing=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No signing credentials - producing an unsigned test artifact."
+          fi
+
+      - name: Import the signing certificate
+        if: steps.creds.outputs.signing == 'true'
+        env:
+          CERT_P12: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          set -eu
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "" "$KEYCHAIN"
+          security set-keychain-settings -lut 900 "$KEYCHAIN"
+          security unlock-keychain -p "" "$KEYCHAIN"
+          echo "$CERT_P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/productsign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security list-keychains -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KEYCHAIN"
+
+      - name: Materialize the notary key
+        if: steps.creds.outputs.signing == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -eu
+          echo "$ASC_KEY_P8" | base64 -d > "$RUNNER_TEMP/asc-key.p8"
+
+      - name: Build (and sign + notarize when configured)
+        env:
+          DR_PKG_VERSION: "1.0.${{ github.run_number }}"
+        run: |
+          set -eu
+          if [ "${{ steps.creds.outputs.signing }}" = "true" ]; then
+            export DR_SIGN_IDENTITY="Developer ID Installer: $(security find-certificate -c 'Developer ID Installer' -Z | sed -n 's/.*"alis"<blob>="Developer ID Installer: \(.*\)"/\1/p' | head -1)"
+            # find-certificate output varies; fall back to the raw identity list
+            if [ "$DR_SIGN_IDENTITY" = "Developer ID Installer: " ]; then
+              DR_SIGN_IDENTITY=$(security find-identity -v | sed -n 's/.*"\(Developer ID Installer: .*\)"/\1/p' | head -1)
+              export DR_SIGN_IDENTITY
+            fi
+            export DR_NOTARY_KEY_FILE="$RUNNER_TEMP/asc-key.p8"
+            export DR_NOTARY_KEY_ID="${{ secrets.ASC_API_KEY_ID }}"
+            export DR_NOTARY_ISSUER="${{ secrets.ASC_API_ISSUER_ID }}"
+          fi
+          sh internal/connect/macos-pkg/build.sh dist
+
+      - name: Sanity-check the artifact carries no secrets
+        run: |
+          set -eu
+          # PRD §11.4: no plaintext key may ever land in a downloadable file.
+          ! grep -R "sk-" internal/connect/macos-pkg/dist --include="*.pkg" 2>/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deeprouter-setup-pkg
+          path: internal/connect/macos-pkg/dist/*.pkg
+          if-no-files-found: error

@@ -37,15 +37,19 @@ func TestClaude5FamilyBillsOutputAtFiveX(t *testing.T) {
 	}
 }
 
-// Every GPT-5.6 tier prices output at 6x input ($5/$30, $2/$12, $0.2/$1.2).
-// Without an explicit branch they inherit the generic gpt-5 rule (8x), which
-// overcharges output by a third.
-func TestGPT56TiersBillOutputAtSixX(t *testing.T) {
+// GPT-5.6 Sol (and its bare alias) is $4/$20 = 5x; terra, luna and cyber are
+// 6x ($2/$12, $0.2/$1.2, $12.5/$75). Without explicit branches they inherit
+// the generic gpt-5 rule (8x) and output is overcharged.
+func TestGPT56TiersBillOutputAtOfficialRatio(t *testing.T) {
 	InitRatioSettings()
 
-	for _, name := range []string{"gpt-5.6", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-cyber"} {
-		if got := GetCompletionRatio(name); got != 6 {
-			t.Errorf("GetCompletionRatio(%q) = %v, want 6", name, got)
+	want := map[string]float64{
+		"gpt-5.6": 5, "gpt-5.6-sol": 5,
+		"gpt-5.6-terra": 6, "gpt-5.6-luna": 6, "gpt-5.6-cyber": 6,
+	}
+	for name, ratio := range want {
+		if got := GetCompletionRatio(name); got != ratio {
+			t.Errorf("GetCompletionRatio(%q) = %v, want %v", name, got, ratio)
 		}
 		if _, found, _ := GetModelRatio(name); !found {
 			t.Errorf("GetModelRatio(%q): no input price configured", name)
@@ -70,6 +74,76 @@ func TestRefreshedCatalogModelsArePriced(t *testing.T) {
 		}
 		if got := GetCompletionRatio(name); got <= 1 {
 			t.Errorf("GetCompletionRatio(%q) = %v, want > 1 (output is priced above input for all of these)", name, got)
+		}
+	}
+}
+
+// GPT-6 tiers price output at 5x input ($10/$50, $2/$10). Without the gpt-6
+// branch they fall through to the generic gpt- default and bill output at 2x.
+func TestGPT6TiersBillOutputAtFiveX(t *testing.T) {
+	InitRatioSettings()
+
+	for _, name := range []string{"gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"} {
+		if got := GetCompletionRatio(name); got != 5 {
+			t.Errorf("GetCompletionRatio(%q) = %v, want 5", name, got)
+		}
+		if _, found, _ := GetModelRatio(name); !found {
+			t.Errorf("GetModelRatio(%q): no input price configured", name)
+		}
+	}
+}
+
+// gpt-image-2.5 keeps gpt-image-2's token prices.
+func TestGPTImage25PricedLikeGPTImage2(t *testing.T) {
+	InitRatioSettings()
+
+	for _, name := range []string{"gpt-image-2.5-flare", "gpt-image-2.5-sunburst"} {
+		if ratio, found, _ := GetModelRatio(name); !found || ratio != 2.5 {
+			t.Errorf("GetModelRatio(%q) = %v,%v, want 2.5,true", name, ratio, found)
+		}
+		if got := GetCompletionRatio(name); got != 6 {
+			t.Errorf("GetCompletionRatio(%q) = %v, want 6", name, got)
+		}
+	}
+}
+
+// Models released Aug-Sep 2026 (catalogue check 2026-10-04): every one must be
+// priced with the official input price and output multiplier.
+func TestOctober2026CatalogModelsArePriced(t *testing.T) {
+	InitRatioSettings()
+
+	cases := []struct {
+		name       string
+		input      float64 // model ratio ($ per 1M input / 2)
+		completion float64
+	}{
+		{"gpt-6-luna", 0.05, 5},
+		{"claude-opus-5-5", 2, 5},
+		{"claude-sonnet-5-5", 1, 5},
+		{"claude-fable-5-1", 5, 5},
+		{"claude-sonnet-5", 1, 5},
+		{"gemini-3.8-flash", 0.75, 5},
+		{"grok-4.7", 1, 3},
+		{"deepseek-flash", 0.15, 4},
+		{"deepseek-v4-pro", 0.66, 3},
+		{"mistral-medium-2604", 0.75, 5},
+		{"mistral-small-2603", 0.075, 4},
+		{"mistral-large-2512", 0.25, 3},
+		{"qwen3.8-flash", 0.075, 3.133},
+		{"glm-5.3-flash", 0.075, 3.333},
+		{"MiniMax-M3", 0.15, 4},
+	}
+	for _, tc := range cases {
+		ratio, found, _ := GetModelRatio(tc.name)
+		if !found {
+			t.Errorf("GetModelRatio(%q): no input price configured", tc.name)
+			continue
+		}
+		if diff := ratio - tc.input; diff > 1e-9 || diff < -1e-9 {
+			t.Errorf("GetModelRatio(%q) = %v, want %v", tc.name, ratio, tc.input)
+		}
+		if got := GetCompletionRatio(tc.name); got != tc.completion {
+			t.Errorf("GetCompletionRatio(%q) = %v, want %v", tc.name, got, tc.completion)
 		}
 	}
 }

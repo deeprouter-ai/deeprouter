@@ -94,7 +94,7 @@ export function QuickImportModelsDialog({
   const createOne = async (preset: ModelPreset) => {
     const result = await createModel({
       model_name: preset.model_name,
-      description: preset.description,
+      description: `${preset.description}\nModels: ${preset.sourceUrl}\nAPI: ${preset.apiDocsUrl}\nKey access: GET /v1/models`,
       tags: preset.tags.join(','),
       endpoints: preset.endpoints,
       status: 0, // disabled until operator reviews
@@ -107,7 +107,9 @@ export function QuickImportModelsDialog({
       // don't trip the operator up.
       const msg = (result?.message || '').toLowerCase()
       if (msg.includes('exist')) return { skipped: true as const }
-      throw new Error(result?.message || `Failed to create ${preset.model_name}`)
+      throw new Error(
+        result?.message || `Failed to create ${preset.model_name}`
+      )
     }
     return { skipped: false as const }
   }
@@ -261,6 +263,27 @@ export function QuickImportModelsDialog({
                           <p className='text-muted-foreground text-xs'>
                             {p.description}
                           </p>
+                          <div
+                            className='flex gap-3 text-xs'
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <a
+                              href={p.sourceUrl}
+                              target='_blank'
+                              rel='noreferrer'
+                              className='text-primary underline'
+                            >
+                              {t('Official model directory')}
+                            </a>
+                            <a
+                              href={p.apiDocsUrl}
+                              target='_blank'
+                              rel='noreferrer'
+                              className='text-primary underline'
+                            >
+                              {t('API documentation')}
+                            </a>
+                          </div>
                         </div>
                       </Label>
                     )

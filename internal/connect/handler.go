@@ -83,7 +83,7 @@ func RedeemScript(c *gin.Context) {
 		c.String(http.StatusOK, RenderDeadTokenScript(
 			PlatformFromUserAgent(c.GetHeader("User-Agent")),
 			"This setup command is no longer valid.",
-			"It works once and expires after 15 minutes.",
+			"It works once and expires after 30 minutes.",
 			"Open your API keys page and copy a fresh command."))
 		return
 	}
@@ -105,6 +105,71 @@ func RedeemScript(c *gin.Context) {
 
 	c.Header("Cache-Control", "no-store")
 	c.String(http.StatusOK, RenderScript(platform, system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
+}
+
+// DownloadInstaller serves the double-click installer for one token (PRD §11).
+//
+// 🔴 It must not redeem. Redeem() claims the grant and destroys it, so routing a
+// download through it would hand the user a file that reports "expired" the
+// moment they double-click it — the token has to survive until the file actually
+// runs. Nothing here touches the grant store at all: the token is checked for
+// shape only, which is what keeps an arbitrary path parameter out of the
+// generated file, and is then written into a wrapper. A spent or unknown token
+// is not this endpoint's problem; /i/:token already answers that out loud.
+//
+// The platform comes from the requested FILENAME, not from the User-Agent that
+// every other handler here sniffs. The page shows a button per operating system,
+// so the choice has already been made by a human — and somebody preparing a
+// Windows machine from a Mac is a real case, not an edge one.
+func DownloadInstaller(c *gin.Context) {
+	token := c.Param("token")
+	if !validToken(token) {
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+
+	var platform Platform
+	filename := c.Param("file")
+	switch filename {
+	case InstallerFileWindows:
+		platform = PlatformPowerShell
+	case InstallerFileUnix:
+		platform = PlatformPOSIX
+	default:
+		if pkgName, err := PkgFileName(token, system_setting.ServerAddress); err == nil &&
+			(filename == pkgName || filename == installerFilePkgBare) {
+			servePkg(c, pkgName)
+			return
+		}
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+
+	// attachment + octet-stream, because with text/plain the browser displays
+	// the file instead of saving it and the download button stops downloading.
+	c.Header("Content-Disposition", `attachment; filename="`+filename+`"`)
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "application/octet-stream",
+		[]byte(RenderInstaller(platform, system_setting.ServerAddress, token)))
+}
+
+// servePkg hands out the signed macOS installer under this token's filename
+// (PRD §11.7). The body is the same signed artifact for everyone — only the
+// name is personal, which is exactly what lets a signed package carry a
+// per-user token at all. Same rule as the text installers: nothing here
+// touches the grant store, because the token has to survive until the package
+// runs on the Mac.
+func servePkg(c *gin.Context, pkgName string) {
+	body, err := pkgArtifact()
+	if err != nil {
+		// This deployment carries no signed artifact yet (CI has not shipped
+		// one, or the box is not wired). Dark until it is.
+		c.String(http.StatusNotFound, "not found")
+		return
+	}
+	c.Header("Content-Disposition", `attachment; filename="`+pkgName+`"`)
+	c.Header("Cache-Control", "no-store")
+	c.Data(http.StatusOK, "application/octet-stream", body)
 }
 
 // UninstallScript serves the undo script.

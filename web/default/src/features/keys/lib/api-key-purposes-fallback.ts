@@ -65,7 +65,10 @@ export const FALLBACK_PURPOSES: PurposeSummary[] = [
     id: 'image',
     label: pick('Image generation', '图像生成'),
     icon: '🎨',
-    desc: pick('Text-to-image, image edit, image variation', '文生图、改图、变体'),
+    desc: pick(
+      'Text-to-image, image edit, image variation',
+      '文生图、改图、变体'
+    ),
     human_estimate: pick('≈ ¥10 for 20 images', '约 ¥10 生成 20 张'),
     price_range: '¥0.3 – 1.0 / image',
     recommended_brand: 'openai',
@@ -76,16 +79,22 @@ export const FALLBACK_PURPOSES: PurposeSummary[] = [
     label: pick('Video generation', '视频生成'),
     icon: '🎬',
     desc: pick('Text-to-video, video edit', '文生视频、改视频'),
-    human_estimate: pick('≈ ¥50 for 10 short clips', '约 ¥50 生成 10 段短视频'),
-    price_range: '¥3 – 10 / clip',
-    recommended_brand: 'openai',
+    human_estimate: pick(
+      '≈ $0.5 for a 6-second clip (768P)',
+      '约 $0.5 生成一段 6 秒短片（768P）'
+    ),
+    price_range: '$0.48 – 5.4 / clip',
+    recommended_brand: '',
     available_brands: [],
   },
   {
     id: 'voice',
     label: pick('Voice / TTS / Transcription', '语音 / TTS / 转写'),
     icon: '🎙️',
-    desc: pick('Transcription, voice cloning, text-to-speech', '转写、配音、克隆'),
+    desc: pick(
+      'Transcription, voice cloning, text-to-speech',
+      '转写、配音、克隆'
+    ),
     human_estimate: pick('≈ ¥10 for 200 minutes', '约 ¥10 转写 200 分钟'),
     price_range: '¥0.05 / minute',
     recommended_brand: 'openai',

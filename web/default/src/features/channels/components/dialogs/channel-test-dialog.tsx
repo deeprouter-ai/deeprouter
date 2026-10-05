@@ -105,10 +105,12 @@ const endpointTypeOptions: Array<{ value: string; label: string }> = [
     label: 'Image Generation (/v1/images/generations)',
   },
   { value: 'embeddings', label: 'Embeddings (/v1/embeddings)' },
+  { value: 'audio-speech', label: 'Text-to-speech (/v1/audio/speech)' },
 ]
 
 const STREAM_INCOMPATIBLE_ENDPOINTS = new Set([
   'embeddings',
+  'audio-speech',
   'image-generation',
   'jina-rerank',
   'openai-response-compact',
@@ -152,7 +154,17 @@ export function ChannelTestDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, currentRow?.id, resetState])
 
-  const streamDisabled = STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
+  const connectionOnly =
+    currentRow?.type === 54 ||
+    (currentRow?.type === 35 &&
+      !!currentRow.models &&
+      currentRow.models
+        .split(',')
+        .every((model) => /^(MiniMax-H|[TIS]2V-)/i.test(model.trim())))
+  const streamDisabled =
+    connectionOnly ||
+    currentRow?.type === 58 ||
+    STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
 
   useEffect(() => {
     if (streamDisabled) {
@@ -342,7 +354,13 @@ export function ChannelTestDialog({
             return (
               <div className='flex flex-col gap-1 text-xs'>
                 <StatusBadge
-                  label='Success'
+                  label={
+                    currentRow?.type === 54 ||
+                    (currentRow?.type === 35 &&
+                      /^(MiniMax-H|[TIS]2V-)/i.test(model.trim()))
+                      ? t('Connected — model generation not tested')
+                      : 'Success'
+                  }
                   variant='success'
                   copyable={false}
                 />
@@ -369,7 +387,10 @@ export function ChannelTestDialog({
                   size='sm'
                   className='w-fit'
                   onClick={() =>
-                    window.open('/system-settings/billing/model-pricing', '_blank')
+                    window.open(
+                      '/system-settings/billing/model-pricing',
+                      '_blank'
+                    )
                   }
                 >
                   <Settings className='mr-1 h-3 w-3' />
@@ -409,6 +430,7 @@ export function ChannelTestDialog({
     ],
     [
       defaultTestModel,
+      connectionOnly,
       isBatchTesting,
       t,
       testResults,
@@ -442,6 +464,13 @@ export function ChannelTestDialog({
           <DialogTitle>{t('Test Channel Connection')}</DialogTitle>
           <DialogDescription>
             {t('Test connectivity for:')} <strong>{currentRow.name}</strong>
+            {connectionOnly && (
+              <span className='mt-2 block'>
+                {t(
+                  'Checks the video task API and key without generating a paid video. Model access and generation are not tested.'
+                )}
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -450,6 +479,7 @@ export function ChannelTestDialog({
             <div className='grid gap-2'>
               <Label htmlFor='endpoint-type'>{t('Endpoint Type')}</Label>
               <Select
+                disabled={connectionOnly}
                 items={[
                   ...endpointTypeOptions.map((option) => {
                     const itemValue = option.value

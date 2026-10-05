@@ -2,6 +2,7 @@ package elevenlabs
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -21,6 +22,23 @@ func convertTTSRequest(request dto.AudioRequest) (io.Reader, error) {
 	modelID := request.Model
 	if modelID == "" {
 		modelID = defaultModelID
+	}
+	if modelID == "eleven_multilingual_v1" || modelID == "eleven_monolingual_v1" {
+		return nil, fmt.Errorf("ElevenLabs model %s has been removed; use eleven_multilingual_v2, eleven_v3 or eleven_flash_v2_5", modelID)
+	}
+	if usesDialogueHTTP(modelID) || usesDialogueWebSocket(modelID) {
+		voiceID := request.Voice
+		if voiceID == "" {
+			voiceID = defaultVoiceID
+		}
+		data, err := common.Marshal(dialogueRequest{
+			ModelID: modelID,
+			Inputs:  []dialogueInput{{Text: request.Input, VoiceID: voiceID}},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return bytes.NewReader(data), nil
 	}
 	body := ttsRequest{
 		Text:    request.Input,

@@ -29,6 +29,9 @@ var defaultCacheRatio = map[string]float64{
 	"gpt-4.1":                             0.25,
 	"gpt-4.1-mini":                        0.25,
 	"gpt-4.1-nano":                        0.25,
+	"gpt-6-astra":                         0.1,  // $1 cached / $10 input
+	"gpt-6-sol":                           0.1,  // $0.2 cached / $2 input
+	"gpt-6.1-sol":                         0.05, // $0.1 cached / $2 input
 	"gpt-5":                               0.1,
 	"gpt-5-2025-08-07":                    0.1,
 	"gpt-5-chat-latest":                   0.1,
@@ -84,8 +87,13 @@ var defaultCacheRatio = map[string]float64{
 	"claude-opus-5-high":                  0.1,
 	"claude-opus-5-medium":                0.1,
 	"claude-opus-5-low":                   0.1,
-	"claude-sonnet-5":                     0.1, // cache read $0.3 / input $3
+	"claude-sonnet-5":                     0.1, // cache read $0.2 / input $2
 	"claude-sonnet-5-thinking":            0.1,
+	"claude-fable-5-1":                    0.025, // cache read $0.25 / input $10
+	"claude-opus-5-5":                     0.05,  // cache read $0.20 / input $4
+	"claude-sonnet-5-5":                   0.1,   // cache read $0.20 / input $2
+	"gpt-6-luna":                          0.1,   // $0.01 cached / $0.10 input
+	"deepseek-flash":                      0.02,  // $0.006 cached / $0.30 input
 	"claude-sonnet-4-6":                   0.1,
 	"claude-sonnet-4-6-thinking":          0.1,
 	"claude-opus-4-8-max":                 0.1,
@@ -147,6 +155,9 @@ var defaultCreateCacheRatio = map[string]float64{
 	"claude-opus-5-low":                   1.25,
 	"claude-sonnet-5":                     1.25,
 	"claude-sonnet-5-thinking":            1.25,
+	"claude-fable-5-1":                    1.25,
+	"claude-opus-5-5":                     1.25,
+	"claude-sonnet-5-5":                   1.25,
 	"claude-sonnet-4-6":                   1.25,
 	"claude-sonnet-4-6-thinking":          1.25,
 	"claude-opus-4-8-max":                 1.25,

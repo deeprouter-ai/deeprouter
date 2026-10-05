@@ -17,10 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useAuthStore } from '@/stores/auth-store'
 import { DASHBOARD_DEFAULT_SECTION } from '@/features/dashboard/section-registry'
+import { consoleModeFor, SIMPLE_HOME } from '@/features/simple/lib/mode'
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   beforeLoad: () => {
+    // Every "go to the console" entry (sign-in, OAuth, the home page button)
+    // lands here, so this is the one place that routes Simple users home.
+    if (consoleModeFor(useAuthStore.getState().auth.user) === 'simple') {
+      throw redirect({ to: SIMPLE_HOME })
+    }
     throw redirect({
       to: '/dashboard/$section',
       params: { section: DASHBOARD_DEFAULT_SECTION },

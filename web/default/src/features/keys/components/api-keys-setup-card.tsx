@@ -30,6 +30,7 @@ import {
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { chatPresetAction } from '@/features/chat/lib/chat-links'
 import { getConnectTools } from '../api'
+import { isMediaPurpose } from '../lib/media-integration'
 import type { ConnectTool } from '../types'
 import { ApiKeysAskAiSection } from './api-keys-ask-ai-section'
 import { ApiKeysOneClickSection } from './api-keys-one-click-card'
@@ -105,7 +106,7 @@ export function ApiKeysSetupCard() {
 
   // No key yet means there is nothing to configure; the create flow above is
   // the right next step, and a disabled block here would only add noise.
-  if (!setupKey) return null
+  if (!setupKey || isMediaPurpose(setupKey.simple_purpose)) return null
   if (tools.length === 0 && appPresets.length === 0) return null
 
   return (

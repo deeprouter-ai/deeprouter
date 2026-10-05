@@ -5,7 +5,19 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <!-- Installable as a home-screen app (Simple console, PWA) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DeepRouter" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="default"
+    />
 
     <!-- Primary Meta Tags -->
     <title>DeepRouter</title>
@@ -15,7 +27,16 @@
       content="DeepRouter — multi-tenant LLM gateway for Airbotix and internal services."
     />
 
-    <meta name="theme-color" content="#fff" />
+    <meta
+      name="theme-color"
+      content="#f7f4ed"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#1c1c1c"
+      media="(prefers-color-scheme: dark)"
+    />
   </head>
 
   <body>

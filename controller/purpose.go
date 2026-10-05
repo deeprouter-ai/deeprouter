@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/internal/keypurpose"
 	"github.com/QuantumNous/new-api/setting/alias_setting"
 
 	"github.com/gin-gonic/gin"
@@ -18,13 +19,29 @@ import (
 // by the frontend's Simple-mode picker. Authenticated user route.
 func GetApiKeyPurposes(c *gin.Context) {
 	lang := i18n.GetLangFromContext(c)
+	purposes := alias_setting.GetPurposeSummary(lang)
+	candidates, catalogErr := mediaCandidatesForUser(c.GetInt("id"))
+	for i := range purposes {
+		if !keypurpose.IsMedia(purposes[i].ID) {
+			continue
+		}
+		models := keypurpose.Models(purposes[i].ID, candidates)
+		purposes[i].AvailableBrands = []string{}
+		purposes[i].RecommendedBrand = ""
+		purposes[i].AvailableModels = models
+		purposes[i].AvailabilityError = catalogErr != nil
+		purposes[i].HumanEstimate = ""
+		purposes[i].PriceRange = ""
+		available := catalogErr == nil && len(models) > 0
+		purposes[i].Available = &available
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data": gin.H{
-			"purposes":            alias_setting.GetPurposeSummary(lang),
-			"price_tiers":         alias_setting.GetPriceTierSummary(lang),
-			"default_price_tier":  alias_setting.DefaultPriceTierID(),
+			"purposes":           purposes,
+			"price_tiers":        alias_setting.GetPriceTierSummary(lang),
+			"default_price_tier": alias_setting.DefaultPriceTierID(),
 		},
 	})
 }

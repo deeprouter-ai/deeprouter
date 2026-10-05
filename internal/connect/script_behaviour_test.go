@@ -193,6 +193,18 @@ type sandbox struct {
 	run     runner
 }
 
+// userVisible strips what varies per run — the sandbox's temp paths and the
+// fake gateway's random port — so "the message never shows a raw status code"
+// cannot fail just because a temp dir or port happened to contain "503".
+func (s *sandbox) userVisible(out string) string {
+	for _, incidental := range []string{s.home, s.bin, s.gateway.server.URL} {
+		if incidental != "" {
+			out = strings.ReplaceAll(out, incidental, "<x>")
+		}
+	}
+	return out
+}
+
 func newSandbox(t *testing.T, r runner, g *fakeGateway) *sandbox {
 	t.Helper()
 	home := t.TempDir()
@@ -1279,7 +1291,7 @@ func TestScript_TranslatesTheReserveFailureIntoMoney(t *testing.T) {
 			require.Contains(t, out, "0.816000")
 			require.Contains(t, out, "/topup")
 			// PRD §6: no bare status codes anywhere in a failure message.
-			require.NotContains(t, out, "403")
+			require.NotContains(t, s.userVisible(out), "403")
 			require.NotContains(t, out, "HTTP")
 		})
 	}
@@ -1296,7 +1308,7 @@ func TestScript_SaysTheKeyIsBadRatherThanShowingA401(t *testing.T) {
 			out := s.setup([]string{ToolClaudeCode})
 
 			require.Contains(t, out, "key was rejected")
-			require.NotContains(t, out, "401")
+			require.NotContains(t, s.userVisible(out), "401")
 			require.False(t, s.exists(".deeprouter/env.sh"), "nothing gets written on a bad key")
 		})
 	}
@@ -1316,7 +1328,7 @@ func TestScript_SaysConfigurationIsFineWhenTheModelIsBusy(t *testing.T) {
 
 			require.Contains(t, out, "busy")
 			require.Contains(t, out, "written and correct")
-			require.NotContains(t, out, "503")
+			require.NotContains(t, s.userVisible(out), "503")
 		})
 	}
 }

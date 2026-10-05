@@ -66,14 +66,17 @@ type seedFile struct {
 // PurposeSummary is the API response shape for GET /api/user/self/purposes.
 // It collapses the per-language strings down to the caller's language.
 type PurposeSummary struct {
-	ID               string   `json:"id"`
-	Label            string   `json:"label"`
-	Icon             string   `json:"icon"`
-	Desc             string   `json:"desc"`
-	HumanEstimate    string   `json:"human_estimate"`
-	PriceRange       string   `json:"price_range"`
-	RecommendedBrand string   `json:"recommended_brand"`
-	AvailableBrands  []string `json:"available_brands"`
+	AvailabilityError bool     `json:"availability_error,omitempty"`
+	AvailableModels   []string `json:"available_models,omitempty"`
+	Available         *bool    `json:"available,omitempty"`
+	ID                string   `json:"id"`
+	Label             string   `json:"label"`
+	Icon              string   `json:"icon"`
+	Desc              string   `json:"desc"`
+	HumanEstimate     string   `json:"human_estimate"`
+	PriceRange        string   `json:"price_range"`
+	RecommendedBrand  string   `json:"recommended_brand"`
+	AvailableBrands   []string `json:"available_brands"`
 }
 
 // PriceTierSummary is the API response shape for a single price tier.
@@ -87,14 +90,14 @@ type PriceTierSummary struct {
 }
 
 var (
-	mu                sync.RWMutex
-	purposes          []PurposeInfo
-	purposesByID      map[string]*PurposeInfo
-	priceTiers        map[string]PriceTierInfo
-	aliasMap          map[string]map[string]string // purpose → brand → target
-	virtualModels     map[string]struct{}
-	defaultTierID     = "standard"
-	priceTierOrder    = []string{"economy", "standard", "premium", "ultra"}
+	mu             sync.RWMutex
+	purposes       []PurposeInfo
+	purposesByID   map[string]*PurposeInfo
+	priceTiers     map[string]PriceTierInfo
+	aliasMap       map[string]map[string]string // purpose → brand → target
+	virtualModels  map[string]struct{}
+	defaultTierID  = "standard"
+	priceTierOrder = []string{"economy", "standard", "premium", "ultra"}
 )
 
 // InitAliasSettings parses the embedded YAML into in-memory lookup tables.

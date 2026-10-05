@@ -40,3 +40,9 @@ function installStorageShim(name: 'localStorage' | 'sessionStorage') {
 
 installStorageShim('localStorage')
 installStorageShim('sessionStorage')
+
+// jsdom implements no scrollIntoView; components that keep the highlighted
+// option in view (e.g. ComboboxInput) would throw in tests without this no-op.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {}
+}

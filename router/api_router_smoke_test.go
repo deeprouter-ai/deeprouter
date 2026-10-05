@@ -21,3 +21,22 @@ func TestSetApiRouter_RegistersWithoutPanic(t *testing.T) {
 	}()
 	SetApiRouter(gin.New())
 }
+
+// TestSetConnectRouter_RegistersWithoutPanic covers the same failure mode for
+// one-click setup, whose routes sit at the ROOT — /i/:token, /uninstall and
+// /d/:token/:file — and are therefore registered alongside each other and the
+// api tree rather than inside a group of their own. Registered on the same
+// engine as the api router, because that is the arrangement main.go builds and
+// a conflict only exists between routes sharing a tree. Added with the
+// downloadable installers (one-click PRD §11).
+func TestSetConnectRouter_RegistersWithoutPanic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("SetConnectRouter panicked: %v", r)
+		}
+	}()
+	engine := gin.New()
+	SetApiRouter(engine)
+	SetConnectRouter(engine)
+}
