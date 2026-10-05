@@ -112,6 +112,41 @@ func TestBuildSkillPackage_SecurityGuardBlocksPackaging(t *testing.T) {
 	}
 }
 
+// Versions uploaded before the runner was removed still carry the two old
+// DR-key fields in their stored manifest_json; re-activating them must not
+// ship those fields to users (PRD §15).
+func TestBuildSkillPackage_StripsLegacyDRKeyManifestFields(t *testing.T) {
+	skill, version := testSkillAndVersion()
+	version.ManifestJSON = json.RawMessage(`{
+		"slug": "code-review-expert",
+		"version": "1.0.0",
+		"author_note": "kept",
+		"requires_deeprouter_key": true,
+		"deeprouter_routing_endpoint": "https://deeprouter.co/v1/routing/chat/completions"
+	}`)
+
+	zipBytes, _, err := BuildSkillPackage(skill, version)
+	if err != nil {
+		t.Fatalf("BuildSkillPackage: %v", err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+	if err != nil {
+		t.Fatalf("open zip: %v", err)
+	}
+	var manifest map[string]interface{}
+	if err := json.Unmarshal([]byte(readZipFile(t, zr, skill.Slug+"/manifest.json")), &manifest); err != nil {
+		t.Fatalf("packaged manifest.json is not valid JSON: %v", err)
+	}
+	for _, field := range []string{"requires_deeprouter_key", "deeprouter_routing_endpoint"} {
+		if _, ok := manifest[field]; ok {
+			t.Fatalf("packaged manifest.json still contains legacy field %q", field)
+		}
+	}
+	if manifest["author_note"] != "kept" || manifest["slug"] != "code-review-expert" {
+		t.Fatalf("other Admin-supplied fields must survive, got %v", manifest)
+	}
+}
+
 func TestBuildSkillPackage_InvalidManifestJSON(t *testing.T) {
 	skill, version := testSkillAndVersion()
 	version.ManifestJSON = json.RawMessage(`not valid json`)

@@ -46,6 +46,11 @@ func validateSkillPackageSecurity(contents ...string) error {
 	return nil
 }
 
+// legacyDRKeyManifestFields were required while hosted skills ran through a
+// DR-key runner (removed, PRD §15). Versions uploaded back then still store
+// them, so they are dropped at packaging time rather than shipped to users.
+var legacyDRKeyManifestFields = []string{"requires_deeprouter_key", "deeprouter_routing_endpoint"}
+
 // buildFinalManifest takes the Admin-uploaded manifest_json (which already
 // has slug/version) and injects the two fields only the server knows:
 // skill_id and skill_version_id (these are DB-assigned and never set by
@@ -54,6 +59,9 @@ func buildFinalManifest(skill *model.Skill, version *model.SkillVersion) ([]byte
 	var manifest map[string]interface{}
 	if err := common.Unmarshal(version.ManifestJSON, &manifest); err != nil {
 		return nil, fmt.Errorf("invalid manifest_json for version %d: %w", version.ID, err)
+	}
+	for _, field := range legacyDRKeyManifestFields {
+		delete(manifest, field)
 	}
 	manifest["skill_id"] = skill.ID
 	manifest["skill_version_id"] = version.ID
