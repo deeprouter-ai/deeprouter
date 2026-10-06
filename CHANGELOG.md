@@ -8,6 +8,15 @@
   - 平台隔离：组织角色与全局 `role` 是两套——owner 的全局角色仍是 1，`internal/org` 不写 `users.role`，`/api/org/*` 只挂 `UserAuth`。
   - 迁移失败不拖垮网关：七张新表迁移失败只写日志、不阻止启动（与 skill-marketplace 同一取舍）；三处加列是平台结构体的字段，走核心 AutoMigrate。
   - 测试：`internal/org/**` 全量，加 `controller`、`router` 里的 `TestOrg*`；SQLite 必跑，设了 `TEST_POSTGRES_DSN` / `TEST_MYSQL_DSN` 时在真实库上再跑一遍。已接进 `unit-test.yml` 与 `airbotix-internal.yml`。真实 PostgreSQL 上实测：旧表结构升级、二次启动无变化、旧版本程序能在升级后的库上运行（可回滚）；200 万行日志表首次启动多耗约 1.7 秒。**MySQL 尚未实测。**
+- **新增企业组织的成员、邀请、服务账号与部门管理**（同一份 PRD，P3；没有新的表或列）：
+  - 部门：建组织时自动生成默认部门「综合」和技术 / 产品 / 市场 / 销售 / 客服五个预设（清单在 `model.PresetDepartments`；名称按注册时页面的语言取中文简体、繁体或英文——注册请求会带上页面语言，不跟浏览器自带的语言走；只写这一次，之后切换界面语言不会改名），owner 落在默认部门。owner / admin 可新建、改名、删除部门；默认部门可改名、不可删；删除部门时它的成员和未用完的邀请链接移到默认部门。
+  - 成员：owner 任免 admin（可多个）；admin 可以分配其它角色，但不能任免 admin；谁都改不了 owner 的角色，也不能把 owner 角色授予别人。owner 不能自助注销账号（`DELETE /api/user/self` 对组织 owner 拒绝，其余账号照旧）。owner 和 admin 固定属于默认部门、不能调整（PRD D26）：被任命为 admin 的成员自动移入默认部门，能授予 admin 的邀请链接只能指向默认部门；免去 admin 后可以再调。本期没有「移出成员」，它和回收 key 一起在 P6。
+  - 邀请链接：`/sign-up?org_invite=<码>`，固定一个角色和部门，7 天内多人可用，可随时撤销；能授予 admin 的链接只有 owner 能生成。注册页带着链接打开时显示将加入的企业、部门和角色，链接失效则不让提交（账号建成个人账号后无法再加入企业）。`POST /api/user/register` 新增可选字段 `org_invite`；通过邀请加入的账号不生成初始 key。
+  - 服务账号：`is_service` 的成员，给 CI / 机器人用。没有密码、邮箱和访问令牌，用户名自动生成（公司起的名字放在显示名里），不送注册试用额度；所有登录方式的汇合点 `setupLogin` 对它一律拒绝。
+  - 建了组织的注册人直接进专业模式（PRD D24）：后端把他存成 `team` persona，注册页不再把他送去 `/welcome`（那里默认选「日常使用」，会把人带进 Simple 控制台）。被邀请加入的成员不受影响，仍按原流程。
+  - 接口：`/api/org/` 下新增 `departments`、`roles`、`members`、`service-accounts`、`invites`，以及唯一不需要登录的 `GET /api/org/invite/:code`（注册页用；只受全局 API 限流，不占注册那份按 IP 计的额度——否则同一个办公室每人打开一次链接就少一个注册名额）。权限不足一律返回 HTTP 403，其余拒绝沿用 200 + `success=false`。本期的权限就是一条线——owner 和 admin 能管，其他人不能；P4 的 `Can()` 落地后替换。
+  - 页面：专业模式侧边栏新增「组织 → 部门与成员」（只有 owner / admin 看得到），三个标签：成员、部门、邀请链接（`web/default/src/features/org`）。
+  - 测试：`internal/org/service` 新增成员 / 部门 / 邀请 / 权限线 / 跨组织隔离的用例，`controller`、`router` 新增 `TestOrg*`（含一条走真实路由和会话 cookie 的端到端用例），SQLite 与真实 PostgreSQL 均通过；前端新增页面、路由守卫、侧边栏与注册页的用例。**MySQL 仍未实测。**
 
 ## 2026-10-05
 

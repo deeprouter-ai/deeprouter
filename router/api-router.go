@@ -437,6 +437,27 @@ func SetApiRouter(router *gin.Engine) {
 		orgRoute.Use(middleware.UserAuth())
 		{
 			orgRoute.GET("/self", controller.GetOrgSelf)
+
+			orgRoute.GET("/departments", controller.ListOrgDepartments)
+			orgRoute.POST("/departments", controller.CreateOrgDepartment)
+			orgRoute.PUT("/departments/:id", controller.RenameOrgDepartment)
+			orgRoute.DELETE("/departments/:id", controller.DeleteOrgDepartment)
+
+			orgRoute.GET("/roles", controller.ListOrgRoles)
+			orgRoute.GET("/members", controller.ListOrgMembers)
+			orgRoute.PUT("/members/:id", controller.UpdateOrgMember)
+			orgRoute.POST("/service-accounts", controller.CreateOrgServiceAccount)
+
+			orgRoute.GET("/invites", controller.ListOrgInvites)
+			orgRoute.POST("/invites", controller.CreateOrgInvite)
+			orgRoute.DELETE("/invites/:id", controller.RevokeOrgInvite)
 		}
+		// The one organization route without a sign-in: the sign-up page asks
+		// it what an invite link leads to, for a visitor who has no account
+		// yet. It deliberately stays off CriticalRateLimit, whose per-address
+		// budget it would share with sign-up itself: every colleague opening
+		// the link from the same office would use up a sign-up. An invite code
+		// is 32 random characters, so the global API limit is guard enough.
+		apiRouter.GET("/org/invite/:code", controller.GetOrgInvitePreview)
 	}
 }

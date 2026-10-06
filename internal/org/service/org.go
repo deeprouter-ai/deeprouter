@@ -39,9 +39,11 @@ func NormalizeName(raw string) (string, error) {
 	return name, nil
 }
 
-// CreateForOwnerTx creates an organization and makes userID its owner, inside
-// the caller's transaction so it commits or rolls back with the sign-up.
-func CreateForOwnerTx(tx *gorm.DB, userID int, rawName string) (*orgmodel.Organization, error) {
+// CreateForOwnerTx creates an organization with its preset departments and
+// makes userID its owner, inside the caller's transaction so it commits or
+// rolls back with the sign-up. lang picks the language the preset departments
+// are named in.
+func CreateForOwnerTx(tx *gorm.DB, userID int, rawName string, lang string) (*orgmodel.Organization, error) {
 	name, err := NormalizeName(rawName)
 	if err != nil {
 		return nil, err
@@ -68,12 +70,16 @@ func CreateForOwnerTx(tx *gorm.DB, userID int, rawName string) (*orgmodel.Organi
 	if err := tx.Create(org).Error; err != nil {
 		return nil, err
 	}
-	// Only the two org columns are written — never users.role. The org_id = 0
+	defaultDepartmentID, err := seedDepartmentsTx(tx, org.Id, lang)
+	if err != nil {
+		return nil, err
+	}
+	// Only the org columns are written — never users.role. The org_id = 0
 	// guard is repeated here so that losing a race with another sign-up for
 	// the same user cannot move them between organizations.
 	result := tx.Model(&platformmodel.User{}).
 		Where("id = ? AND org_id = ?", userID, 0).
-		Updates(map[string]any{"org_id": org.Id, "role_id": ownerRoleID})
+		Updates(map[string]any{"org_id": org.Id, "role_id": ownerRoleID, "department_id": defaultDepartmentID})
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -88,6 +94,7 @@ type Membership struct {
 	OrgId        int      `json:"org_id"`
 	OrgName      string   `json:"org_name"`
 	IsOwner      bool     `json:"is_owner"`
+	IsAdmin      bool     `json:"is_admin"` // holds the preset admin role
 	Role         string   `json:"role"`
 	RoleScope    string   `json:"role_scope"`
 	Permissions  []string `json:"permissions"`
@@ -120,6 +127,7 @@ func GetMembership(db *gorm.DB, userID int) (*Membership, error) {
 		OrgId:        org.Id,
 		OrgName:      org.Name,
 		IsOwner:      org.OwnerUserId == user.Id,
+		IsAdmin:      isPreset(&role, orgmodel.RoleAdmin),
 		Role:         role.Name,
 		RoleScope:    role.Scope,
 		Permissions:  orgmodel.SplitPermissions(role.Permissions),

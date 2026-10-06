@@ -94,7 +94,7 @@ func TestOrgOwner_IsRejectedByPlatformAdminRoutes(t *testing.T) {
 		}
 		require.NoError(t, db.Create(&owner).Error)
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			_, err := orgservice.CreateForOwnerTx(tx, owner.Id, "Acme")
+			_, err := orgservice.CreateForOwnerTx(tx, owner.Id, "Acme", "en")
 			return err
 		}))
 

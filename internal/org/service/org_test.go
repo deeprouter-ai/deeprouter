@@ -49,6 +49,14 @@ func reloadUser(t *testing.T, db *gorm.DB, id int) platformmodel.User {
 	return user
 }
 
+// defaultDepartment loads the default department of an organization.
+func defaultDepartment(t *testing.T, db *gorm.DB, orgID int) orgmodel.Department {
+	t.Helper()
+	var department orgmodel.Department
+	require.NoError(t, db.Where("org_id = ? AND is_default = ?", orgID, true).First(&department).Error)
+	return department
+}
+
 // countOrganizations returns how many organizations exist.
 func countOrganizations(t *testing.T, db *gorm.DB) int64 {
 	t.Helper()
@@ -87,7 +95,7 @@ func TestCreateForOwnerTx_MakesTheUserTheSoleOwner(t *testing.T) {
 		var org *orgmodel.Organization
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 			var err error
-			org, err = CreateForOwnerTx(tx, founder.Id, "  Acme Pty Ltd  ")
+			org, err = CreateForOwnerTx(tx, founder.Id, "  Acme Pty Ltd  ", "en")
 			return err
 		}))
 
@@ -97,10 +105,11 @@ func TestCreateForOwnerTx_MakesTheUserTheSoleOwner(t *testing.T) {
 		require.Equal(t, founder.Id, stored.OwnerUserId)
 		require.NotZero(t, stored.CreatedTime)
 
-		// The founder gained exactly the two org columns and nothing else.
+		// The founder gained exactly the three org columns and nothing else.
 		want := founder
 		want.OrgId = org.Id
 		want.OrgRoleId = ownerRoleID
+		want.DepartmentId = defaultDepartment(t, db, org.Id).Id
 		require.Equal(t, want, reloadUser(t, db, founder.Id))
 		// Nobody else was pulled in: the organization has one member, its owner.
 		require.Equal(t, bystander, reloadUser(t, db, bystander.Id))
@@ -117,7 +126,7 @@ func TestCreateForOwnerTx_NeverWritesTheGlobalRole(t *testing.T) {
 		for _, role := range []int{common.RoleCommonUser, common.RoleAdminUser, common.RoleRootUser} {
 			user := seedUser(t, db, fmt.Sprintf("role-%d", role), role)
 			require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-				_, err := CreateForOwnerTx(tx, user.Id, "Org of role")
+				_, err := CreateForOwnerTx(tx, user.Id, "Org of role", "en")
 				return err
 			}))
 			require.Equal(t, role, reloadUser(t, db, user.Id).Role)
@@ -130,13 +139,13 @@ func TestCreateForOwnerTx_RejectsAUserWhoAlreadyBelongsToOne(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		founder := seedUser(t, db, "founder", common.RoleCommonUser)
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			_, err := CreateForOwnerTx(tx, founder.Id, "First")
+			_, err := CreateForOwnerTx(tx, founder.Id, "First", "en")
 			return err
 		}))
 		member := reloadUser(t, db, founder.Id)
 
 		err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := CreateForOwnerTx(tx, founder.Id, "Second")
+			_, err := CreateForOwnerTx(tx, founder.Id, "Second", "en")
 			return err
 		})
 		require.ErrorIs(t, err, ErrNotPersonalAccount)
@@ -148,7 +157,7 @@ func TestCreateForOwnerTx_RejectsAUserWhoAlreadyBelongsToOne(t *testing.T) {
 func TestCreateForOwnerTx_RejectsAnUnknownUser(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := CreateForOwnerTx(tx, 4242, "Ghost Inc")
+			_, err := CreateForOwnerTx(tx, 4242, "Ghost Inc", "en")
 			return err
 		})
 		require.ErrorIs(t, err, ErrNotPersonalAccount)
@@ -160,7 +169,7 @@ func TestCreateForOwnerTx_RejectsABadNameBeforeWritingAnything(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		founder := seedUser(t, db, "founder", common.RoleCommonUser)
 		err := db.Transaction(func(tx *gorm.DB) error {
-			_, err := CreateForOwnerTx(tx, founder.Id, "   ")
+			_, err := CreateForOwnerTx(tx, founder.Id, "   ", "en")
 			return err
 		})
 		require.ErrorIs(t, err, ErrInvalidName)
@@ -176,7 +185,7 @@ func TestCreateForOwnerTx_RollsBackWithTheCallersTransaction(t *testing.T) {
 		founder := seedUser(t, db, "founder", common.RoleCommonUser)
 		later := errors.New("a later sign-up step failed")
 		err := db.Transaction(func(tx *gorm.DB) error {
-			if _, err := CreateForOwnerTx(tx, founder.Id, "Acme"); err != nil {
+			if _, err := CreateForOwnerTx(tx, founder.Id, "Acme", "en"); err != nil {
 				return err
 			}
 			return later
@@ -194,7 +203,7 @@ func TestGetMembership(t *testing.T) {
 		var org *orgmodel.Organization
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
 			var err error
-			org, err = CreateForOwnerTx(tx, founder.Id, "Acme")
+			org, err = CreateForOwnerTx(tx, founder.Id, "Acme", "en")
 			return err
 		}))
 
@@ -211,7 +220,7 @@ func TestGetMembership(t *testing.T) {
 			Role:         orgmodel.RoleOwner,
 			RoleScope:    orgmodel.ScopeOrg,
 			Permissions:  orgmodel.Primitives,
-			DepartmentId: 0,
+			DepartmentId: defaultDepartment(t, db, org.Id).Id,
 		}, got)
 	})
 }
@@ -222,7 +231,7 @@ func TestGetMembership_DoesNotResolveAnotherOrganizationsRole(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		founder := seedUser(t, db, "founder", common.RoleCommonUser)
 		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
-			_, err := CreateForOwnerTx(tx, founder.Id, "Acme")
+			_, err := CreateForOwnerTx(tx, founder.Id, "Acme", "en")
 			return err
 		}))
 		foreign := orgmodel.OrgRole{OrgId: 999, Name: "their-secret-role", Scope: orgmodel.ScopeOrg, Permissions: "key.delete"}

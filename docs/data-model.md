@@ -50,10 +50,10 @@ Added by `internal/org` (see its README for the rules). An organization is a cus
 | Table | Purpose | Key columns |
 |---|---|---|
 | `organizations` | One customer company. Holds no money: the company wallet is the owner's `users.quota` | PK `id`; UNQ `owner_user_id`; `name` varchar(64) |
-| `departments` | Structural unit only — scopes managers and groups reports, carries no permissions | PK `id`; IDX `org_id`; `is_default`; `parent_id` (always 0 for now); SOFT-DELETE |
+| `departments` | Structural unit only — scopes managers and groups reports, carries no permissions. Every organization starts with the rows of `model.PresetDepartments`: a default department that cannot be deleted, plus five business units. Deleting a department moves its members and unused invite links to the default one | PK `id`; IDX `org_id`; `is_default`; `preset_key` (starter entry the row came from, NULL if the company made it); `parent_id` (always 0 for now); SOFT-DELETE |
 | `org_roles` | A bundle of permission primitives. `org_id = 0` rows are the five platform presets, synced from `model.PresetRoles` on every boot | PK `id`; IDX `org_id`; `scope` = `org` \| `dept` \| `self`; CSV `permissions`; SOFT-DELETE |
 | `department_managers` | Which member manages which department | Composite PK `(department_id, user_id)` |
-| `org_invites` | Join codes carrying a role and a department | PK `id`; UNQ `code`; IDX `org_id` |
+| `org_invites` | Invite links carrying a role and a department. A link is not consumed: it admits every sign-up that presents it until `expires_time` (7 days after creation) or until the row is deleted (revoked) | PK `id`; UNQ `code` (32 random characters); IDX `org_id` |
 | `org_alerts` | Anomaly-rule hits on a key (notify only, never block) | PK `id`; IDX `org_id`, `token_id`; TEXT `detail` (JSON) |
 | `org_audit_logs` | Append-only record of org management actions | PK `id`; IDX `org_id`; TEXT `detail` (JSON) |
 
@@ -64,7 +64,7 @@ Columns added to platform tables — all default to zero and are `omitempty` in 
 | `users.org_id` | `bigint`, indexed | `0` | Organization the account belongs to |
 | `users.role_id` | `bigint` | `0` | The member's **org** role → `org_roles.id`. Unrelated to `users.role`, which stays `1` for every org member (Go field `OrgRoleId`) |
 | `users.department_id` | `bigint` | `0` | Department the member sits in |
-| `users.is_service` | `boolean` | `false` | Service account: holds keys, cannot log in |
+| `users.is_service` | `boolean` | `false` | Service account: holds keys, cannot log in. The row is written by `internal/org` with a generated `svc-…` username, the company's name for it in `display_name`, no password, email or access token, and zero quota |
 | `tokens.org_id` | `bigint`, indexed | `0` | Organization that owns the key |
 | `tokens.created_by` | `bigint` | `0` | Who created an org key (the holder is `user_id`) |
 | `tokens.policy_template` | `varchar(64)` | `''` | Policy template applied to an org key |

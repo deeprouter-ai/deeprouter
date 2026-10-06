@@ -51,6 +51,9 @@ type RegisterRequest struct {
 	// Enterprise Org P2: when set, the sign-up also creates this organization
 	// and the new user becomes its owner. Empty = a personal account, as before.
 	OrgName string `json:"org_name,omitempty"`
+	// Enterprise Org P3: the code of an invite link. When set, the new user
+	// joins that organization with the invite's role and department.
+	OrgInvite string `json:"org_invite,omitempty"`
 }
 
 func Login(c *gin.Context) {
@@ -115,6 +118,12 @@ func Login(c *gin.Context) {
 
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
+	// Enterprise Org: a service account holds keys and never signs in. Every
+	// way of signing in ends here, so this one check covers them all.
+	if user.IsService {
+		common.ApiErrorI18n(c, msgOrgServiceAccountLogin)
+		return
+	}
 	model.UpdateUserLastLoginAt(user.Id)
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
@@ -222,6 +231,13 @@ func Register(c *gin.Context) {
 	if persona == "" {
 		persona = "unset"
 	}
+	// Enterprise Org D24: whoever founds an organization works in the Advanced
+	// console, where organization management lives. "team" puts them there
+	// from the first sign-in and keeps the persona prompt from sending them
+	// to the Simple console.
+	if req.OrgName != "" {
+		persona = "team"
+	}
 	defaultSetting := dto.UserSetting{
 		Persona:            persona,
 		BrandPreference:    req.BrandPreference,
@@ -240,15 +256,13 @@ func Register(c *gin.Context) {
 	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
 		cleanUser.Setting = string(settingBytes)
 	}
-	// Enterprise Org P2: with org_name the account and its organization are
-	// created together (controller/org.go); without it this is the plain Insert.
-	orgId, err := insertRegisteredUser(&cleanUser, inviterId, req.OrgName)
+	// Enterprise Org: with org_name the account founds an organization, with
+	// org_invite it joins one (controller/org.go); with neither this is the
+	// plain Insert. orgError answers anything that is not an organization
+	// refusal exactly as ApiError did.
+	orgId, err := insertRegisteredUser(&cleanUser, inviterId, &req, i18n.GetLangFromContext(c))
 	if err != nil {
-		if isOrgNameError(err) {
-			common.ApiErrorI18n(c, msgOrgNameInvalid)
-			return
-		}
-		common.ApiError(c, err)
+		orgError(c, err)
 		return
 	}
 
@@ -264,7 +278,9 @@ func Register(c *gin.Context) {
 	// initial response the key string is gone; the user has to copy it
 	// or regenerate via /keys.
 	var defaultTokenKey string
-	if constant.GenerateDefaultToken {
+	// Enterprise Org D16: a member who joined by invite holds only the keys an
+	// admin hands them, so no starter key is made for them.
+	if constant.GenerateDefaultToken && req.OrgInvite == "" {
 		key, kErr := common.GenerateKey()
 		if kErr != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserDefaultTokenFailed)
@@ -941,6 +957,11 @@ func DeleteSelf(c *gin.Context) {
 
 	if user.Role == common.RoleRootUser {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
+		return
+	}
+	// Enterprise Org: the owner cannot be removed, their own hand included.
+	if isOrgOwner(user) {
+		common.ApiErrorI18n(c, msgOrgOwnerCannotDeleteAccount)
 		return
 	}
 

@@ -43,12 +43,12 @@ func setForTest[T any](t *testing.T, target *T, value T) {
 
 // forEachOrgDialect runs fn on every available engine, with the platform
 // globals pointed at a fresh migrated database and an engine that serves the
-// real Register handler behind a session store, as main.go does.
+// real Register and Login handlers behind a session store, as main.go does.
 func forEachOrgDialect(t *testing.T, fn func(t *testing.T, env orgTestEnv)) {
 	t.Helper()
 	orgtest.ForEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		gin.SetMode(gin.TestMode)
-		require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Log{}, &referralmodel.ReferralRecord{}))
+		require.NoError(t, db.AutoMigrate(&model.User{}, &model.Token{}, &model.Log{}, &model.TwoFA{}, &referralmodel.ReferralRecord{}))
 		require.NoError(t, orgmodel.Migrate(db))
 
 		dialect := db.Dialector.Name()
@@ -60,12 +60,14 @@ func forEachOrgDialect(t *testing.T, fn func(t *testing.T, env orgTestEnv)) {
 		setForTest(t, &common.RedisEnabled, false)
 		setForTest(t, &common.RegisterEnabled, true)
 		setForTest(t, &common.PasswordRegisterEnabled, true)
+		setForTest(t, &common.PasswordLoginEnabled, true)
 		setForTest(t, &common.EmailVerificationEnabled, false)
 		setForTest(t, &constant.GenerateDefaultToken, false)
 
 		engine := gin.New()
 		engine.Use(sessions.Sessions("session", cookie.NewStore([]byte("org-test-session-secret"))))
 		engine.POST("/api/user/register", Register)
+		engine.POST("/api/user/login", Login)
 		fn(t, orgTestEnv{db: db, engine: engine})
 	})
 }
@@ -73,10 +75,19 @@ func forEachOrgDialect(t *testing.T, fn func(t *testing.T, env orgTestEnv)) {
 // register posts a sign-up and returns the decoded envelope and the raw response.
 func (env orgTestEnv) register(t *testing.T, body map[string]any) (tokenAPIResponse, *httptest.ResponseRecorder) {
 	t.Helper()
+	return env.post(t, "/api/user/register", body, nil)
+}
+
+// post sends a JSON body to one of the engine's routes, with optional headers.
+func (env orgTestEnv) post(t *testing.T, path string, body map[string]any, headers map[string]string) (tokenAPIResponse, *httptest.ResponseRecorder) {
+	t.Helper()
 	payload, err := common.Marshal(body)
 	require.NoError(t, err)
-	request := httptest.NewRequest(http.MethodPost, "/api/user/register", bytes.NewReader(payload))
+	request := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(payload))
 	request.Header.Set("Content-Type", "application/json")
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
 	recorder := httptest.NewRecorder()
 	env.engine.ServeHTTP(recorder, request)
 	return decodeAPIResponse(t, recorder), recorder
@@ -425,6 +436,7 @@ func TestOrgSelf_ReportsMembershipOrNullForAPersonalAccount(t *testing.T) {
 		require.True(t, owner.Success)
 		var membership orgservice.Membership
 		require.NoError(t, common.Unmarshal(owner.Data, &membership))
+		require.NotZero(t, founder.DepartmentId, "the owner sits in the default department")
 		require.Equal(t, orgservice.Membership{
 			OrgId:        founder.OrgId,
 			OrgName:      "Acme",
@@ -432,7 +444,7 @@ func TestOrgSelf_ReportsMembershipOrNullForAPersonalAccount(t *testing.T) {
 			Role:         orgmodel.RoleOwner,
 			RoleScope:    orgmodel.ScopeOrg,
 			Permissions:  orgmodel.Primitives,
-			DepartmentId: 0,
+			DepartmentId: founder.DepartmentId,
 		}, membership)
 	})
 }
