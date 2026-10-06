@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,83 +12,234 @@ import (
 	"gorm.io/gorm"
 )
 
-// Enterprise Org P3: until P4's Can() arrives, the permission model is one
-// line — the owner and the admins run the organization, nobody else may. This
-// pins that line on every management action, so a new action that forgets
-// the gate fails here.
+// Enterprise Org P4 (meta-repo docs/enterprise-org-prd.md): who may do what.
+// Every management action of the package is tried here by every kind of
+// member, against a table that says by hand who gets through. The truth table
+// in ../model pins the engine; this pins that each action asks the engine the
+// right question — a new action that forgets its gate, or its audit record,
+// fails here.
+
+// The kinds of member in the cast.
+const (
+	kindOwner    = "owner"
+	kindAdmin    = "admin"
+	kindManager  = "manager" // the preset, sitting in Sales and so managing it
+	kindReadonly = "readonly"
+	kindStaff    = "staff"
+	kindBot      = "bot"     // a service account, were it ever to act
+	kindITOps    = "it-ops"  // the three role packs, adopted as custom roles
+	kindHROps    = "hr-ops"  // — the one non-admin role that invites company-wide
+	kindFinance  = "finance" // — and one that sees usage and nothing else
+)
+
+// allKinds lists the cast in a fixed order, so a failure names the same actor
+// on every run.
+var allKinds = []string{kindOwner, kindAdmin, kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance}
+
+// Who an action is open to, as a space-separated list of kinds.
+const (
+	// runners hold the inherent powers: the owner and the admins.
+	runners = kindOwner + " " + kindAdmin
+	// readers hold member.read somewhere, directly or through a write.
+	readers = runners + " " + kindManager + " " + kindReadonly + " " + kindITOps + " " + kindHROps
+)
+
+// cast is one organization with a member of every kind.
+type cast struct {
+	org     testOrg
+	sales   orgmodel.Department
+	product orgmodel.Department
+	actors  map[string]*Actor
+}
+
+// newCast founds an organization and fills it with one member of every kind.
+func newCast(t *testing.T, db *gorm.DB, name string) cast {
+	t.Helper()
+	org := seedOrg(t, db, name)
+	c := cast{
+		org:     org,
+		sales:   departmentNamed(t, db, org.id, "Sales"),
+		product: departmentNamed(t, db, org.id, "Product"),
+		actors:  map[string]*Actor{kindOwner: actorFor(t, db, org.owner.Id)},
+	}
+	general := defaultDepartment(t, db, org.id).Id
+	join := func(kind string, roleID int, departmentID int) {
+		member := seedMemberIn(t, db, org, kind+"-of-"+name, roleID, departmentID)
+		c.actors[kind] = actorFor(t, db, member.Id)
+	}
+	join(kindAdmin, presetRoleID(t, db, orgmodel.RoleAdmin), general)
+	join(kindManager, presetRoleID(t, db, orgmodel.RoleManager), c.sales.Id)
+	join(kindReadonly, presetRoleID(t, db, orgmodel.RoleReadonly), general)
+	join(kindStaff, presetRoleID(t, db, orgmodel.RoleStaff), c.sales.Id)
+	join(kindITOps, seedRole(t, db, org.id, "IT Ops", orgmodel.ScopeOrg, packPermissions(t, "it_ops")...).Id, general)
+	join(kindHROps, seedRole(t, db, org.id, "HR Ops", orgmodel.ScopeOrg, packPermissions(t, "hr_ops")...).Id, general)
+	join(kindFinance, seedRole(t, db, org.id, "Finance", orgmodel.ScopeOrg, packPermissions(t, "finance")...).Id, general)
+	bot, err := CreateServiceAccount(db, c.actors[kindOwner], "CI", 0)
+	require.NoError(t, err)
+	c.actors[kindBot] = actorFor(t, db, bot.Id)
+	return c
+}
 
 // managementAction is one management action, ready to be tried by any actor.
 type managementAction struct {
 	name string
-	run  func(actor *Actor) error
+	// openTo lists the kinds of member who may do it.
+	openTo string
+	// audited is the audit action a success records; empty for a read.
+	audited string
+	// spawns names what run creates for itself before asking: an action that
+	// destroys something needs a fresh victim each time.
+	spawns string
+	run    func(actor *Actor) error
+}
+
+// open reports whether the action is open to a kind of member.
+func (a managementAction) open(kind string) bool {
+	return strings.Contains(" "+a.openTo+" ", " "+kind+" ")
 }
 
 // managementActions returns every management action of the package against
-// one organization, each built so that a manager would succeed at it any
-// number of times.
-func managementActions(t *testing.T, db *gorm.DB, org testOrg) []managementAction {
+// the cast's organization, each built so that whoever may do it succeeds at
+// it any number of times.
+func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	t.Helper()
 	serial := 0
 	next := func() int { serial++; return serial }
-	sales := departmentNamed(t, db, org.id, "Sales")
-	product := departmentNamed(t, db, org.id, "Product")
-	target := seedMember(t, db, org, fmt.Sprintf("target-of-%d", org.id), orgmodel.RoleStaff)
+	org := c.org
+	support := departmentNamed(t, db, org.id, "Customer Support")
 	staffRole := presetRoleID(t, db, orgmodel.RoleStaff)
-	// Destructive actions get a fresh victim each run, written straight to
-	// the database so that making it does not depend on the actor.
+	managerRole := presetRoleID(t, db, orgmodel.RoleManager)
+	readonlyRole := presetRoleID(t, db, orgmodel.RoleReadonly)
+	// Three members nobody in the cast is: one to move, one to give roles to,
+	// and a manager to give departments to.
+	moved := seedMember(t, db, org, fmt.Sprintf("moved-in-%d", org.id), orgmodel.RoleStaff)
+	promoted := seedMember(t, db, org, fmt.Sprintf("promoted-in-%d", org.id), orgmodel.RoleStaff)
+	lead := seedMemberIn(t, db, org, fmt.Sprintf("lead-in-%d", org.id), managerRole, support.Id)
+	edited := seedRole(t, db, org.id, "Edited", orgmodel.ScopeOrg, "usage.read")
+
+	// Victims are written straight to the database, so that making one does
+	// not depend on the actor.
 	spareDepartment := func() int {
 		department := orgmodel.Department{OrgId: org.id, Name: fmt.Sprintf("Spare %d", next())}
 		require.NoError(t, db.Create(&department).Error)
 		return department.Id
 	}
-	spareInvite := func() int {
+	spareRole := func() int {
+		return seedRole(t, db, org.id, fmt.Sprintf("Spare %d", next()), orgmodel.ScopeDept, "key.read").Id
+	}
+	spareInvite := func(roleID int, departmentID int) int {
 		invite := orgmodel.OrgInvite{
 			OrgId: org.id, Code: fmt.Sprintf("spare-%d-%d", org.id, next()),
-			RoleId: staffRole, DepartmentId: sales.Id, ExpiresTime: time.Now().Add(time.Hour).Unix(),
+			RoleId: roleID, DepartmentId: departmentID, ExpiresTime: time.Now().Add(time.Hour).Unix(),
 		}
 		require.NoError(t, db.Create(&invite).Error)
 		return invite.Id
 	}
+	// Picking whichever of two values is not the current one makes a change
+	// of every call, however often it runs.
+	other := func(current int, first int, second int) int {
+		if current == first {
+			return second
+		}
+		return first
+	}
+
 	return []managementAction{
-		{"list departments", func(actor *Actor) error {
+		// --- reading: member.read, wherever it reaches -------------------------
+		{name: "list departments", openTo: readers, run: func(actor *Actor) error {
 			_, err := ListDepartments(db, actor)
 			return err
 		}},
-		{"create a department", func(actor *Actor) error {
-			_, err := CreateDepartment(db, actor, fmt.Sprintf("New %d", next()))
-			return err
-		}},
-		{"rename a department", func(actor *Actor) error {
-			return RenameDepartment(db, actor, product.Id, fmt.Sprintf("Product %d", next()))
-		}},
-		{"delete a department", func(actor *Actor) error {
-			return DeleteDepartment(db, actor, spareDepartment())
-		}},
-		{"list roles", func(actor *Actor) error {
+		{name: "list roles", openTo: readers, run: func(actor *Actor) error {
 			_, err := ListRoles(db, actor)
 			return err
 		}},
-		{"list members", func(actor *Actor) error {
+		{name: "read the permission catalogue", openTo: readers, run: func(actor *Actor) error {
+			_, err := GetPermissionCatalog(actor)
+			return err
+		}},
+		{name: "list members", openTo: readers, run: func(actor *Actor) error {
 			_, err := ListMembers(db, actor)
 			return err
 		}},
-		{"update a member", func(actor *Actor) error {
-			return UpdateMember(db, actor, target.Id, MemberPatch{DepartmentId: intPtr(sales.Id)})
+
+		// --- inherent powers: the owner and the admins --------------------------
+		{name: "create a department", openTo: runners, audited: orgmodel.AuditDepartmentCreate, run: func(actor *Actor) error {
+			_, err := CreateDepartment(db, actor, fmt.Sprintf("New %d", next()))
+			return err
 		}},
-		{"create a service account", func(actor *Actor) error {
+		{name: "rename a department", openTo: runners, audited: orgmodel.AuditDepartmentRename, run: func(actor *Actor) error {
+			return RenameDepartment(db, actor, c.product.Id, fmt.Sprintf("Product %d", next()))
+		}},
+		{name: "delete a department", openTo: runners, audited: orgmodel.AuditDepartmentDelete, spawns: "departments", run: func(actor *Actor) error {
+			return DeleteDepartment(db, actor, spareDepartment())
+		}},
+		{name: "create a role", openTo: runners, audited: orgmodel.AuditRoleCreate, run: func(actor *Actor) error {
+			_, err := CreateRole(db, actor, RoleInput{Name: fmt.Sprintf("Made %d", next()), Scope: orgmodel.ScopeOrg, Permissions: []string{"key.read"}})
+			return err
+		}},
+		{name: "adopt a role pack", openTo: runners, audited: orgmodel.AuditRoleCreate, run: func(actor *Actor) error {
+			_, err := AdoptRolePack(db, actor, "finance", fmt.Sprintf("Adopted %d", next()))
+			return err
+		}},
+		{name: "change a role", openTo: runners, audited: orgmodel.AuditRoleUpdate, run: func(actor *Actor) error {
+			_, err := UpdateRole(db, actor, edited.Id, RoleInput{Name: fmt.Sprintf("Edited %d", next()), Scope: orgmodel.ScopeOrg, Permissions: []string{"usage.read"}})
+			return err
+		}},
+		{name: "delete a role", openTo: runners, audited: orgmodel.AuditRoleDelete, spawns: "roles", run: func(actor *Actor) error {
+			return DeleteRole(db, actor, spareRole())
+		}},
+		{name: "give a member a role", openTo: runners, audited: orgmodel.AuditRoleAssign, run: func(actor *Actor) error {
+			current := reloadUser(t, db, promoted.Id).OrgRoleId
+			return UpdateMember(db, actor, promoted.Id, MemberPatch{RoleId: intPtr(other(current, readonlyRole, staffRole))})
+		}},
+		{name: "move a member", openTo: runners, audited: orgmodel.AuditMemberMove, run: func(actor *Actor) error {
+			current := reloadUser(t, db, moved.Id).DepartmentId
+			return UpdateMember(db, actor, moved.Id, MemberPatch{DepartmentId: intPtr(other(current, c.sales.Id, c.product.Id))})
+		}},
+		{name: "set what a member manages", openTo: runners, audited: orgmodel.AuditMemberManages, run: func(actor *Actor) error {
+			current := 0
+			if added := managerRows(t, db, lead.Id); len(added) > 0 {
+				current = added[0]
+			}
+			return UpdateMember(db, actor, lead.Id, MemberPatch{ManagedDepartmentIds: intsPtr(other(current, c.sales.Id, c.product.Id))})
+		}},
+		{name: "create a service account", openTo: runners, audited: orgmodel.AuditServiceAccountCreate, run: func(actor *Actor) error {
 			_, err := CreateServiceAccount(db, actor, "Bot", 0)
 			return err
 		}},
-		{"create an invite", func(actor *Actor) error {
-			_, err := CreateInvite(db, actor, staffRole, 0)
+
+		// --- member.invite: into the departments it reaches, staff only ----------
+		{name: "invite staff into Sales", openTo: runners + " " + kindManager + " " + kindHROps, audited: orgmodel.AuditMemberInvite, run: func(actor *Actor) error {
+			_, err := CreateInvite(db, actor, staffRole, c.sales.Id)
 			return err
 		}},
-		{"list invites", func(actor *Actor) error {
+		{name: "invite staff into Product", openTo: runners + " " + kindHROps, audited: orgmodel.AuditMemberInvite, run: func(actor *Actor) error {
+			_, err := CreateInvite(db, actor, staffRole, c.product.Id)
+			return err
+		}},
+		{name: "invite a manager into Sales", openTo: runners, audited: orgmodel.AuditMemberInvite, run: func(actor *Actor) error {
+			_, err := CreateInvite(db, actor, managerRole, c.sales.Id)
+			return err
+		}},
+		{name: "list invites", openTo: runners + " " + kindManager + " " + kindHROps, run: func(actor *Actor) error {
 			_, err := ListInvites(db, actor)
 			return err
 		}},
-		{"revoke an invite", func(actor *Actor) error {
-			return RevokeInvite(db, actor, spareInvite())
+		{name: "revoke a staff invite into Sales", openTo: runners + " " + kindManager + " " + kindHROps, audited: orgmodel.AuditInviteRevoke, spawns: "invites", run: func(actor *Actor) error {
+			return RevokeInvite(db, actor, spareInvite(staffRole, c.sales.Id))
+		}},
+		{name: "revoke a staff invite into Product", openTo: runners + " " + kindHROps, audited: orgmodel.AuditInviteRevoke, spawns: "invites", run: func(actor *Actor) error {
+			return RevokeInvite(db, actor, spareInvite(staffRole, c.product.Id))
+		}},
+		{name: "revoke a manager invite into Sales", openTo: runners, audited: orgmodel.AuditInviteRevoke, spawns: "invites", run: func(actor *Actor) error {
+			return RevokeInvite(db, actor, spareInvite(managerRole, c.sales.Id))
+		}},
+
+		// --- audit.read, across the whole organization ---------------------------
+		{name: "read the audit log", openTo: runners + " " + kindReadonly, run: func(actor *Actor) error {
+			_, _, err := ListAuditLogs(db, actor, 0, 10)
+			return err
 		}},
 	}
 }
@@ -98,8 +250,10 @@ func orgRowCounts(t *testing.T, db *gorm.DB, orgID int) map[string]int64 {
 	counts := map[string]int64{}
 	for name, table := range map[string]any{
 		"departments": &orgmodel.Department{},
+		"roles":       &orgmodel.OrgRole{},
 		"invites":     &orgmodel.OrgInvite{},
 		"members":     &platformmodel.User{},
+		"audit":       &orgmodel.OrgAuditLog{},
 	} {
 		var n int64
 		require.NoError(t, db.Model(table).Where("org_id = ?", orgID).Count(&n).Error)
@@ -108,61 +262,125 @@ func orgRowCounts(t *testing.T, db *gorm.DB, orgID int) map[string]int64 {
 	return counts
 }
 
-func TestManagement_IsOpenToTheOwnerAndAdminsOnly(t *testing.T) {
+// Acceptance: 部门作用域硬检查 and the rest of the role table, one action at a
+// time. Every pair of action and kind of member has an expected answer.
+func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
-		acme := seedOrg(t, db, "Acme")
-		actions := managementActions(t, db, acme)
-		require.Len(t, actions, 11, "a new management action belongs in managementActions")
+		c := newCast(t, db, "Acme")
+		actions := managementActions(t, db, c)
+		require.Len(t, actions, 23, "a new management action belongs in managementActions")
+		require.Len(t, c.actors, len(allKinds))
 
-		for _, role := range []string{orgmodel.RoleManager, orgmodel.RoleStaff, orgmodel.RoleReadonly} {
-			member := seedMember(t, db, acme, "plain-"+role, role)
-			actor := actorFor(t, db, member.Id)
-			for _, action := range actions {
-				require.ErrorIs(t, action.run(actor), ErrForbidden, "%s must not %s", role, action.name)
-			}
-		}
-		// A service account is staff; were it ever to act, it is refused too.
-		bot, err := CreateServiceAccount(db, actorFor(t, db, acme.owner.Id), "CI", 0)
-		require.NoError(t, err)
 		for _, action := range actions {
-			require.ErrorIs(t, action.run(actorFor(t, db, bot.Id)), ErrForbidden, "a service account must not %s", action.name)
-		}
-
-		admin := seedMember(t, db, acme, "the-admin", orgmodel.RoleAdmin)
-		for _, userID := range []int{acme.owner.Id, admin.Id} {
-			actor := actorFor(t, db, userID)
-			for _, action := range actions {
-				require.NoError(t, action.run(actor), "user %d could not %s", userID, action.name)
+			for _, kind := range allKinds {
+				// Loaded again for every try: an earlier action may have
+				// changed something, and a real request always starts fresh.
+				actor := actorFor(t, db, c.actors[kind].UserId)
+				err := action.run(actor)
+				if action.open(kind) {
+					require.NoError(t, err, "%s must be able to %s", kind, action.name)
+				} else {
+					require.ErrorIs(t, err, ErrForbidden, "%s must not %s", kind, action.name)
+				}
 			}
 		}
 	})
 }
 
-// Refusals must come before anything is written: a refused actor leaves the
-// organization exactly as it was.
+// Refusals come before anything is written: a refused actor leaves the
+// organization exactly as it was — audit log included.
 func TestManagement_ARefusalChangesNothing(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
-		acme := seedOrg(t, db, "Acme")
-		actions := managementActions(t, db, acme)
-		staff := actorFor(t, db, seedMember(t, db, acme, "staff", orgmodel.RoleStaff).Id)
-		product := departmentNamed(t, db, acme.id, "Product")
-
-		for _, action := range actions {
-			before := orgRowCounts(t, db, acme.id)
-			require.ErrorIs(t, action.run(staff), ErrForbidden, action.name)
-			after := orgRowCounts(t, db, acme.id)
-			// The two destructive actions get a fresh victim written for them
-			// before the gate runs; nothing else may appear, and nothing may go.
-			switch action.name {
-			case "delete a department":
-				before["departments"]++
-			case "revoke an invite":
-				before["invites"]++
+		c := newCast(t, db, "Acme")
+		product := c.product
+		for _, action := range managementActions(t, db, c) {
+			for _, kind := range allKinds {
+				if action.open(kind) {
+					continue
+				}
+				before := orgRowCounts(t, db, c.org.id)
+				require.ErrorIs(t, action.run(c.actors[kind]), ErrForbidden, "%s, %s", kind, action.name)
+				after := orgRowCounts(t, db, c.org.id)
+				// A destructive action wrote itself a fresh victim before it
+				// asked; nothing else may appear, and nothing may go.
+				if action.spawns != "" {
+					before[action.spawns]++
+				}
+				require.Equal(t, before, after, "%s, %s", kind, action.name)
 			}
-			require.Equal(t, before, after, action.name)
 		}
-		require.Equal(t, "Product", departmentNamed(t, db, acme.id, "Product").Name)
-		require.Equal(t, product.Id, departmentNamed(t, db, acme.id, "Product").Id)
+		require.Equal(t, product, departmentNamed(t, db, c.org.id, "Product"))
+	})
+}
+
+// Whoever may not change members is turned away before anything is looked up.
+// The answer must not depend on who the target is or whether they exist:
+// otherwise a manager could learn who is in the organization, and would be
+// told "the owner's role cannot be changed" where the truth is "not yours to
+// ask".
+func TestUpdateMember_RefusesBeforeLookingAnythingUp(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		c := newCast(t, db, "Acme")
+		other := seedOrg(t, db, "Other")
+		stranger := seedMember(t, db, other, "stranger", orgmodel.RoleStaff)
+		ownerRole := presetRoleID(t, db, orgmodel.RoleOwner)
+		targets := map[string]int{
+			"the owner":                   c.org.owner.Id,
+			"an admin":                    c.actors[kindAdmin].UserId,
+			"a member of their own":       c.actors[kindStaff].UserId,
+			"nobody":                      424242,
+			"another organization's":      stranger.Id,
+			"themselves (see each actor)": 0,
+		}
+		patches := map[string]MemberPatch{
+			"nothing":               {},
+			"the owner role":        {RoleId: intPtr(ownerRole)},
+			"an unknown role":       {RoleId: intPtr(424242)},
+			"an unknown department": {DepartmentId: intPtr(424242)},
+			"departments to manage": {ManagedDepartmentIds: intsPtr(c.sales.Id)},
+		}
+		before := orgRowCounts(t, db, c.org.id)
+		for _, kind := range []string{kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance} {
+			actor := c.actors[kind]
+			for target, memberID := range targets {
+				if memberID == 0 {
+					memberID = actor.UserId
+				}
+				for what, patch := range patches {
+					require.ErrorIs(t, UpdateMember(db, actor, memberID, patch), ErrForbidden,
+						"%s giving %s %s", kind, target, what)
+				}
+			}
+		}
+		require.Equal(t, before, orgRowCounts(t, db, c.org.id))
+	})
+}
+
+// PRD D17: every management write goes into the audit log, with who did it and
+// from where — and a read leaves no trace.
+func TestManagement_EveryWriteIsRecordedAndNoReadIs(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		c := newCast(t, db, "Acme")
+		admin := c.actors[kindAdmin]
+		for _, action := range managementActions(t, db, c) {
+			before := auditRecords(t, db, c.org.id)
+			require.NoError(t, action.run(admin), action.name)
+			after := auditRecords(t, db, c.org.id)
+			if action.audited == "" {
+				require.Len(t, after, len(before), "%s is a read and must leave no record", action.name)
+				continue
+			}
+			require.Len(t, after, len(before)+1, "%s must leave exactly one record", action.name)
+			record := after[len(after)-1]
+			require.Equal(t, action.audited, record.Action, action.name)
+			require.Equal(t, c.org.id, record.OrgId, action.name)
+			require.Equal(t, admin.UserId, record.ActorUserId, action.name)
+			require.Equal(t, testIP, record.Ip, action.name)
+			require.NotEmpty(t, record.TargetType, action.name)
+			require.NotZero(t, record.TargetId, action.name)
+			require.NotZero(t, record.CreatedTime, action.name)
+			require.NotEqual(t, "{}", record.Detail, "%s must say what changed", action.name)
+		}
 	})
 }
 
@@ -178,6 +396,8 @@ func TestManagement_StaysInsideTheActorsOrganization(t *testing.T) {
 		theirMember := seedMember(t, db, other, "their-member", orgmodel.RoleStaff)
 		theirInvite, err := CreateInvite(db, theirOwner, presetRoleID(t, db, orgmodel.RoleStaff), theirSales.Id)
 		require.NoError(t, err)
+		theirRole, err := CreateRole(db, theirOwner, RoleInput{Name: "Their role", Scope: orgmodel.ScopeOrg, Permissions: []string{"key.delete"}})
+		require.NoError(t, err)
 		before := orgRowCounts(t, db, other.id)
 
 		require.ErrorIs(t, RenameDepartment(db, intruder, theirSales.Id, "Mine now"), ErrDepartmentNotFound)
@@ -186,10 +406,16 @@ func TestManagement_StaysInsideTheActorsOrganization(t *testing.T) {
 		require.ErrorIs(t, RevokeInvite(db, intruder, theirInvite.Id), ErrInviteNotFound)
 		_, err = CreateServiceAccount(db, intruder, "Plant", theirSales.Id)
 		require.ErrorIs(t, err, ErrDepartmentNotFound)
+		_, err = UpdateRole(db, intruder, theirRole.Id, RoleInput{Name: "Mine now", Scope: orgmodel.ScopeOrg, Permissions: []string{"key.read"}})
+		require.ErrorIs(t, err, ErrRoleNotFound)
+		require.ErrorIs(t, DeleteRole(db, intruder, theirRole.Id), ErrRoleNotFound)
+		own := seedMember(t, db, acme, "own-member", orgmodel.RoleManager)
+		require.ErrorIs(t, UpdateMember(db, intruder, own.Id, MemberPatch{ManagedDepartmentIds: intsPtr(theirSales.Id)}), ErrDepartmentNotFound)
 
 		require.Equal(t, before, orgRowCounts(t, db, other.id))
 		require.Equal(t, "Sales", departmentNamed(t, db, other.id, "Sales").Name)
 		require.Equal(t, theirMember, reloadUser(t, db, theirMember.Id))
+		require.Empty(t, managerRows(t, db, own.Id))
 
 		// What the intruder can list is their own company's, and only that.
 		departments, err := ListDepartments(db, intruder)
@@ -199,10 +425,22 @@ func TestManagement_StaysInsideTheActorsOrganization(t *testing.T) {
 		}
 		members, err := ListMembers(db, intruder)
 		require.NoError(t, err)
-		require.Len(t, members, 1)
+		require.Len(t, members, 2)
 		require.Equal(t, acme.owner.Id, members[0].Id)
 		invites, err := ListInvites(db, intruder)
 		require.NoError(t, err)
 		require.Empty(t, invites)
+		roles, err := ListRoles(db, intruder)
+		require.NoError(t, err)
+		for _, role := range roles {
+			require.NotEqual(t, theirRole.Id, role.Id)
+		}
+		// Nor their audit log: the intruder sees no record of the other
+		// company, which by now has some.
+		require.NotEmpty(t, auditRecords(t, db, other.id))
+		records, total, err := ListAuditLogs(db, intruder, 0, 100)
+		require.NoError(t, err)
+		require.Empty(t, records)
+		require.Zero(t, total)
 	})
 }

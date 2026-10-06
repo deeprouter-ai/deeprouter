@@ -58,8 +58,9 @@ type OrgRole struct {
 // TableName pins the PRD's table name.
 func (OrgRole) TableName() string { return "org_roles" }
 
-// DepartmentManager gives one member dept-scoped reach over one department;
-// a member may manage several.
+// DepartmentManager adds one department to the ones a member manages. A member
+// whose role has department scope always manages the department they belong
+// to; these rows are the further ones (PRD D28).
 type DepartmentManager struct {
 	DepartmentId int `json:"department_id" gorm:"primaryKey;autoIncrement:false"`
 	UserId       int `json:"user_id" gorm:"primaryKey;autoIncrement:false;index"`
@@ -105,7 +106,7 @@ type OrgAuditLog struct {
 	Id          int    `json:"id"`
 	OrgId       int    `json:"org_id" gorm:"not null;index"`
 	ActorUserId int    `json:"actor_user_id" gorm:"not null"`
-	Action      string `json:"action" gorm:"type:varchar(64);not null"` // a primitive, or the name of an inherent power
+	Action      string `json:"action" gorm:"type:varchar(64);not null"` // what was done, see audit.go
 	TargetType  string `json:"target_type" gorm:"type:varchar(32)"`
 	TargetId    int    `json:"target_id"`
 	Detail      string `json:"detail" gorm:"type:text"` // JSON: the values before and after

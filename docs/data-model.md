@@ -51,11 +51,11 @@ Added by `internal/org` (see its README for the rules). An organization is a cus
 |---|---|---|
 | `organizations` | One customer company. Holds no money: the company wallet is the owner's `users.quota` | PK `id`; UNQ `owner_user_id`; `name` varchar(64) |
 | `departments` | Structural unit only — scopes managers and groups reports, carries no permissions. Every organization starts with the rows of `model.PresetDepartments`: a default department that cannot be deleted, plus five business units. Deleting a department moves its members and unused invite links to the default one | PK `id`; IDX `org_id`; `is_default`; `preset_key` (starter entry the row came from, NULL if the company made it); `parent_id` (always 0 for now); SOFT-DELETE |
-| `org_roles` | A bundle of permission primitives. `org_id = 0` rows are the five platform presets, synced from `model.PresetRoles` on every boot | PK `id`; IDX `org_id`; `scope` = `org` \| `dept` \| `self`; CSV `permissions`; SOFT-DELETE |
-| `department_managers` | Which member manages which department | Composite PK `(department_id, user_id)` |
+| `org_roles` | A bundle of permission primitives. `org_id = 0` rows are the five platform presets, synced from `model.PresetRoles` on every boot; the others are an organization's custom roles (`scope` `org` or `dept` only), stored with the reads their writes imply. Deleting a custom role sends its holders and its invite links back to the preset `staff` | PK `id`; IDX `org_id`; `scope` = `org` \| `dept` \| `self`; CSV `permissions`; SOFT-DELETE |
+| `department_managers` | The *further* departments a member manages. A member whose role has `dept` scope always manages the department in `users.department_id` — that one has no row here. Rows exist only for members with such a role | Composite PK `(department_id, user_id)` |
 | `org_invites` | Invite links carrying a role and a department. A link is not consumed: it admits every sign-up that presents it until `expires_time` (7 days after creation) or until the row is deleted (revoked) | PK `id`; UNQ `code` (32 random characters); IDX `org_id` |
 | `org_alerts` | Anomaly-rule hits on a key (notify only, never block) | PK `id`; IDX `org_id`, `token_id`; TEXT `detail` (JSON) |
-| `org_audit_logs` | Append-only record of org management actions | PK `id`; IDX `org_id`; TEXT `detail` (JSON) |
+| `org_audit_logs` | Append-only record of org management actions, written in the transaction of the change itself. `action` is one of `model.Audit…` (`role.assign`, `department.rename`, `member.invite`, …), `target_type` one of `department` \| `role` \| `member` \| `invite`. `detail` is `{"before": …, "after": …}` with names as well as ids, and never a credential | PK `id`; IDX `org_id`; `actor_user_id`; `ip`; TEXT `detail` (JSON) |
 
 Columns added to platform tables — all default to zero and are `omitempty` in JSON, so a personal row looks exactly as it did before:
 

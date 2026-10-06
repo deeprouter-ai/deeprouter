@@ -23,7 +23,15 @@ const (
 	msgOrgOwnerImmutable            = "org.owner_immutable"
 	msgOrgOwnerCannotDeleteAccount  = "org.owner_cannot_delete_account"
 	msgOrgMemberNotFound            = "org.member_not_found"
+	msgOrgMemberNotDepartmentScoped = "org.member_not_department_scoped"
 	msgOrgRoleNotFound              = "org.role_not_found"
+	msgOrgRoleNameInvalid           = "org.role_name_invalid"
+	msgOrgRoleExists                = "org.role_exists"
+	msgOrgRolePreset                = "org.role_preset"
+	msgOrgRoleScopeInvalid          = "org.role_scope_invalid"
+	msgOrgRolePermissionsInvalid    = "org.role_permissions_invalid"
+	msgOrgRoleAuditScope            = "org.role_audit_scope"
+	msgOrgRolePackNotFound          = "org.role_pack_not_found"
 	msgOrgDepartmentNotFound        = "org.department_not_found"
 	msgOrgDepartmentNameInvalid     = "org.department_name_invalid"
 	msgOrgDepartmentExists          = "org.department_exists"
@@ -54,7 +62,15 @@ var orgRefusals = []struct {
 	{orgservice.ErrOwnerImmutable, msgOrgOwnerImmutable, http.StatusOK},
 	{orgservice.ErrInvalidName, msgOrgNameInvalid, http.StatusOK},
 	{orgservice.ErrMemberNotFound, msgOrgMemberNotFound, http.StatusOK},
+	{orgservice.ErrNotDepartmentScoped, msgOrgMemberNotDepartmentScoped, http.StatusOK},
 	{orgservice.ErrRoleNotFound, msgOrgRoleNotFound, http.StatusOK},
+	{orgservice.ErrInvalidRoleName, msgOrgRoleNameInvalid, http.StatusOK},
+	{orgservice.ErrRoleExists, msgOrgRoleExists, http.StatusOK},
+	{orgservice.ErrPresetRole, msgOrgRolePreset, http.StatusOK},
+	{orgservice.ErrInvalidRoleScope, msgOrgRoleScopeInvalid, http.StatusOK},
+	{orgservice.ErrInvalidRolePermissions, msgOrgRolePermissionsInvalid, http.StatusOK},
+	{orgservice.ErrAuditNeedsOrgScope, msgOrgRoleAuditScope, http.StatusOK},
+	{orgservice.ErrRolePackNotFound, msgOrgRolePackNotFound, http.StatusOK},
 	{orgservice.ErrDepartmentNotFound, msgOrgDepartmentNotFound, http.StatusOK},
 	{orgservice.ErrInvalidDepartmentName, msgOrgDepartmentNameInvalid, http.StatusOK},
 	{orgservice.ErrDepartmentExists, msgOrgDepartmentExists, http.StatusOK},
@@ -81,14 +97,16 @@ func orgError(c *gin.Context, err error) {
 	common.ApiError(c, err)
 }
 
-// orgActor loads the caller as a member of their organization. When the
-// caller is not in one it answers the request and reports false.
+// orgActor loads the caller as a member of their organization, with the
+// address the request came from for the audit log. When the caller is not in
+// an organization it answers the request and reports false.
 func orgActor(c *gin.Context) (*orgservice.Actor, bool) {
 	actor, err := orgservice.LoadActor(model.DB, c.GetInt("id"))
 	if err != nil {
 		orgError(c, err)
 		return nil, false
 	}
+	actor.Ip = c.ClientIP()
 	return actor, true
 }
 
@@ -209,6 +227,122 @@ func ListOrgRoles(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, roles)
+}
+
+// GetOrgPermissions returns what roles are made of — the primitives, the
+// inherent powers and the role packs — for the roles page to draw from.
+func GetOrgPermissions(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	catalog, err := orgservice.GetPermissionCatalog(actor)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, catalog)
+}
+
+// CreateOrgRole adds a custom role to the caller's organization.
+func CreateOrgRole(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	var input orgservice.RoleInput
+	if !orgBody(c, &input) {
+		return
+	}
+	role, err := orgservice.CreateRole(model.DB, actor, input)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, role)
+}
+
+// UpdateOrgRole changes a custom role of the caller's organization.
+func UpdateOrgRole(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	id, ok := orgPathID(c)
+	if !ok {
+		return
+	}
+	var input orgservice.RoleInput
+	if !orgBody(c, &input) {
+		return
+	}
+	role, err := orgservice.UpdateRole(model.DB, actor, id, input)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, role)
+}
+
+// DeleteOrgRole deletes a custom role; the members who held it become staff.
+func DeleteOrgRole(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	id, ok := orgPathID(c)
+	if !ok {
+		return
+	}
+	if err := orgservice.DeleteRole(model.DB, actor, id); err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+// orgRolePackRequest is the body of a role pack adoption. The name is
+// optional: the page sends the name it shows the pack under, so the role comes
+// out in the language the admin is reading.
+type orgRolePackRequest struct {
+	Name string `json:"name"`
+}
+
+// AdoptOrgRolePack copies a platform role pack into the caller's organization
+// as a custom role.
+func AdoptOrgRolePack(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	var req orgRolePackRequest
+	if !orgBody(c, &req) {
+		return
+	}
+	role, err := orgservice.AdoptRolePack(model.DB, actor, c.Param("key"), req.Name)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, role)
+}
+
+// ListOrgAuditLogs returns one page of the organization's audit log, newest
+// first.
+func ListOrgAuditLogs(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := orgservice.ListAuditLogs(model.DB, actor, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
+	common.ApiSuccess(c, pageInfo)
 }
 
 // ListOrgMembers returns the members of the caller's organization.
@@ -344,8 +478,9 @@ func GetOrgInvitePreview(c *gin.Context) {
 // writes the account and its membership in one transaction — an account that
 // asked for a company must never be left behind without one. A sign-up that
 // asks for neither is exactly the upstream insert, so personal sign-ups do
-// not change at all. lang names the preset departments of a new organization.
-func insertRegisteredUser(user *model.User, inviterId int, req *RegisterRequest, lang string) (int, error) {
+// not change at all. The request supplies the language that names the preset
+// departments of a new organization, and the address an invite was used from.
+func insertRegisteredUser(c *gin.Context, user *model.User, inviterId int, req *RegisterRequest) (int, error) {
 	if req.OrgName == "" && req.OrgInvite == "" {
 		return 0, user.Insert(inviterId)
 	}
@@ -367,9 +502,9 @@ func insertRegisteredUser(user *model.User, inviterId int, req *RegisterRequest,
 			return err
 		}
 		if req.OrgInvite != "" {
-			return orgservice.JoinByInviteTx(tx, user.Id, req.OrgInvite)
+			return orgservice.JoinByInviteTx(tx, user.Id, req.OrgInvite, c.ClientIP())
 		}
-		org, err := orgservice.CreateForOwnerTx(tx, user.Id, req.OrgName, lang)
+		org, err := orgservice.CreateForOwnerTx(tx, user.Id, req.OrgName, i18n.GetLangFromContext(c))
 		if err != nil {
 			return err
 		}

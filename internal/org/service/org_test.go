@@ -207,6 +207,9 @@ func TestGetMembership(t *testing.T) {
 			return err
 		}))
 
+		ownerRoleID, err := orgmodel.PresetRoleID(db, orgmodel.RoleOwner)
+		require.NoError(t, err)
+
 		none, err := GetMembership(db, personal.Id)
 		require.NoError(t, err)
 		require.Nil(t, none, "a personal account has no membership")
@@ -214,13 +217,15 @@ func TestGetMembership(t *testing.T) {
 		got, err := GetMembership(db, founder.Id)
 		require.NoError(t, err)
 		require.Equal(t, &Membership{
-			OrgId:        org.Id,
-			OrgName:      "Acme",
-			IsOwner:      true,
-			Role:         orgmodel.RoleOwner,
-			RoleScope:    orgmodel.ScopeOrg,
-			Permissions:  orgmodel.Primitives,
-			DepartmentId: defaultDepartment(t, db, org.Id).Id,
+			OrgId:                org.Id,
+			OrgName:              "Acme",
+			IsOwner:              true,
+			RoleId:               ownerRoleID,
+			Role:                 orgmodel.RoleOwner,
+			RoleScope:            orgmodel.ScopeOrg,
+			Permissions:          orgmodel.Primitives,
+			DepartmentId:         defaultDepartment(t, db, org.Id).Id,
+			ManagedDepartmentIds: []int{},
 		}, got)
 	})
 }

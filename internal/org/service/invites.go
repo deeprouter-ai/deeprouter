@@ -41,6 +41,35 @@ type InvitePreview struct {
 	Department string `json:"department"`
 }
 
+// inviteRecord is what the audit log keeps of an invite link. It leaves the
+// code out on purpose: the code is a credential, and whoever may read the
+// audit log is not thereby entitled to let people into the organization.
+type inviteRecord struct {
+	RoleId       int    `json:"role_id"`
+	Role         string `json:"role"`
+	DepartmentId int    `json:"department_id"`
+	Department   string `json:"department"`
+	ExpiresTime  int64  `json:"expires_time,omitempty"`
+}
+
+// joinRecord is what the audit log keeps of someone joining: the link they
+// used and what it gave them.
+type joinRecord struct {
+	InviteId int `json:"invite_id"`
+	inviteRecord
+}
+
+// describeInvite renders an invite link for the audit log.
+func describeInvite(db *gorm.DB, invite *orgmodel.OrgInvite, role *orgmodel.OrgRole) inviteRecord {
+	return inviteRecord{
+		RoleId:       role.Id,
+		Role:         role.Name,
+		DepartmentId: invite.DepartmentId,
+		Department:   describeDepartment(db, invite.OrgId, invite.DepartmentId).Department,
+		ExpiresTime:  invite.ExpiresTime,
+	}
+}
+
 // findLiveInvite loads an invite that can still be used.
 func findLiveInvite(db *gorm.DB, code string) (*orgmodel.OrgInvite, error) {
 	if code == "" {
@@ -57,27 +86,53 @@ func findLiveInvite(db *gorm.DB, code string) (*orgmodel.OrgInvite, error) {
 	return &found[0], nil
 }
 
+// mayIssue decides whether actor may issue an invite link for a role into a
+// department. The same answer decides which links they see and may revoke: a
+// link is a way in, so showing one to somebody who could not have made it
+// would hand them that way in.
+//
+//   - It takes member.invite reaching the department.
+//   - Nobody gives what they do not have (PRD §2): only whoever assigns roles
+//     — the owner and admins — invites into a role other than staff.
+//   - A link that makes admins is an appointment, the owner's alone (PRD D10),
+//     and no link makes owners.
+func mayIssue(actor *Actor, role *orgmodel.OrgRole, departmentID int) error {
+	if !actor.can("member.invite", orgmodel.Target{DepartmentId: departmentID}) {
+		return ErrForbidden
+	}
+	if isPreset(role, orgmodel.RoleOwner) {
+		return ErrOwnerImmutable
+	}
+	if isPreset(role, orgmodel.RoleAdmin) && !actor.can(orgmodel.PowerAdmins, wholeOrganization) {
+		return ErrOwnerOnly
+	}
+	if !isPreset(role, orgmodel.RoleStaff) && !actor.can(orgmodel.PowerRoles, wholeOrganization) {
+		return ErrForbidden
+	}
+	return nil
+}
+
 // CreateInvite issues an invite link that admits new members with a fixed
 // role and department. The link can be used by any number of people until it
 // expires or is revoked, so one link serves a whole team. A zero departmentID
 // means the default department.
 func CreateInvite(db *gorm.DB, actor *Actor, roleID int, departmentID int) (*InviteView, error) {
-	if err := actor.requireManager(); err != nil {
-		return nil, err
+	// Whoever may invite nowhere learns nothing about roles or departments.
+	if !actor.Holds("member.invite") {
+		return nil, ErrForbidden
 	}
 	role, err := findRole(db, actor.OrgId, roleID)
 	if err != nil {
 		return nil, err
 	}
-	if isPreset(role, orgmodel.RoleOwner) {
-		return nil, ErrOwnerImmutable
-	}
-	// An invite that makes admins is an appointment, and appointing admins is
-	// the owner's alone.
-	if isPreset(role, orgmodel.RoleAdmin) && !actor.IsOwner {
-		return nil, ErrOwnerOnly
-	}
 	resolvedDepartmentID, err := resolveDepartment(db, actor.OrgId, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	if err := mayIssue(actor, role, resolvedDepartmentID); err != nil {
+		return nil, err
+	}
+	permit, err := actor.permit("member.invite", orgmodel.Target{DepartmentId: resolvedDepartmentID})
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +158,14 @@ func CreateInvite(db *gorm.DB, actor *Actor, roleID int, departmentID int) (*Inv
 		DepartmentId: resolvedDepartmentID,
 		ExpiresTime:  time.Now().Add(InviteValidity).Unix(),
 	}
-	if err := db.Create(&invite).Error; err != nil {
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&invite).Error; err != nil {
+			return err
+		}
+		return permit.record(tx, orgmodel.AuditMemberInvite, orgmodel.AuditTargetInvite, invite.Id,
+			nil, describeInvite(tx, &invite, role))
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &InviteView{
@@ -116,11 +178,12 @@ func CreateInvite(db *gorm.DB, actor *Actor, roleID int, departmentID int) (*Inv
 	}, nil
 }
 
-// ListInvites returns the organization's invite links that can still be used,
-// newest first.
+// ListInvites returns the usable invite links the actor could have issued
+// themselves, newest first: every link for the owner, only the staff links
+// into their departments for a manager.
 func ListInvites(db *gorm.DB, actor *Actor) ([]InviteView, error) {
-	if err := actor.requireManager(); err != nil {
-		return nil, err
+	if !actor.Holds("member.invite") {
+		return nil, ErrForbidden
 	}
 	var invites []orgmodel.OrgInvite
 	if err := db.Where("org_id = ? AND expires_time > ?", actor.OrgId, common.GetTimestamp()).
@@ -131,17 +194,21 @@ func ListInvites(db *gorm.DB, actor *Actor) ([]InviteView, error) {
 	if err != nil {
 		return nil, err
 	}
-	roleNames := make(map[int]string, len(roles))
-	for _, role := range roles {
-		roleNames[role.Id] = role.Name
+	roleByID := make(map[int]*orgmodel.OrgRole, len(roles))
+	for i := range roles {
+		roleByID[roles[i].Id] = &roles[i]
 	}
 	views := make([]InviteView, 0, len(invites))
 	for _, invite := range invites {
+		role, known := roleByID[invite.RoleId]
+		if !known || mayIssue(actor, role, invite.DepartmentId) != nil {
+			continue
+		}
 		views = append(views, InviteView{
 			Id:           invite.Id,
 			Code:         invite.Code,
 			RoleId:       invite.RoleId,
-			Role:         roleNames[invite.RoleId],
+			Role:         role.Name,
 			DepartmentId: invite.DepartmentId,
 			ExpiresTime:  invite.ExpiresTime,
 		})
@@ -149,19 +216,39 @@ func ListInvites(db *gorm.DB, actor *Actor) ([]InviteView, error) {
 	return views, nil
 }
 
-// RevokeInvite makes an invite link stop working at once.
+// RevokeInvite makes an invite link stop working at once. Whoever could have
+// issued a link may revoke it.
 func RevokeInvite(db *gorm.DB, actor *Actor, inviteID int) error {
-	if err := actor.requireManager(); err != nil {
-		return err
+	if !actor.Holds("member.invite") {
+		return ErrForbidden
 	}
-	result := db.Where("id = ? AND org_id = ?", inviteID, actor.OrgId).Delete(&orgmodel.OrgInvite{})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return ErrInviteNotFound
-	}
-	return nil
+	return db.Transaction(func(tx *gorm.DB) error {
+		var found []orgmodel.OrgInvite
+		if err := tx.Where("id = ? AND org_id = ?", inviteID, actor.OrgId).
+			Limit(1).Find(&found).Error; err != nil {
+			return err
+		}
+		if len(found) == 0 {
+			return ErrInviteNotFound
+		}
+		invite := &found[0]
+		role, err := findRole(tx, actor.OrgId, invite.RoleId)
+		if err != nil {
+			return err
+		}
+		if err := mayIssue(actor, role, invite.DepartmentId); err != nil {
+			return err
+		}
+		permit, err := actor.permit("member.invite", orgmodel.Target{DepartmentId: invite.DepartmentId})
+		if err != nil {
+			return err
+		}
+		if err := tx.Delete(&orgmodel.OrgInvite{}, invite.Id).Error; err != nil {
+			return err
+		}
+		return permit.record(tx, orgmodel.AuditInviteRevoke, orgmodel.AuditTargetInvite, invite.Id,
+			describeInvite(tx, invite, role), nil)
+	})
 }
 
 // LookupInvite tells the holder of an invite code what joining with it means.
@@ -191,8 +278,9 @@ func LookupInvite(db *gorm.DB, code string) (*InvitePreview, error) {
 // organization an invite code belongs to, with the invite's role and
 // department. It runs inside the sign-up transaction, so an account that asked
 // to join a company is never left behind without one. The invite is kept: it
-// serves everyone who holds the link.
-func JoinByInviteTx(tx *gorm.DB, userID int, code string) error {
+// serves everyone who holds the link — which is why each use of it goes into
+// the audit log, with the address it came from.
+func JoinByInviteTx(tx *gorm.DB, userID int, code string, ip string) error {
 	invite, err := findLiveInvite(tx, code)
 	if err != nil {
 		return err
@@ -213,5 +301,21 @@ func JoinByInviteTx(tx *gorm.DB, userID int, code string) error {
 	if result.RowsAffected != 1 {
 		return ErrNotPersonalAccount
 	}
-	return nil
+	role, err := findRole(tx, invite.OrgId, invite.RoleId)
+	if err != nil {
+		return err
+	}
+	// Joining is nobody's management action, so it is recorded directly: the
+	// newcomer is both who acted and who the record is about.
+	joined := describeInvite(tx, invite, role)
+	joined.ExpiresTime = 0
+	return RecordAudit(tx, AuditEntry{
+		OrgId:       invite.OrgId,
+		ActorUserId: userID,
+		Ip:          ip,
+		Action:      orgmodel.AuditMemberJoin,
+		TargetType:  orgmodel.AuditTargetMember,
+		TargetId:    userID,
+		After:       joinRecord{InviteId: invite.Id, inviteRecord: joined},
+	})
 }

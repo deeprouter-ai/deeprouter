@@ -260,7 +260,7 @@ func Register(c *gin.Context) {
 	// org_invite it joins one (controller/org.go); with neither this is the
 	// plain Insert. orgError answers anything that is not an organization
 	// refusal exactly as ApiError did.
-	orgId, err := insertRegisteredUser(&cleanUser, inviterId, &req, i18n.GetLangFromContext(c))
+	orgId, err := insertRegisteredUser(c, &cleanUser, inviterId, &req)
 	if err != nil {
 		orgError(c, err)
 		return

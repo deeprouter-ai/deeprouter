@@ -32,6 +32,14 @@ type DepartmentView struct {
 	MemberCount int    `json:"member_count"`
 }
 
+// departmentRecord is what the audit log keeps of a department.
+type departmentRecord struct {
+	Name string `json:"name"`
+	// MemberIds is set on a deletion: the members it moved to the default
+	// department.
+	MemberIds []int `json:"member_ids,omitempty"`
+}
+
 // seedDepartmentsTx creates the preset departments of a new organization and
 // returns the id of the default one.
 func seedDepartmentsTx(tx *gorm.DB, orgID int, lang string) (int, error) {
@@ -112,15 +120,21 @@ func departmentNameTaken(db *gorm.DB, orgID int, name string, exceptID int) (boo
 	return n > 0, err
 }
 
-// ListDepartments returns the organization's departments, the default one
-// first, each with the number of members (service accounts included) in it.
+// ListDepartments returns the departments the actor may see, the default one
+// first, each with the number of members (service accounts included) in it:
+// all of them for a role that reaches the whole organization, the ones they
+// manage for a department-scoped one.
 func ListDepartments(db *gorm.DB, actor *Actor) ([]DepartmentView, error) {
-	if err := actor.requireManager(); err != nil {
+	everywhere, managed, err := actor.reach("member.read")
+	if err != nil {
 		return nil, err
 	}
+	query := db.Where("org_id = ?", actor.OrgId)
+	if !everywhere {
+		query = query.Where("id IN ?", managed)
+	}
 	var departments []orgmodel.Department
-	if err := db.Where("org_id = ?", actor.OrgId).
-		Order("is_default DESC").Order("id").Find(&departments).Error; err != nil {
+	if err := query.Order("is_default DESC").Order("id").Find(&departments).Error; err != nil {
 		return nil, err
 	}
 	var counts []struct {
@@ -151,22 +165,30 @@ func ListDepartments(db *gorm.DB, actor *Actor) ([]DepartmentView, error) {
 
 // CreateDepartment adds a department to the organization.
 func CreateDepartment(db *gorm.DB, actor *Actor, rawName string) (*DepartmentView, error) {
-	if err := actor.requireManager(); err != nil {
+	permit, err := actor.permit(orgmodel.PowerDepartments, wholeOrganization)
+	if err != nil {
 		return nil, err
 	}
 	name, err := normalizeDepartmentName(rawName)
 	if err != nil {
 		return nil, err
 	}
-	taken, err := departmentNameTaken(db, actor.OrgId, name, 0)
-	if err != nil {
-		return nil, err
-	}
-	if taken {
-		return nil, ErrDepartmentExists
-	}
 	department := orgmodel.Department{OrgId: actor.OrgId, Name: name}
-	if err := db.Create(&department).Error; err != nil {
+	err = db.Transaction(func(tx *gorm.DB) error {
+		taken, err := departmentNameTaken(tx, actor.OrgId, name, 0)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrDepartmentExists
+		}
+		if err := tx.Create(&department).Error; err != nil {
+			return err
+		}
+		return permit.record(tx, orgmodel.AuditDepartmentCreate, orgmodel.AuditTargetDepartment, department.Id,
+			nil, departmentRecord{Name: department.Name})
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &DepartmentView{Id: department.Id, Name: department.Name}, nil
@@ -175,32 +197,40 @@ func CreateDepartment(db *gorm.DB, actor *Actor, rawName string) (*DepartmentVie
 // RenameDepartment renames a department. The default department can be
 // renamed like any other; it only cannot be deleted.
 func RenameDepartment(db *gorm.DB, actor *Actor, departmentID int, rawName string) error {
-	if err := actor.requireManager(); err != nil {
+	permit, err := actor.permit(orgmodel.PowerDepartments, wholeOrganization)
+	if err != nil {
 		return err
 	}
 	name, err := normalizeDepartmentName(rawName)
 	if err != nil {
 		return err
 	}
-	department, err := findDepartment(db, actor.OrgId, departmentID)
-	if err != nil {
-		return err
-	}
-	taken, err := departmentNameTaken(db, actor.OrgId, name, department.Id)
-	if err != nil {
-		return err
-	}
-	if taken {
-		return ErrDepartmentExists
-	}
-	return db.Model(&orgmodel.Department{}).Where("id = ?", department.Id).Update("name", name).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		department, err := findDepartment(tx, actor.OrgId, departmentID)
+		if err != nil {
+			return err
+		}
+		taken, err := departmentNameTaken(tx, actor.OrgId, name, department.Id)
+		if err != nil {
+			return err
+		}
+		if taken {
+			return ErrDepartmentExists
+		}
+		if err := tx.Model(&orgmodel.Department{}).Where("id = ?", department.Id).Update("name", name).Error; err != nil {
+			return err
+		}
+		return permit.record(tx, orgmodel.AuditDepartmentRename, orgmodel.AuditTargetDepartment, department.Id,
+			departmentRecord{Name: department.Name}, departmentRecord{Name: name})
+	})
 }
 
 // DeleteDepartment removes a department. Whoever pointed at it — its members,
 // and invite links not yet used — falls back to the default department, which
 // is why that one cannot be deleted.
 func DeleteDepartment(db *gorm.DB, actor *Actor, departmentID int) error {
-	if err := actor.requireManager(); err != nil {
+	permit, err := actor.permit(orgmodel.PowerDepartments, wholeOrganization)
+	if err != nil {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
@@ -213,6 +243,12 @@ func DeleteDepartment(db *gorm.DB, actor *Actor, departmentID int) error {
 		}
 		fallbackID, err := defaultDepartmentID(tx, actor.OrgId)
 		if err != nil {
+			return err
+		}
+		moved := []int{}
+		if err := tx.Model(&platformmodel.User{}).
+			Where("org_id = ? AND department_id = ?", actor.OrgId, department.Id).
+			Order("id").Pluck("id", &moved).Error; err != nil {
 			return err
 		}
 		if err := tx.Model(&platformmodel.User{}).
@@ -230,6 +266,10 @@ func DeleteDepartment(db *gorm.DB, actor *Actor, departmentID int) error {
 			Delete(&orgmodel.DepartmentManager{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&orgmodel.Department{}, department.Id).Error
+		if err := tx.Delete(&orgmodel.Department{}, department.Id).Error; err != nil {
+			return err
+		}
+		return permit.record(tx, orgmodel.AuditDepartmentDelete, orgmodel.AuditTargetDepartment, department.Id,
+			departmentRecord{Name: department.Name, MemberIds: moved}, nil)
 	})
 }

@@ -10,6 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
+// testIP is the address test actors act from, so audit records can be checked
+// for carrying it.
+const testIP = "203.0.113.7"
+
 // testOrg is an organization with its owner, as a sign-up leaves them.
 type testOrg struct {
 	id    int
@@ -34,22 +38,51 @@ func seedOrg(t *testing.T, db *gorm.DB, name string) testOrg {
 // default department — what joining by invite leaves behind.
 func seedMember(t *testing.T, db *gorm.DB, org testOrg, username string, role string) platformmodel.User {
 	t.Helper()
+	return seedMemberIn(t, db, org, username, presetRoleID(t, db, role), defaultDepartment(t, db, org.id).Id)
+}
+
+// seedMemberIn adds a person to an organization with any role, in any
+// department. It writes the columns directly, so it works whatever the rules
+// say about who may hold what.
+func seedMemberIn(t *testing.T, db *gorm.DB, org testOrg, username string, roleID int, departmentID int) platformmodel.User {
+	t.Helper()
 	user := seedUser(t, db, username, common.RoleCommonUser)
-	roleID, err := orgmodel.PresetRoleID(db, role)
-	require.NoError(t, err)
 	require.NoError(t, db.Model(&platformmodel.User{}).Where("id = ?", user.Id).Updates(map[string]any{
 		"org_id":        org.id,
 		"role_id":       roleID,
-		"department_id": defaultDepartment(t, db, org.id).Id,
+		"department_id": departmentID,
 	}).Error)
 	return reloadUser(t, db, user.Id)
 }
 
-// actorFor loads a member as the one performing a management action.
+// seedRole writes a custom role straight into the table, without the checks
+// CreateRole makes.
+func seedRole(t *testing.T, db *gorm.DB, orgID int, name string, scope string, permissions ...string) orgmodel.OrgRole {
+	t.Helper()
+	role := orgmodel.OrgRole{OrgId: orgID, Name: name, Scope: scope, Permissions: orgmodel.JoinPermissions(permissions)}
+	require.NoError(t, db.Create(&role).Error)
+	return role
+}
+
+// packPermissions returns the primitives of a role pack.
+func packPermissions(t *testing.T, key string) []string {
+	t.Helper()
+	for _, pack := range orgmodel.RolePacks {
+		if pack.Key == key {
+			return pack.Permissions
+		}
+	}
+	t.Fatalf("no role pack %s", key)
+	return nil
+}
+
+// actorFor loads a member as the one performing a management action, acting
+// from testIP.
 func actorFor(t *testing.T, db *gorm.DB, userID int) *Actor {
 	t.Helper()
 	actor, err := LoadActor(db, userID)
 	require.NoError(t, err)
+	actor.Ip = testIP
 	return actor
 }
 
@@ -69,5 +102,36 @@ func departmentNamed(t *testing.T, db *gorm.DB, orgID int, name string) orgmodel
 	return department
 }
 
+// managerRows returns the departments added for a member in
+// department_managers, in id order.
+func managerRows(t *testing.T, db *gorm.DB, userID int) []int {
+	t.Helper()
+	added, err := extraDepartments(db, []int{userID})
+	require.NoError(t, err)
+	return added[userID]
+}
+
+// auditRecords returns an organization's audit log, oldest first.
+func auditRecords(t *testing.T, db *gorm.DB, orgID int) []orgmodel.OrgAuditLog {
+	t.Helper()
+	var records []orgmodel.OrgAuditLog
+	require.NoError(t, db.Where("org_id = ?", orgID).Order("id").Find(&records).Error)
+	return records
+}
+
+// lastAudit returns the newest audit record of an organization.
+func lastAudit(t *testing.T, db *gorm.DB, orgID int) orgmodel.OrgAuditLog {
+	t.Helper()
+	records := auditRecords(t, db, orgID)
+	require.NotEmpty(t, records, "the audit log is empty")
+	return records[len(records)-1]
+}
+
 // intPtr returns a pointer to n, for the optional fields of a MemberPatch.
 func intPtr(n int) *int { return &n }
+
+// intsPtr returns a pointer to a list, for MemberPatch.ManagedDepartmentIds.
+func intsPtr(ns ...int) *[]int {
+	list := append([]int{}, ns...)
+	return &list
+}

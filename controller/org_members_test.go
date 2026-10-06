@@ -64,13 +64,19 @@ func (env orgTestEnv) seedOwner(t *testing.T, username string, orgName string) m
 }
 
 // seedMember inserts an account and puts it in the owner's organization with
-// a preset role, as joining by invite leaves it.
+// a preset role, in the default department, as joining by invite leaves it.
 func (env orgTestEnv) seedMember(t *testing.T, owner model.User, username string, role string) model.User {
 	t.Helper()
+	return env.seedMemberIn(t, owner, username, role, 0)
+}
+
+// seedMemberIn is seedMember for a department of choice; zero is the default one.
+func (env orgTestEnv) seedMemberIn(t *testing.T, owner model.User, username string, role string, departmentID int) model.User {
+	t.Helper()
 	user := env.seedUser(t, username)
-	code := env.invite(t, owner, role, 0).Code
+	code := env.invite(t, owner, role, departmentID).Code
 	require.NoError(t, env.db.Transaction(func(tx *gorm.DB) error {
-		return orgservice.JoinByInviteTx(tx, user.Id, code)
+		return orgservice.JoinByInviteTx(tx, user.Id, code, "")
 	}))
 	return env.userByName(t, username)
 }
@@ -414,17 +420,33 @@ func TestOrgDeleteSelf_TheOwnerCannotDeleteTheirAccount(t *testing.T) {
 func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 	forEachOrgDialect(t, func(t *testing.T, env orgTestEnv) {
 		owner := env.seedOwner(t, "founder", "Acme")
-		admin := env.seedMember(t, owner, "admin", orgmodel.RoleAdmin)
-		staff := env.seedMember(t, owner, "staff", orgmodel.RoleStaff)
-		solo := env.seedUser(t, "solo")
-		adminRole, err := orgmodel.PresetRoleID(env.db, orgmodel.RoleAdmin)
-		require.NoError(t, err)
-		ownerRole, err := orgmodel.PresetRoleID(env.db, orgmodel.RoleOwner)
-		require.NoError(t, err)
 		general := env.department(t, owner.OrgId, "General")
 		sales := env.department(t, owner.OrgId, "Sales")
+		product := env.department(t, owner.OrgId, "Product")
+		admin := env.seedMember(t, owner, "admin", orgmodel.RoleAdmin)
+		staff := env.seedMember(t, owner, "staff", orgmodel.RoleStaff)
+		readonly := env.seedMember(t, owner, "readonly", orgmodel.RoleReadonly)
+		manager := env.seedMemberIn(t, owner, "manager", orgmodel.RoleManager, sales.Id)
+		solo := env.seedUser(t, "solo")
+		roleID := map[string]int{}
+		for _, name := range []string{orgmodel.RoleOwner, orgmodel.RoleAdmin, orgmodel.RoleManager, orgmodel.RoleStaff} {
+			id, err := orgmodel.PresetRoleID(env.db, name)
+			require.NoError(t, err)
+			roleID[name] = id
+		}
+		adminRole, ownerRole, staffRole := roleID[orgmodel.RoleAdmin], roleID[orgmodel.RoleOwner], roleID[orgmodel.RoleStaff]
+		custom, err := orgservice.CreateRole(env.db, env.actor(t, owner.Id), orgservice.RoleInput{
+			Name: "Key Desk", Scope: orgmodel.ScopeOrg, Permissions: []string{"key.read"},
+		})
+		require.NoError(t, err)
+		intoProduct := env.invite(t, owner, orgmodel.RoleStaff, product.Id)
+		adminLink := env.invite(t, owner, orgmodel.RoleAdmin, 0)
+		role := func(name string, scope string, permissions ...string) map[string]any {
+			return map[string]any{"name": name, "scope": scope, "permissions": permissions}
+		}
+		auditBefore := env.count(t, &orgmodel.OrgAuditLog{})
 
-		for _, tc := range []struct {
+		type refusal struct {
 			name    string
 			handler gin.HandlerFunc
 			method  string
@@ -433,7 +455,8 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 			params  []gin.Param
 			status  int
 			message string
-		}{
+		}
+		cases := []refusal{
 			{"a personal account has no organization to manage", ListOrgMembers, http.MethodGet, nil, solo.Id, nil,
 				http.StatusForbidden, msgOrgNotMember},
 			{"staff cannot list members", ListOrgMembers, http.MethodGet, nil, staff.Id, nil,
@@ -442,7 +465,11 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusForbidden, msgOrgForbidden},
 			{"staff cannot list roles", ListOrgRoles, http.MethodGet, nil, staff.Id, nil,
 				http.StatusForbidden, msgOrgForbidden},
+			{"staff cannot read the permission catalogue", GetOrgPermissions, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
 			{"staff cannot list invites", ListOrgInvites, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"staff cannot read the audit log", ListOrgAuditLogs, http.MethodGet, nil, staff.Id, nil,
 				http.StatusForbidden, msgOrgForbidden},
 			{"staff cannot create a department", CreateOrgDepartment, http.MethodPost, map[string]any{"name": "Mine"}, staff.Id, nil,
 				http.StatusForbidden, msgOrgForbidden},
@@ -452,9 +479,52 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusForbidden, msgOrgForbidden},
 			{"staff cannot create a service account", CreateOrgServiceAccount, http.MethodPost, map[string]any{"name": "Bot"}, staff.Id, nil,
 				http.StatusForbidden, msgOrgForbidden},
+
+			// Acceptance: 部门作用域硬检查 — a manager outside their department.
+			{"a manager cannot invite into another department", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": staffRole, "department_id": product.Id}, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot invite into the default department by naming none", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": staffRole}, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot invite anything but staff", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": roleID[orgmodel.RoleManager], "department_id": sales.Id}, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot invite into a custom role", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": custom.Id, "department_id": sales.Id}, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot revoke a link into another department", RevokeOrgInvite, http.MethodDelete, nil, manager.Id, []gin.Param{idParam(intoProduct.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot move a member", UpdateOrgMember, http.MethodPut, map[string]any{"department_id": sales.Id}, manager.Id, []gin.Param{idParam(staff.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot create a role", CreateOrgRole, http.MethodPost, role("Mine", "dept", "key.read"), manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot read the audit log", ListOrgAuditLogs, http.MethodGet, nil, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+		}
+		// Acceptance: readonly … 发起的任何写操作均被拒绝. Every writing endpoint
+		// there is, tried by a member who may read all of it.
+		for _, write := range []refusal{
+			{name: "create a department", handler: CreateOrgDepartment, method: http.MethodPost, body: map[string]any{"name": "Mine"}},
+			{name: "rename a department", handler: RenameOrgDepartment, method: http.MethodPut, body: map[string]any{"name": "Mine"}, params: []gin.Param{idParam(sales.Id)}},
+			{name: "delete a department", handler: DeleteOrgDepartment, method: http.MethodDelete, params: []gin.Param{idParam(sales.Id)}},
+			{name: "create a role", handler: CreateOrgRole, method: http.MethodPost, body: role("Mine", "org", "key.read")},
+			{name: "change a role", handler: UpdateOrgRole, method: http.MethodPut, body: role("Mine", "org", "key.read"), params: []gin.Param{idParam(custom.Id)}},
+			{name: "delete a role", handler: DeleteOrgRole, method: http.MethodDelete, params: []gin.Param{idParam(custom.Id)}},
+			{name: "adopt a role pack", handler: AdoptOrgRolePack, method: http.MethodPost, body: map[string]any{}, params: []gin.Param{{Key: "key", Value: "finance"}}},
+			{name: "give a member a role", handler: UpdateOrgMember, method: http.MethodPut, body: map[string]any{"role_id": custom.Id}, params: []gin.Param{idParam(staff.Id)}},
+			{name: "move a member", handler: UpdateOrgMember, method: http.MethodPut, body: map[string]any{"department_id": sales.Id}, params: []gin.Param{idParam(staff.Id)}},
+			{name: "set what a member manages", handler: UpdateOrgMember, method: http.MethodPut, body: map[string]any{"managed_department_ids": []int{product.Id}}, params: []gin.Param{idParam(manager.Id)}},
+			{name: "create a service account", handler: CreateOrgServiceAccount, method: http.MethodPost, body: map[string]any{"name": "Bot"}},
+			{name: "issue an invite link", handler: CreateOrgInvite, method: http.MethodPost, body: map[string]any{"role_id": staffRole}},
+			{name: "revoke an invite link", handler: RevokeOrgInvite, method: http.MethodDelete, params: []gin.Param{idParam(intoProduct.Id)}},
+		} {
+			write.name = "readonly cannot " + write.name
+			write.userID, write.status, write.message = readonly.Id, http.StatusForbidden, msgOrgForbidden
+			cases = append(cases, write)
+		}
+		cases = append(cases, []refusal{
 			{"an admin cannot appoint an admin", UpdateOrgMember, http.MethodPut, map[string]any{"role_id": adminRole}, admin.Id, []gin.Param{idParam(staff.Id)},
 				http.StatusForbidden, msgOrgOwnerOnly},
 			{"an admin cannot issue an admin invite", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": adminRole}, admin.Id, nil,
+				http.StatusForbidden, msgOrgOwnerOnly},
+			{"an admin cannot revoke the owner's admin invite", RevokeOrgInvite, http.MethodDelete, nil, admin.Id, []gin.Param{idParam(adminLink.Id)},
 				http.StatusForbidden, msgOrgOwnerOnly},
 			{"nobody demotes the owner", UpdateOrgMember, http.MethodPut, map[string]any{"role_id": adminRole}, admin.Id, []gin.Param{idParam(owner.Id)},
 				http.StatusOK, msgOrgOwnerImmutable},
@@ -466,6 +536,8 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusOK, msgOrgAdminDepartment},
 			{"an admin invite is for the default department", CreateOrgInvite, http.MethodPost, map[string]any{"role_id": adminRole, "department_id": sales.Id}, owner.Id, nil,
 				http.StatusOK, msgOrgAdminDepartment},
+			{"only a department-scoped member manages departments", UpdateOrgMember, http.MethodPut, map[string]any{"managed_department_ids": []int{sales.Id}}, owner.Id, []gin.Param{idParam(staff.Id)},
+				http.StatusOK, msgOrgMemberNotDepartmentScoped},
 			{"a department name must be new", CreateOrgDepartment, http.MethodPost, map[string]any{"name": "Sales"}, owner.Id, nil,
 				http.StatusOK, msgOrgDepartmentExists},
 			{"a department name must not be blank", CreateOrgDepartment, http.MethodPost, map[string]any{"name": "  "}, owner.Id, nil,
@@ -482,11 +554,37 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusOK, msgOrgInviteInvalid},
 			{"a service account needs a name", CreateOrgServiceAccount, http.MethodPost, map[string]any{"name": ""}, owner.Id, nil,
 				http.StatusOK, msgOrgServiceAccountNameInvalid},
+			{"a role needs a name", CreateOrgRole, http.MethodPost, role("  ", "org", "key.read"), owner.Id, nil,
+				http.StatusOK, msgOrgRoleNameInvalid},
+			{"a role name must be new", CreateOrgRole, http.MethodPost, role("Key Desk", "org", "key.read"), owner.Id, nil,
+				http.StatusOK, msgOrgRoleExists},
+			{"a role cannot take a preset's name", CreateOrgRole, http.MethodPost, role("Admin", "org", "key.read"), owner.Id, nil,
+				http.StatusOK, msgOrgRoleExists},
+			{"a role reaches the organization or departments", CreateOrgRole, http.MethodPost, role("Mine", "self", "key.read"), owner.Id, nil,
+				http.StatusOK, msgOrgRoleScopeInvalid},
+			{"a role needs a permission", CreateOrgRole, http.MethodPost, role("Mine", "org"), owner.Id, nil,
+				http.StatusOK, msgOrgRolePermissionsInvalid},
+			{"an inherent power is not a permission", CreateOrgRole, http.MethodPost, role("Mine", "org", "key.read", orgmodel.PowerRoles), owner.Id, nil,
+				http.StatusOK, msgOrgRolePermissionsInvalid},
+			{"the audit log is not read by department", CreateOrgRole, http.MethodPost, role("Mine", "dept", "audit.read"), owner.Id, nil,
+				http.StatusOK, msgOrgRoleAuditScope},
+			{"a preset cannot be changed", UpdateOrgRole, http.MethodPut, role("Mine", "org", "key.read"), owner.Id, []gin.Param{idParam(adminRole)},
+				http.StatusOK, msgOrgRolePreset},
+			{"a preset cannot be deleted", DeleteOrgRole, http.MethodDelete, nil, owner.Id, []gin.Param{idParam(staffRole)},
+				http.StatusOK, msgOrgRolePreset},
+			{"an unknown role to change", UpdateOrgRole, http.MethodPut, role("Mine", "org", "key.read"), owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgRoleNotFound},
+			{"an unknown role to delete", DeleteOrgRole, http.MethodDelete, nil, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgRoleNotFound},
+			{"an unknown role pack", AdoptOrgRolePack, http.MethodPost, map[string]any{}, owner.Id, []gin.Param{{Key: "key", Value: "no_such_pack"}},
+				http.StatusOK, msgOrgRolePackNotFound},
 			{"a path id must be a number", DeleteOrgDepartment, http.MethodDelete, nil, owner.Id, []gin.Param{{Key: "id", Value: "abc"}},
 				http.StatusOK, i18n.MsgInvalidParams},
 			{"a body must be JSON", CreateOrgDepartment, http.MethodPost, nil, owner.Id, nil,
 				http.StatusOK, i18n.MsgInvalidParams},
-		} {
+		}...)
+
+		for _, tc := range cases {
 			response, status := callOrg(t, tc.handler, tc.method, tc.body, tc.userID, tc.params...)
 			require.False(t, response.Success, tc.name)
 			require.Equal(t, tc.status, status, tc.name)
@@ -494,14 +592,20 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 			require.Empty(t, string(response.Data), "%s: a refusal carries no data", tc.name)
 		}
 
-		// None of it left a mark.
+		// None of it left a mark — in the audit log either.
 		require.Equal(t, common.RoleCommonUser, env.userByName(t, "staff").Role)
 		require.EqualValues(t, 1, env.count(t, &model.User{}, "org_id = ? AND role_id = ?", owner.OrgId, adminRole))
 		require.EqualValues(t, 6, env.count(t, &orgmodel.Department{}, "org_id = ?", owner.OrgId))
+		require.EqualValues(t, 1, env.count(t, &orgmodel.OrgRole{}, "org_id = ?", owner.OrgId))
 		require.Zero(t, env.count(t, &model.User{}, "is_service = ?", true))
+		require.Zero(t, env.count(t, &orgmodel.DepartmentManager{}))
+		require.EqualValues(t, 2, env.count(t, &orgmodel.OrgInvite{}, "id IN ?", []int{intoProduct.Id, adminLink.Id}))
+		require.Equal(t, auditBefore, env.count(t, &orgmodel.OrgAuditLog{}))
 		for _, username := range []string{"founder", "admin"} {
 			require.Equal(t, general.Id, env.userByName(t, username).DepartmentId, username)
 		}
+		require.Equal(t, staff.DepartmentId, env.userByName(t, "staff").DepartmentId)
+		require.EqualValues(t, 1, env.count(t, &orgmodel.OrgRole{}, "id = ? AND name = ? AND permissions = ?", custom.Id, "Key Desk", "key.read"))
 	})
 }
 

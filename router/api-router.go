@@ -443,7 +443,13 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.PUT("/departments/:id", controller.RenameOrgDepartment)
 			orgRoute.DELETE("/departments/:id", controller.DeleteOrgDepartment)
 
+			orgRoute.GET("/permissions", controller.GetOrgPermissions)
 			orgRoute.GET("/roles", controller.ListOrgRoles)
+			orgRoute.POST("/roles", controller.CreateOrgRole)
+			orgRoute.PUT("/roles/:id", controller.UpdateOrgRole)
+			orgRoute.DELETE("/roles/:id", controller.DeleteOrgRole)
+			orgRoute.POST("/role-packs/:key/adopt", controller.AdoptOrgRolePack)
+
 			orgRoute.GET("/members", controller.ListOrgMembers)
 			orgRoute.PUT("/members/:id", controller.UpdateOrgMember)
 			orgRoute.POST("/service-accounts", controller.CreateOrgServiceAccount)
@@ -451,6 +457,8 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.GET("/invites", controller.ListOrgInvites)
 			orgRoute.POST("/invites", controller.CreateOrgInvite)
 			orgRoute.DELETE("/invites/:id", controller.RevokeOrgInvite)
+
+			orgRoute.GET("/audit-logs", controller.ListOrgAuditLogs)
 		}
 		// The one organization route without a sign-in: the sign-up page asks
 		// it what an invite link leads to, for a visitor who has no account

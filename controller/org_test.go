@@ -438,13 +438,18 @@ func TestOrgSelf_ReportsMembershipOrNullForAPersonalAccount(t *testing.T) {
 		require.NoError(t, common.Unmarshal(owner.Data, &membership))
 		require.NotZero(t, founder.DepartmentId, "the owner sits in the default department")
 		require.Equal(t, orgservice.Membership{
-			OrgId:        founder.OrgId,
-			OrgName:      "Acme",
-			IsOwner:      true,
-			Role:         orgmodel.RoleOwner,
-			RoleScope:    orgmodel.ScopeOrg,
-			Permissions:  orgmodel.Primitives,
-			DepartmentId: founder.DepartmentId,
+			OrgId:                founder.OrgId,
+			OrgName:              "Acme",
+			IsOwner:              true,
+			RoleId:               founder.OrgRoleId,
+			Role:                 orgmodel.RoleOwner,
+			RoleScope:            orgmodel.ScopeOrg,
+			Permissions:          orgmodel.Primitives,
+			DepartmentId:         founder.DepartmentId,
+			ManagedDepartmentIds: []int{},
 		}, membership)
+		// A list that is empty travels as [], so the page never has to guard
+		// against null.
+		require.Contains(t, string(owner.Data), `"managed_department_ids":[]`)
 	})
 }

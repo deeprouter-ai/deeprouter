@@ -91,14 +91,21 @@ func CreateForOwnerTx(tx *gorm.DB, userID int, rawName string, lang string) (*or
 
 // Membership is what a member can see about their own place in an organization.
 type Membership struct {
-	OrgId        int      `json:"org_id"`
-	OrgName      string   `json:"org_name"`
-	IsOwner      bool     `json:"is_owner"`
-	IsAdmin      bool     `json:"is_admin"` // holds the preset admin role
-	Role         string   `json:"role"`
-	RoleScope    string   `json:"role_scope"`
+	OrgId     int    `json:"org_id"`
+	OrgName   string `json:"org_name"`
+	IsOwner   bool   `json:"is_owner"`
+	IsAdmin   bool   `json:"is_admin"` // holds the preset admin role
+	RoleId    int    `json:"role_id"`
+	Role      string `json:"role"`
+	RoleScope string `json:"role_scope"`
+	// Permissions is everything the role grants, the reads its writes bring
+	// included: a client looks a primitive up in it and needs no rule of its own.
 	Permissions  []string `json:"permissions"`
 	DepartmentId int      `json:"department_id"`
+	// ManagedDepartmentIds is where a department-scoped role reaches: the
+	// member's own department first, then the ones added for them. Empty for
+	// every other scope.
+	ManagedDepartmentIds []int `json:"managed_department_ids"`
 }
 
 // GetMembership returns the organization and role of userID, or nil for a
@@ -123,14 +130,24 @@ func GetMembership(db *gorm.DB, userID int) (*Membership, error) {
 		First(&role).Error; err != nil {
 		return nil, err
 	}
+	managed := []int{}
+	if role.Scope == orgmodel.ScopeDept {
+		extra, err := extraDepartments(db, []int{user.Id})
+		if err != nil {
+			return nil, err
+		}
+		managed = withOwnDepartment(user.DepartmentId, extra[user.Id])
+	}
 	return &Membership{
-		OrgId:        org.Id,
-		OrgName:      org.Name,
-		IsOwner:      org.OwnerUserId == user.Id,
-		IsAdmin:      isPreset(&role, orgmodel.RoleAdmin),
-		Role:         role.Name,
-		RoleScope:    role.Scope,
-		Permissions:  orgmodel.SplitPermissions(role.Permissions),
-		DepartmentId: user.DepartmentId,
+		OrgId:                org.Id,
+		OrgName:              org.Name,
+		IsOwner:              org.OwnerUserId == user.Id,
+		IsAdmin:              isPreset(&role, orgmodel.RoleAdmin),
+		RoleId:               role.Id,
+		Role:                 role.Name,
+		RoleScope:            role.Scope,
+		Permissions:          orgmodel.WithImpliedReads(orgmodel.SplitPermissions(role.Permissions)),
+		DepartmentId:         user.DepartmentId,
+		ManagedDepartmentIds: managed,
 	}, nil
 }

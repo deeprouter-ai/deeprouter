@@ -30,12 +30,72 @@ func TestLoadActor(t *testing.T) {
 		staff := seedMember(t, db, acme, "staff", orgmodel.RoleStaff)
 		personal := seedUser(t, db, "personal", common.RoleCommonUser)
 
-		require.Equal(t, &Actor{UserId: acme.owner.Id, OrgId: acme.id, IsOwner: true}, actorFor(t, db, acme.owner.Id))
-		require.Equal(t, &Actor{UserId: admin.Id, OrgId: acme.id, IsAdmin: true}, actorFor(t, db, admin.Id))
-		require.Equal(t, &Actor{UserId: staff.Id, OrgId: acme.id}, actorFor(t, db, staff.Id))
+		manager := seedMemberIn(t, db, acme, "manager", presetRoleID(t, db, orgmodel.RoleManager), departmentNamed(t, db, acme.id, "Sales").Id)
+
+		// An actor is what the permission engine judges: the role's primitives
+		// and scope as they are in the database right now, and no request
+		// address until a handler supplies one.
+		for _, tc := range []struct {
+			userID int
+			want   orgmodel.Subject
+		}{
+			{acme.owner.Id, orgmodel.Subject{IsOwner: true, Scope: orgmodel.ScopeOrg, Permissions: orgmodel.Primitives, Departments: []int{}}},
+			{admin.Id, orgmodel.Subject{IsAdmin: true, Scope: orgmodel.ScopeOrg, Permissions: orgmodel.Primitives, Departments: []int{}}},
+			{staff.Id, orgmodel.Subject{Scope: orgmodel.ScopeSelf, Permissions: []string{}, Departments: []int{}}},
+			{manager.Id, orgmodel.Subject{Scope: orgmodel.ScopeDept, Departments: []int{manager.DepartmentId},
+				Permissions: []string{"key.read", "key.assign", "member.read", "member.invite", "usage.read", "alert.read"}}},
+		} {
+			actor, err := LoadActor(db, tc.userID)
+			require.NoError(t, err)
+			tc.want.UserId = tc.userID
+			require.Equal(t, &Actor{Subject: tc.want, OrgId: acme.id}, actor)
+		}
 
 		_, err := LoadActor(db, personal.Id)
 		require.ErrorIs(t, err, ErrNotMember)
+	})
+}
+
+// Acceptance: 修改角色权限即时生效，无需重新登录. Nothing about a member is
+// cached: the next time they are loaded, they are what the database says.
+func TestLoadActor_SeesAChangeToTheRoleAtOnce(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		acme := seedOrg(t, db, "Acme")
+		owner := actorFor(t, db, acme.owner.Id)
+		sales := departmentNamed(t, db, acme.id, "Sales")
+		role, err := CreateRole(db, owner, RoleInput{Name: "Helper", Scope: orgmodel.ScopeOrg, Permissions: []string{"usage.read"}})
+		require.NoError(t, err)
+		helper := seedMemberIn(t, db, acme, "helper", role.Id, sales.Id)
+
+		_, err = ListMembers(db, actorFor(t, db, helper.Id))
+		require.ErrorIs(t, err, ErrForbidden, "usage.read does not show members")
+
+		// The role gains a permission …
+		_, err = UpdateRole(db, owner, role.Id, RoleInput{Name: "Helper", Scope: orgmodel.ScopeOrg, Permissions: []string{"usage.read", "member.read"}})
+		require.NoError(t, err)
+		members, err := ListMembers(db, actorFor(t, db, helper.Id))
+		require.NoError(t, err)
+		require.Len(t, members, 2, "and its holder sees the whole organization on their next request")
+
+		// … is narrowed to departments …
+		_, err = UpdateRole(db, owner, role.Id, RoleInput{Name: "Helper", Scope: orgmodel.ScopeDept, Permissions: []string{"member.read"}})
+		require.NoError(t, err)
+		members, err = ListMembers(db, actorFor(t, db, helper.Id))
+		require.NoError(t, err)
+		require.Len(t, members, 1, "then only their own department")
+		require.Equal(t, helper.Id, members[0].Id)
+
+		// … and loses it again.
+		_, err = UpdateRole(db, owner, role.Id, RoleInput{Name: "Helper", Scope: orgmodel.ScopeOrg, Permissions: []string{"usage.read"}})
+		require.NoError(t, err)
+		_, err = ListMembers(db, actorFor(t, db, helper.Id))
+		require.ErrorIs(t, err, ErrForbidden)
+
+		// The same holds for the member's own role: given another, they are it.
+		require.NoError(t, UpdateMember(db, owner, helper.Id, MemberPatch{RoleId: intPtr(presetRoleID(t, db, orgmodel.RoleReadonly))}))
+		members, err = ListMembers(db, actorFor(t, db, helper.Id))
+		require.NoError(t, err)
+		require.Len(t, members, 2)
 	})
 }
 
@@ -101,11 +161,12 @@ func TestListMembers(t *testing.T) {
 
 		members, err := ListMembers(db, owner)
 		require.NoError(t, err)
+		none := []int{} // nobody here has a department-scoped role
 		require.Equal(t, []MemberView{
-			{Id: acme.owner.Id, Username: "owner-of-Acme", RoleId: presetRoleID(t, db, orgmodel.RoleOwner), Role: orgmodel.RoleOwner, DepartmentId: general, IsOwner: true},
-			{Id: admin.Id, Username: "admin", RoleId: presetRoleID(t, db, orgmodel.RoleAdmin), Role: orgmodel.RoleAdmin, DepartmentId: general},
-			{Id: staff.Id, Username: "staff", DisplayName: "Staff Person", Email: "staff@acme.test", RoleId: presetRoleID(t, db, orgmodel.RoleStaff), Role: orgmodel.RoleStaff, DepartmentId: general},
-			{Id: bot.Id, Username: bot.Username, DisplayName: "CI Pipeline", RoleId: presetRoleID(t, db, orgmodel.RoleStaff), Role: orgmodel.RoleStaff, DepartmentId: general, IsService: true},
+			{Id: acme.owner.Id, Username: "owner-of-Acme", RoleId: presetRoleID(t, db, orgmodel.RoleOwner), Role: orgmodel.RoleOwner, DepartmentId: general, IsOwner: true, ManagedDepartmentIds: none},
+			{Id: admin.Id, Username: "admin", RoleId: presetRoleID(t, db, orgmodel.RoleAdmin), Role: orgmodel.RoleAdmin, DepartmentId: general, ManagedDepartmentIds: none},
+			{Id: staff.Id, Username: "staff", DisplayName: "Staff Person", Email: "staff@acme.test", RoleId: presetRoleID(t, db, orgmodel.RoleStaff), Role: orgmodel.RoleStaff, DepartmentId: general, ManagedDepartmentIds: none},
+			{Id: bot.Id, Username: bot.Username, DisplayName: "CI Pipeline", RoleId: presetRoleID(t, db, orgmodel.RoleStaff), Role: orgmodel.RoleStaff, DepartmentId: general, IsService: true, ManagedDepartmentIds: none},
 		}, members)
 
 		// An admin sees the same list.
@@ -422,6 +483,8 @@ func TestCreateServiceAccount(t *testing.T) {
 			Role:         orgmodel.RoleStaff,
 			DepartmentId: sales.Id,
 			IsService:    true,
+			// A service account is staff: it manages nothing.
+			ManagedDepartmentIds: []int{},
 		}, created)
 		require.Regexp(t, `^svc-[a-z0-9]{12}$`, created.Username)
 		require.LessOrEqual(t, len(created.Username), platformmodel.UserNameMaxLength)
