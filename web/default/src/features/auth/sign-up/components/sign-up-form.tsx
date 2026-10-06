@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,10 @@ export function SignUpForm({
   const [isLoading, setIsLoading] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
   const [agreedToLegal, setAgreedToLegal] = useState(false)
+  // Enterprise Org: tick to sign up as a company — the account becomes the
+  // owner of a new organization with this name.
+  const [createOrg, setCreateOrg] = useState(false)
+  const [orgName, setOrgName] = useState('')
   const [wechatCode, setWeChatCode] = useState('')
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
@@ -159,6 +164,11 @@ export function SignUpForm({
       }
     }
 
+    if (createOrg && !orgName.trim()) {
+      toast.error(t('Please enter your organization name'))
+      return
+    }
+
     setIsLoading(true)
     try {
       const acquisition = readAcquisitionMeta()
@@ -167,6 +177,7 @@ export function SignUpForm({
         password: data.password,
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
+        org_name: createOrg ? orgName.trim() : undefined,
         aff: getAffiliateCode(),
         turnstile: turnstileToken,
         // Step 2-4 are captured at /welcome instead — leaving these
@@ -358,6 +369,41 @@ export function SignUpForm({
           </>
         )}
 
+        {/* Enterprise Org: optional company sign-up */}
+        <div className='grid gap-3'>
+          <div className='flex items-start gap-3'>
+            <Checkbox
+              id='create-org'
+              checked={createOrg}
+              onCheckedChange={(value) => setCreateOrg(value === true)}
+              className='mt-0.5'
+            />
+            <Label
+              htmlFor='create-org'
+              className='flex-col items-start gap-1 text-left leading-5 font-normal'
+            >
+              <span>{t('Create an organization for my company')}</span>
+              <span className='text-muted-foreground text-xs'>
+                {t(
+                  'For teams — one shared company wallet, with usage tracked per member.'
+                )}
+              </span>
+            </Label>
+          </div>
+          {createOrg && (
+            <div className='grid gap-2'>
+              <Label htmlFor='org-name'>{t('Organization name')}</Label>
+              <Input
+                id='org-name'
+                placeholder={t('Enter your organization name')}
+                value={orgName}
+                maxLength={64}
+                onChange={(e) => setOrgName(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+
         <LegalConsent
           status={status}
           checked={agreedToLegal}
@@ -375,7 +421,9 @@ export function SignUpForm({
           {t('Create account')}
         </Button>
 
-        {oauthRegisterEnabled && (
+        {/* A third-party sign-up cannot carry the organization name, so those
+            buttons step aside while the company option is ticked. */}
+        {oauthRegisterEnabled && !createOrg && (
           <OAuthProviders
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}

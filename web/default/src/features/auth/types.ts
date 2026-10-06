@@ -49,6 +49,9 @@ export interface RegisterPayload {
     | 'playground' | 'dashboard' | ''
   acquisition_channel?: string
   timezone?: string
+  // Enterprise Org: set to sign up as a company — the backend creates this
+  // organization and makes the new account its owner.
+  org_name?: string
 }
 
 /**
