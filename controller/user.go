@@ -47,6 +47,10 @@ type RegisterRequest struct {
 	PreferredClient    string `json:"preferred_client,omitempty"`    // cherry-studio|chatbox|...|playground|dashboard|''
 	AcquisitionChannel string `json:"acquisition_channel,omitempty"` // utm_source / referrer marker
 	Timezone           string `json:"timezone,omitempty"`            // IANA tz from browser
+
+	// Enterprise Org P2: when set, the sign-up also creates this organization
+	// and the new user becomes its owner. Empty = a personal account, as before.
+	OrgName string `json:"org_name,omitempty"`
 }
 
 func Login(c *gin.Context) {
@@ -236,7 +240,14 @@ func Register(c *gin.Context) {
 	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
 		cleanUser.Setting = string(settingBytes)
 	}
-	if err := cleanUser.Insert(inviterId); err != nil {
+	// Enterprise Org P2: with org_name the account and its organization are
+	// created together (controller/org.go); without it this is the plain Insert.
+	orgId, err := insertRegisteredUser(&cleanUser, inviterId, req.OrgName)
+	if err != nil {
+		if isOrgNameError(err) {
+			common.ApiErrorI18n(c, msgOrgNameInvalid)
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}
@@ -285,6 +296,12 @@ func Register(c *gin.Context) {
 		}
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
+		}
+		if orgId != 0 {
+			// An organization account holds organization keys only (Enterprise
+			// Org PRD D16), so its starter key is one from the first second.
+			token.OrgId = orgId
+			token.CreatedBy = insertedUser.Id
 		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)

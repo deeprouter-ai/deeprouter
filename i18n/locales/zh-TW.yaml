@@ -280,3 +280,6 @@ custom_oauth.provider_id_field_invalid: "無法從供應者響應中提取使用
 
 # Quick media key creation
 token.media_models_unavailable: "帳號暫無此用途的可用模型，請選擇其他用途或聯絡支援。"
+
+# Enterprise Org
+org.name_invalid: "企業名稱需為 1 到 64 個字元。"

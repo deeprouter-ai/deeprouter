@@ -428,5 +428,15 @@ func SetApiRouter(router *gin.Engine) {
 			adminSkillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
 			adminSkillsRoute.DELETE("/:id/versions/:vid", controller.AdminDeleteVersion)
 		}
+
+		// Enterprise Org (meta-repo docs/enterprise-org-prd.md). 🔴 UserAuth
+		// only: org owners and admins are common users on the platform, so
+		// nothing under /api/org may ever sit behind AdminAuth or RootAuth —
+		// who may do what inside an organization is decided by internal/org.
+		orgRoute := apiRouter.Group("/org")
+		orgRoute.Use(middleware.UserAuth())
+		{
+			orgRoute.GET("/self", controller.GetOrgSelf)
+		}
 	}
 }

@@ -280,3 +280,6 @@ custom_oauth.provider_id_field_invalid: "无法从提供商响应中提取用户
 
 # Quick media key creation
 token.media_models_unavailable: "账号暂无此用途的可用模型，请选择其他用途或联系支持。"
+
+# Enterprise Org
+org.name_invalid: "企业名称需为 1 到 64 个字符。"

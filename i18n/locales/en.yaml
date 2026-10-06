@@ -279,3 +279,6 @@ custom_oauth.provider_id_field_invalid: "Could not extract user ID from provider
 
 # Quick media key creation
 token.media_models_unavailable: "No models are available for this purpose in your account. Choose another purpose or contact support."
+
+# Enterprise Org
+org.name_invalid: "The organization name must be between 1 and 64 characters."

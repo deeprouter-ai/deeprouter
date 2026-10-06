@@ -37,6 +37,13 @@ type Log struct {
 	Ip               string `json:"ip" gorm:"index;default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
+	// Enterprise Org (meta-repo docs/enterprise-org-prd.md §7.2): stamped when
+	// an org key is used, with the department the user was in at that moment,
+	// so moving someone between departments never rewrites past bills. Both
+	// stay 0 for personal usage, and omitempty keeps such a log line's JSON
+	// exactly what it was before these columns existed.
+	OrgId        int `json:"org_id,omitempty" gorm:"default:0;index"`
+	DepartmentId int `json:"department_id,omitempty" gorm:"default:0;index"`
 }
 
 // don't use iota, avoid change log type value

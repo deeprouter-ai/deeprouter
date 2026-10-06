@@ -43,6 +43,36 @@ Added by this fork (`model/user.go:60-66`). Stored plaintext like the upstream c
 
 Plus 3 auto-topup columns (also added in the same `User` extension): `auto_topup_enabled`, `auto_topup_threshold`, `auto_topup_amount`.
 
+## Enterprise Org tables and columns
+
+Added by `internal/org` (see its README for the rules). An organization is a customer company; `org_id = 0` everywhere means "personal", which is every row that existed before the feature.
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `organizations` | One customer company. Holds no money: the company wallet is the owner's `users.quota` | PK `id`; UNQ `owner_user_id`; `name` varchar(64) |
+| `departments` | Structural unit only — scopes managers and groups reports, carries no permissions | PK `id`; IDX `org_id`; `is_default`; `parent_id` (always 0 for now); SOFT-DELETE |
+| `org_roles` | A bundle of permission primitives. `org_id = 0` rows are the five platform presets, synced from `model.PresetRoles` on every boot | PK `id`; IDX `org_id`; `scope` = `org` \| `dept` \| `self`; CSV `permissions`; SOFT-DELETE |
+| `department_managers` | Which member manages which department | Composite PK `(department_id, user_id)` |
+| `org_invites` | Join codes carrying a role and a department | PK `id`; UNQ `code`; IDX `org_id` |
+| `org_alerts` | Anomaly-rule hits on a key (notify only, never block) | PK `id`; IDX `org_id`, `token_id`; TEXT `detail` (JSON) |
+| `org_audit_logs` | Append-only record of org management actions | PK `id`; IDX `org_id`; TEXT `detail` (JSON) |
+
+Columns added to platform tables — all default to zero and are `omitempty` in JSON, so a personal row looks exactly as it did before:
+
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `users.org_id` | `bigint`, indexed | `0` | Organization the account belongs to |
+| `users.role_id` | `bigint` | `0` | The member's **org** role → `org_roles.id`. Unrelated to `users.role`, which stays `1` for every org member (Go field `OrgRoleId`) |
+| `users.department_id` | `bigint` | `0` | Department the member sits in |
+| `users.is_service` | `boolean` | `false` | Service account: holds keys, cannot log in |
+| `tokens.org_id` | `bigint`, indexed | `0` | Organization that owns the key |
+| `tokens.created_by` | `bigint` | `0` | Who created an org key (the holder is `user_id`) |
+| `tokens.policy_template` | `varchar(64)` | `''` | Policy template applied to an org key |
+| `logs.org_id` | `bigint`, indexed | `0` | Stamped when an org key is used |
+| `logs.department_id` | `bigint`, indexed | `0` | The user's department at that moment — moving someone never rewrites past bills |
+
+The org tables migrate fail-soft (`internal/org/model.Migrate` logs and carries on); the columns above migrate with the core `AutoMigrate` and are fatal on failure.
+
 ## Layer-2 routing: the `abilities` table
 
 This is the lookup that powers `model/channel_cache.go:GetRandomSatisfiedChannel`. It's flat and denormalized:

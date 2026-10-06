@@ -20,6 +20,11 @@ func TestUser_AirbotixFieldsPresent(t *testing.T) {
 		"AutoTopupEnabled",
 		"AutoTopupThreshold",
 		"AutoTopupAmount",
+		// Enterprise Org membership (internal/org)
+		"OrgId",
+		"OrgRoleId",
+		"DepartmentId",
+		"IsService",
 	}
 
 	rt := reflect.TypeOf(User{})

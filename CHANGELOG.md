@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-06
+
+- **新增企业组织（Enterprise Org）的地基**（PRD：meta-repo `docs/enterprise-org-prd.md`，P2）：
+  - 数据模型：七张新表 `organizations` / `departments` / `org_roles` / `department_managers` / `org_invites` / `org_alerts` / `org_audit_logs`（`internal/org/model`）；`users` 加 `org_id`、`role_id`、`department_id`、`is_service`，`tokens` 加 `org_id`、`created_by`、`policy_template`，`logs` 加 `org_id`、`department_id`。新列默认值全是 0 / false / 空，JSON 是 `omitempty`——个人账号、个人 key、日志行的接口返回与改动前逐字节相同。五个预设角色（owner / admin / manager / staff / readonly）只在 `model.PresetRoles` 定义一次，每次启动同步进 `org_roles`。
+  - 自助开通：`POST /api/user/register` 新增可选字段 `org_name`，带上即在同一个事务里建账号和组织，注册人成为唯一的 owner；组织建不成，账号一并回滚。注册页新增「为我的公司创建企业组织」勾选项（勾上后第三方登录按钮收起，因为那条路带不了企业名称）。新接口 `GET /api/org/self` 返回本人的组织、角色与权限，个人账号返回 `null`。
+  - 平台隔离：组织角色与全局 `role` 是两套——owner 的全局角色仍是 1，`internal/org` 不写 `users.role`，`/api/org/*` 只挂 `UserAuth`。
+  - 迁移失败不拖垮网关：七张新表迁移失败只写日志、不阻止启动（与 skill-marketplace 同一取舍）；三处加列是平台结构体的字段，走核心 AutoMigrate。
+  - 测试：`internal/org/**` 全量，加 `controller`、`router` 里的 `TestOrg*`；SQLite 必跑，设了 `TEST_POSTGRES_DSN` / `TEST_MYSQL_DSN` 时在真实库上再跑一遍。已接进 `unit-test.yml` 与 `airbotix-internal.yml`。真实 PostgreSQL 上实测：旧表结构升级、二次启动无变化、旧版本程序能在升级后的库上运行（可回滚）；200 万行日志表首次启动多耗约 1.7 秒。**MySQL 尚未实测。**
+
 ## 2026-10-05
 
 - Simple 视频页可选模型：列出这把 key 能用的全部视频模型（卡片显示特点与价格，Seedance 编号转为可读名称），所选即为复制出去的话术默认模型；每个用途页新增「配好之后怎么用」——在电脑上打开 Claude Code / Codex、粘贴、之后直接说什么（附示例句），视频还说明如何点名换模型。
