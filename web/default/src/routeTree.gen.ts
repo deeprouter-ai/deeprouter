@@ -61,6 +61,7 @@ import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as SimpleUsePurposeRouteImport } from './routes/simple/use.$purpose'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
+import { Route as AuthenticatedOrgRolesRouteImport } from './routes/_authenticated/org/roles'
 import { Route as AuthenticatedOrgMembersRouteImport } from './routes/_authenticated/org/members'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedKeysTestRouteImport } from './routes/_authenticated/keys/test'
@@ -359,6 +360,11 @@ const AuthenticatedUsageLogsSectionRoute =
     path: '/usage-logs/$section',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOrgRolesRoute = AuthenticatedOrgRolesRouteImport.update({
+  id: '/org/roles',
+  path: '/org/roles',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedOrgMembersRoute = AuthenticatedOrgMembersRouteImport.update({
   id: '/org/members',
   path: '/org/members',
@@ -560,6 +566,7 @@ export interface FileRoutesByFullPath {
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/org/members': typeof AuthenticatedOrgMembersRoute
+  '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -637,6 +644,7 @@ export interface FileRoutesByTo {
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/org/members': typeof AuthenticatedOrgMembersRoute
+  '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
@@ -719,6 +727,7 @@ export interface FileRoutesById {
   '/_authenticated/keys/test': typeof AuthenticatedKeysTestRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/org/members': typeof AuthenticatedOrgMembersRoute
+  '/_authenticated/org/roles': typeof AuthenticatedOrgRolesRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -800,6 +809,7 @@ export interface FileRouteTypes {
     | '/keys/test'
     | '/models/$section'
     | '/org/members'
+    | '/org/roles'
     | '/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/channels/'
@@ -877,6 +887,7 @@ export interface FileRouteTypes {
     | '/keys/test'
     | '/models/$section'
     | '/org/members'
+    | '/org/roles'
     | '/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/channels'
@@ -958,6 +969,7 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/test'
     | '/_authenticated/models/$section'
     | '/_authenticated/org/members'
+    | '/_authenticated/org/roles'
     | '/_authenticated/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/_authenticated/channels/'
@@ -1389,6 +1401,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsageLogsSectionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/org/roles': {
+      id: '/_authenticated/org/roles'
+      path: '/org/roles'
+      fullPath: '/org/roles'
+      preLoaderRoute: typeof AuthenticatedOrgRolesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/org/members': {
       id: '/_authenticated/org/members'
       path: '/org/members'
@@ -1673,6 +1692,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKeysTestRoute: typeof AuthenticatedKeysTestRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
   AuthenticatedOrgMembersRoute: typeof AuthenticatedOrgMembersRoute
+  AuthenticatedOrgRolesRoute: typeof AuthenticatedOrgRolesRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
@@ -1705,6 +1725,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKeysTestRoute: AuthenticatedKeysTestRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
   AuthenticatedOrgMembersRoute: AuthenticatedOrgMembersRoute,
+  AuthenticatedOrgRolesRoute: AuthenticatedOrgRolesRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,

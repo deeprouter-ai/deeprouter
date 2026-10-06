@@ -39,6 +39,7 @@ import {
   Sparkles,
   Receipt,
   Building2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -48,7 +49,7 @@ import {
   marketplaceQueryKeys,
 } from '@/features/marketplace/api'
 import {
-  canManageOrg,
+  canSeeOrg,
   useOrgMembership,
 } from '@/features/org/hooks/use-org-membership'
 
@@ -66,11 +67,12 @@ export function useSidebarData(): SidebarData {
   })
   const hasPurchases = (purchasesProbe?.total ?? 0) > 0
 
-  // Enterprise Org: the "Organization" group exists only for members who run
-  // their organization (owner and admins, until the permission engine lands).
-  // A personal account's probe answers null and the group never appears.
+  // Enterprise Org: the "Organization" group exists for members whose role
+  // lets them see members, departments and roles — the owner and admins, a
+  // manager, a read-only member — and not for Staff. A personal account's
+  // probe answers null and the group never appears.
   const { data: orgMembership } = useOrgMembership()
-  const managesOrg = canManageOrg(orgMembership)
+  const seesOrg = canSeeOrg(orgMembership)
 
   return {
     workspaces: [
@@ -126,7 +128,7 @@ export function useSidebarData(): SidebarData {
           },
         ],
       },
-      ...(managesOrg
+      ...(seesOrg
         ? [
             {
               id: 'org',
@@ -136,6 +138,11 @@ export function useSidebarData(): SidebarData {
                   title: t('Members & departments'),
                   url: '/org/members',
                   icon: Building2,
+                },
+                {
+                  title: t('Roles & permissions'),
+                  url: '/org/roles',
+                  icon: ShieldCheck,
                 },
               ],
             },

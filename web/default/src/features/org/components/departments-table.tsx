@@ -16,11 +16,12 @@ import type { OrgDepartment } from '../types'
 
 type DepartmentsTableProps = {
   departments: OrgDepartment[]
-  onRename: (department: OrgDepartment) => void
-  onDelete: (department: OrgDepartment) => void
+  /** Leave both out for a viewer who may not change departments: the column goes with them. */
+  onRename?: (department: OrgDepartment) => void
+  onDelete?: (department: OrgDepartment) => void
 }
 
-/** The organization's departments; the default one cannot be deleted. */
+/** The departments the viewer may see; the default one cannot be deleted. */
 export function DepartmentsTable({
   departments,
   onRename,
@@ -35,7 +36,9 @@ export function DepartmentsTable({
           <TableRow>
             <TableHead className='px-3'>{t('Department')}</TableHead>
             <TableHead>{t('Members')}</TableHead>
-            <TableHead className='px-3 text-right'>{t('Actions')}</TableHead>
+            {onRename && onDelete && (
+              <TableHead className='px-3 text-right'>{t('Actions')}</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -52,31 +55,37 @@ export function DepartmentsTable({
               <TableCell className='tabular-nums'>
                 {department.member_count}
               </TableCell>
-              <TableCell className='px-3 text-right'>
-                <Button
-                  variant='ghost'
-                  size='sm'
-                  onClick={() => onRename(department)}
-                  aria-label={t('Rename {{name}}', { name: department.name })}
-                >
-                  <Pencil aria-hidden='true' />
-                  {t('Rename')}
-                </Button>
-                {/* The default department takes in whoever has no other
-                    department, so it is the one that stays. */}
-                {!department.is_default && (
+              {onRename && onDelete && (
+                <TableCell className='px-3 text-right'>
                   <Button
                     variant='ghost'
                     size='sm'
-                    className='text-destructive hover:text-destructive'
-                    onClick={() => onDelete(department)}
-                    aria-label={t('Delete {{name}}', { name: department.name })}
+                    onClick={() => onRename(department)}
+                    aria-label={t('Rename {{name}}', {
+                      name: department.name,
+                    })}
                   >
-                    <Trash2 aria-hidden='true' />
-                    {t('Delete')}
+                    <Pencil aria-hidden='true' />
+                    {t('Rename')}
                   </Button>
-                )}
-              </TableCell>
+                  {/* The default department takes in whoever has no other
+                      department, so it is the one that stays. */}
+                  {!department.is_default && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      className='text-destructive hover:text-destructive'
+                      onClick={() => onDelete(department)}
+                      aria-label={t('Delete {{name}}', {
+                        name: department.name,
+                      })}
+                    >
+                      <Trash2 aria-hidden='true' />
+                      {t('Delete')}
+                    </Button>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

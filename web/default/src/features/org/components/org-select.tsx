@@ -9,27 +9,27 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type OrgSelectProps = {
+type OrgSelectProps<Value extends number | string> = {
   /** The id the field's label points at. */
   id: string
-  options: { value: number; label: string }[]
-  value: number
+  options: { value: Value; label: string }[]
+  value: Value
   disabled?: boolean
-  onChange: (value: number) => void
+  onChange: (value: Value) => void
 }
 
 /**
- * The dropdown of this page's dialogs: one role or one department out of a
- * short list. It is the themed select, not the browser's own — that one opens
- * a white list on the dark theme.
+ * The dropdown of the organization dialogs: one role, department or scope out
+ * of a short list. It is the themed select, not the browser's own — that one
+ * opens a white list on the dark theme.
  */
-export function OrgSelect({
+export function OrgSelect<Value extends number | string>({
   id,
   options,
   value,
   disabled,
   onChange,
-}: OrgSelectProps) {
+}: OrgSelectProps<Value>) {
   return (
     <Select
       items={options}

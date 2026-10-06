@@ -32,17 +32,20 @@ function isPresetRole(role: OrgRole, name: string): boolean {
 
 /**
  * The roles the acting member may hand out, by appointment or by invite: never
- * the owner role, and the admin role only when acting as the owner (PRD D10).
- * The backend enforces both; this keeps impossible choices off the screen.
+ * the owner role, the admin role only when acting as the owner (PRD D10), and
+ * for anyone but the owner and admins nothing except Staff — nobody gives what
+ * they do not have, so a manager who may invite invites Staff (PRD §2). The
+ * backend enforces all of it; this keeps impossible choices off the screen.
  */
 export function assignableRoles(
   roles: OrgRole[],
   actor: OrgMembership | null | undefined
 ): OrgRole[] {
+  const assignsRoles = Boolean(actor?.is_owner || actor?.is_admin)
   return roles.filter((role) => {
     if (isPresetRole(role, 'owner')) return false
     if (isPresetRole(role, 'admin')) return Boolean(actor?.is_owner)
-    return true
+    return assignsRoles || isPresetRole(role, 'staff')
   })
 }
 
@@ -79,6 +82,14 @@ export function sitsInDefaultDepartment(role: OrgRole | undefined): boolean {
     role !== undefined &&
     (isPresetRole(role, 'owner') || isPresetRole(role, 'admin'))
   )
+}
+
+/**
+ * Whether holders of a role manage departments: the one they belong to, plus
+ * any an owner or admin adds for them (PRD D28).
+ */
+export function managesDepartments(role: OrgRole | undefined): boolean {
+  return role?.scope === 'dept'
 }
 
 /** The link a newcomer opens to sign up into the organization. */

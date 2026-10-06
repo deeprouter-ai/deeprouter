@@ -11,12 +11,13 @@ import type {
   OrgInvite,
   OrgMember,
   OrgMembership,
-  OrgRole,
 } from '../types'
+import { memberOf, membershipOf, presetRoles } from './fixtures'
 
-// Enterprise Org P3 (meta-repo docs/enterprise-org-prd.md): the "Members &
-// departments" page. The backend decides what is allowed; these tests pin
-// what the page offers and what it asks the backend for.
+// Enterprise Org P3 and P4 (meta-repo docs/enterprise-org-prd.md): the
+// "Members & departments" page. The backend decides what is allowed; these
+// tests pin what the page offers each kind of member and what it asks the
+// backend for.
 
 const api = vi.hoisted(() => ({
   fetchOrgMembership: vi.fn(),
@@ -66,62 +67,29 @@ vi.mock('@/components/layout', () => {
   }
 })
 
-const roles: OrgRole[] = [
-  { id: 1, name: 'owner', scope: 'org', permissions: [], is_preset: true },
-  { id: 2, name: 'admin', scope: 'org', permissions: [], is_preset: true },
-  { id: 3, name: 'manager', scope: 'dept', permissions: [], is_preset: true },
-  { id: 4, name: 'staff', scope: 'self', permissions: [], is_preset: true },
-  { id: 5, name: 'readonly', scope: 'org', permissions: [], is_preset: true },
-]
+const roles = presetRoles
 const departments: OrgDepartment[] = [
   { id: 10, name: 'General', is_default: true, member_count: 3 },
   { id: 11, name: 'Sales', is_default: false, member_count: 1 },
 ]
 const members: OrgMember[] = [
-  {
+  memberOf({
     id: 1,
     username: 'founder',
     display_name: 'Fiona Founder',
     email: 'fiona@acme.test',
     role_id: 1,
     role: 'owner',
-    department_id: 10,
     is_owner: true,
-    is_service: false,
-  },
-  {
-    id: 2,
-    username: 'adam',
-    display_name: '',
-    email: '',
-    role_id: 2,
-    role: 'admin',
-    department_id: 10,
-    is_owner: false,
-    is_service: false,
-  },
-  {
-    id: 3,
-    username: 'sally',
-    display_name: '',
-    email: '',
-    role_id: 4,
-    role: 'staff',
-    department_id: 11,
-    is_owner: false,
-    is_service: false,
-  },
-  {
+  }),
+  memberOf({ id: 2, username: 'adam', role_id: 2, role: 'admin' }),
+  memberOf({ id: 3, username: 'sally', department_id: 11 }),
+  memberOf({
     id: 4,
     username: 'svc-abc123def456',
     display_name: 'CI Pipeline',
-    email: '',
-    role_id: 4,
-    role: 'staff',
-    department_id: 10,
-    is_owner: false,
     is_service: true,
-  },
+  }),
 ]
 const invites: OrgInvite[] = [
   {
@@ -134,22 +102,8 @@ const invites: OrgInvite[] = [
   },
 ]
 
-const ownerMembership: OrgMembership = {
-  org_id: 1,
-  org_name: 'Acme',
-  is_owner: true,
-  is_admin: false,
-  role: 'owner',
-  role_scope: 'org',
-  permissions: [],
-  department_id: 10,
-}
-const adminMembership: OrgMembership = {
-  ...ownerMembership,
-  is_owner: false,
-  is_admin: true,
-  role: 'admin',
-}
+const ownerMembership = membershipOf('owner')
+const adminMembership = membershipOf('admin')
 
 /** Renders the page as the given member and waits for its lists. */
 async function renderPage(membership: OrgMembership = ownerMembership) {
@@ -195,6 +149,15 @@ async function choose(label: string, option: string) {
   await userEvent.click(dropdown(label))
   await userEvent.click(await screen.findByRole('option', { name: option }))
   await waitFor(() => expect(screen.queryByRole('option')).toBeNull())
+}
+
+/**
+ * Whether a checkbox is locked. Its root is not a form control, so the lock
+ * shows as aria-disabled and not as the disabled attribute.
+ */
+function locked(name: string): boolean {
+  const box = screen.getByRole('checkbox', { name })
+  return box.getAttribute('aria-disabled') === 'true'
 }
 
 /** The sentence under a department that cannot be chosen. */
@@ -590,6 +553,235 @@ describe('invite links', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Invite links/ }))
 
     expect(screen.getByText('No invite links yet')).toBeInTheDocument()
+  })
+})
+
+describe('departments a member manages', () => {
+  // PRD D28: a department-scoped role manages the member's own department,
+  // plus any an owner or admin ticks. Product exists so there is one to tick.
+  const withProduct: OrgDepartment[] = [
+    ...departments,
+    { id: 12, name: 'Product', is_default: false, member_count: 0 },
+  ]
+  const mona = memberOf({
+    id: 5,
+    username: 'mona',
+    role_id: 3,
+    role: 'manager',
+    department_id: 11,
+    managed_department_ids: [11, 12],
+  })
+
+  beforeEach(() => {
+    api.fetchOrgDepartments.mockResolvedValue(withProduct)
+    api.fetchOrgMembers.mockResolvedValue([...members, mona])
+  })
+
+  it('says in the list what a manager manages besides their own department', async () => {
+    await renderPage()
+
+    expect(rowOf('mona')).toHaveTextContent('Sales')
+    expect(rowOf('mona')).toHaveTextContent('Also manages: Product')
+    // Nobody else manages anything, and the list does not pretend otherwise.
+    expect(rowOf('sally')).not.toHaveTextContent('Also manages')
+    expect(rowOf('adam')).not.toHaveTextContent('Also manages')
+  })
+
+  it('offers the departments only for a role that manages some', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit sally' }))
+
+    expect(screen.queryByText('Departments they manage')).toBeNull()
+    await choose('Role', 'Manager')
+    expect(screen.getByText('Departments they manage')).toBeInTheDocument()
+    // Their own department is ticked and cannot be unticked.
+    expect(screen.getByRole('checkbox', { name: 'Sales' })).toBeChecked()
+    expect(locked('Sales')).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'Product' })).not.toBeChecked()
+    expect(locked('Product')).toBe(false)
+
+    await choose('Role', 'Read-only')
+    expect(screen.queryByText('Departments they manage')).toBeNull()
+  })
+
+  it('makes a manager without sending departments nobody ticked', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit sally' }))
+    await choose('Role', 'Manager')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    // The backend makes a new manager manage their own department by itself.
+    await waitFor(() =>
+      expect(api.updateOrgMember).toHaveBeenCalledWith(3, { role_id: 3 })
+    )
+  })
+
+  it('sends the whole list when a department is ticked', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit sally' }))
+    await choose('Role', 'Manager')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Product' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(api.updateOrgMember).toHaveBeenCalledWith(3, {
+        role_id: 3,
+        managed_department_ids: [11, 12],
+      })
+    )
+  })
+
+  it('starts from what a manager already manages and takes a department away', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit mona' }))
+
+    expect(locked('Sales')).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'Product' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'General' })).not.toBeChecked()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Product' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.updateOrgMember).toHaveBeenCalledWith(5, {
+        managed_department_ids: [11],
+      })
+    )
+  })
+
+  it('moves a manager without touching what was added for them', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit mona' }))
+
+    // Moved to General: that is now the one they cannot untick, Sales is
+    // theirs to tick again, and Product stays as it was — so only the move
+    // is sent.
+    await choose('Department', 'General')
+    expect(locked('General')).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'General' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Sales' })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Product' })).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(api.updateOrgMember).toHaveBeenCalledWith(5, { department_id: 10 })
+    )
+  })
+})
+
+describe('what each role is offered', () => {
+  // Acceptance: 部门作用域硬检查. The backend sends a manager only the people
+  // and departments of the departments they manage; the page must then offer
+  // only what a manager may do with them.
+  const managerMembership = membershipOf('manager', {
+    department_id: 11,
+    managed_department_ids: [11],
+  })
+  const salesOnly = [departments[1]]
+  const salesPeople = [
+    memberOf({
+      id: 5,
+      username: 'mona',
+      role_id: 3,
+      role: 'manager',
+      department_id: 11,
+      managed_department_ids: [11],
+    }),
+    members[2],
+  ]
+
+  it('gives a manager their people, invite links and nothing to manage', async () => {
+    api.fetchOrgDepartments.mockResolvedValue(salesOnly)
+    api.fetchOrgMembers.mockResolvedValue(salesPeople)
+    await renderPage(managerMembership)
+
+    expect(
+      screen.getByText('You see the members of the departments you manage.')
+    ).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Members/ })).toHaveTextContent('2')
+    expect(rowOf('sally')).toHaveTextContent('Sales')
+    // Inviting is theirs; roles, departments and service accounts are not.
+    expect(screen.getByRole('button', { name: 'Invite members' })).toBeEnabled()
+    expect(
+      screen.queryByRole('button', { name: 'Add service account' })
+    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Edit sally' })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Departments/ }))
+    expect(screen.getByText('Sales')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New department' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Rename Sales' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Delete Sales' })).toBeNull()
+
+    // Their invite links are listed, and they can revoke one.
+    await userEvent.click(screen.getByRole('tab', { name: /Invite links/ }))
+    expect(
+      within(rowOf('Staff')).getByRole('button', { name: 'Revoke' })
+    ).toBeInTheDocument()
+  })
+
+  it('lets a manager invite Staff, into their departments only', async () => {
+    api.fetchOrgDepartments.mockResolvedValue(salesOnly)
+    api.fetchOrgMembers.mockResolvedValue(salesPeople)
+    await renderPage(managerMembership)
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Invite members' })
+    )
+
+    // Acceptance: 只能邀请本部门的 staff.
+    expect(await optionsOf('Role')).toEqual(['Staff'])
+    expect(await optionsOf('Department')).toEqual(['Sales'])
+    await userEvent.click(screen.getByRole('button', { name: 'Create link' }))
+
+    await waitFor(() =>
+      expect(api.createOrgInvite).toHaveBeenCalledWith({
+        role_id: 4,
+        department_id: 11,
+      })
+    )
+  })
+
+  it('shows a read-only member everything and offers them nothing', async () => {
+    await renderPage(membershipOf('readonly'))
+
+    expect(screen.getByRole('tab', { name: /Members/ })).toHaveTextContent('4')
+    expect(rowOf('Fiona Founder')).toHaveTextContent('Owner')
+    expect(
+      screen.queryByText('You see the members of the departments you manage.')
+    ).toBeNull()
+    for (const name of [
+      'Invite members',
+      'Add service account',
+      'Edit sally',
+    ]) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+    // A link is a way in: the tab is not there and the list is never asked for.
+    expect(screen.queryByRole('tab', { name: /Invite links/ })).toBeNull()
+    expect(api.fetchOrgInvites).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Departments/ }))
+    expect(screen.getByText('Sales')).toBeInTheDocument()
+    for (const name of ['New department', 'Rename Sales', 'Delete Sales']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
+  it('keeps every button for an admin', async () => {
+    await renderPage(adminMembership)
+
+    for (const name of [
+      'Invite members',
+      'Add service account',
+      'Edit sally',
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeEnabled()
+    }
+    expect(screen.getByRole('tab', { name: /Invite links/ })).toBeVisible()
+    await userEvent.click(screen.getByRole('tab', { name: /Departments/ }))
+    for (const name of ['New department', 'Rename Sales', 'Delete Sales']) {
+      expect(screen.getByRole('button', { name })).toBeEnabled()
+    }
   })
 })
 

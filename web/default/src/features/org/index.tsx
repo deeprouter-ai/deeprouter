@@ -28,7 +28,8 @@ import { InvitesTable } from './components/invites-table'
 import { MemberEditDialog } from './components/member-edit-dialog'
 import { MembersTable } from './components/members-table'
 import { ServiceAccountDialog } from './components/service-account-dialog'
-import { useOrgMembership } from './hooks/use-org-membership'
+import { canManageOrg, useOrgMembership } from './hooks/use-org-membership'
+import { holds } from './lib/permissions'
 import type { OrgDepartment, OrgInvite, OrgMember } from './types'
 
 /** Which dialog of the page is open, and on what. */
@@ -44,6 +45,12 @@ type OpenDialog =
  * "Members & departments" — the first page of the organization area
  * (Enterprise Org PRD §6): who is in the company, in which department and
  * role, plus the invite links that bring new people in.
+ *
+ * Anyone who may see members opens it, and it offers each of them what their
+ * role allows: the owner and admins everything, a manager the people of their
+ * departments and invite links into them, a read-only member no button at all.
+ * The backend sends only what the caller may see and checks every action
+ * again.
  */
 export function OrgMembersPage() {
   const { t } = useTranslation()
@@ -54,6 +61,11 @@ export function OrgMembersPage() {
 
   const membershipQuery = useOrgMembership()
   const membership = membershipQuery.data
+  // Roles, departments and service accounts are the owner's and the admins' to
+  // manage; inviting takes a permission a role can carry.
+  const runs = canManageOrg(membership)
+  const invitesPeople = holds(membership, 'member.invite')
+
   const membersQuery = useQuery({
     queryKey: orgQueryKeys.members(),
     queryFn: fetchOrgMembers,
@@ -66,9 +78,12 @@ export function OrgMembersPage() {
     queryKey: orgQueryKeys.roles(),
     queryFn: fetchOrgRoles,
   })
+  // A link is a way into the organization, so the backend shows them only to
+  // whoever may invite; asking without that would be a refusal on every load.
   const invitesQuery = useQuery({
     queryKey: orgQueryKeys.invites(),
     queryFn: fetchOrgInvites,
+    enabled: invitesPeople,
   })
 
   const members = membersQuery.data ?? []
@@ -124,23 +139,27 @@ export function OrgMembersPage() {
           {t('Members & departments')}
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <Button
-            variant='outline'
-            size='sm'
-            disabled={loading || failed}
-            onClick={() => setDialog({ type: 'service-account' })}
-          >
-            <Bot aria-hidden='true' />
-            {t('Add service account')}
-          </Button>
-          <Button
-            size='sm'
-            disabled={loading || failed}
-            onClick={() => setDialog({ type: 'invite' })}
-          >
-            <UserPlus aria-hidden='true' />
-            {t('Invite members')}
-          </Button>
+          {runs && (
+            <Button
+              variant='outline'
+              size='sm'
+              disabled={loading || failed}
+              onClick={() => setDialog({ type: 'service-account' })}
+            >
+              <Bot aria-hidden='true' />
+              {t('Add service account')}
+            </Button>
+          )}
+          {invitesPeople && (
+            <Button
+              size='sm'
+              disabled={loading || failed}
+              onClick={() => setDialog({ type: 'invite' })}
+            >
+              <UserPlus aria-hidden='true' />
+              {t('Invite members')}
+            </Button>
+          )}
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           {failed ? (
@@ -170,23 +189,36 @@ export function OrgMembersPage() {
                       {departments.length}
                     </span>
                   </TabsTrigger>
-                  <TabsTrigger value='invites'>
-                    {t('Invite links')}
-                    <span className='text-muted-foreground tabular-nums'>
-                      {invites.length}
-                    </span>
-                  </TabsTrigger>
+                  {invitesPeople && (
+                    <TabsTrigger value='invites'>
+                      {t('Invite links')}
+                      <span className='text-muted-foreground tabular-nums'>
+                        {invites.length}
+                      </span>
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 <span className='text-muted-foreground truncate text-sm'>
                   {membership?.org_name}
                 </span>
               </div>
 
-              <TabsContent value='members' className='pt-2'>
+              <TabsContent value='members' className='space-y-3 pt-2'>
+                {/* Said out loud, so a short list reads as a scope and not as
+                    a company with three people in it. */}
+                {membership?.role_scope === 'dept' && (
+                  <p className='text-muted-foreground text-sm'>
+                    {t('You see the members of the departments you manage.')}
+                  </p>
+                )}
                 <MembersTable
                   members={members}
                   departments={departments}
-                  onEdit={(member) => setDialog({ type: 'member', member })}
+                  onEdit={
+                    runs
+                      ? (member) => setDialog({ type: 'member', member })
+                      : undefined
+                  }
                 />
               </TabsContent>
 
@@ -197,134 +229,153 @@ export function OrgMembersPage() {
                       'Departments decide who belongs where and how reports are grouped. They carry no permissions — those come from roles.'
                     )}
                   </p>
-                  <Button
-                    variant='outline'
-                    size='sm'
-                    onClick={() => setDialog({ type: 'department' })}
-                  >
-                    <Plus aria-hidden='true' />
-                    {t('New department')}
-                  </Button>
+                  {runs && (
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      onClick={() => setDialog({ type: 'department' })}
+                    >
+                      <Plus aria-hidden='true' />
+                      {t('New department')}
+                    </Button>
+                  )}
                 </div>
                 <DepartmentsTable
                   departments={departments}
-                  onRename={(department) =>
-                    setDialog({ type: 'department', department })
+                  onRename={
+                    runs
+                      ? (department) =>
+                          setDialog({ type: 'department', department })
+                      : undefined
                   }
-                  onDelete={(department) =>
-                    setDialog({ type: 'delete-department', department })
+                  onDelete={
+                    runs
+                      ? (department) =>
+                          setDialog({ type: 'delete-department', department })
+                      : undefined
                   }
                 />
               </TabsContent>
 
-              <TabsContent value='invites' className='pt-2'>
-                {invites.length === 0 ? (
-                  <EmptyState
-                    icon={Link2}
-                    title={t('No invite links yet')}
-                    description={t(
-                      'Create a link for a role and a department, and send it to the people who should join.'
-                    )}
-                    action={
-                      <Button
-                        variant='outline'
-                        onClick={() => setDialog({ type: 'invite' })}
-                      >
-                        {t('Invite members')}
-                      </Button>
-                    }
-                    bordered
-                  />
-                ) : (
-                  <InvitesTable
-                    invites={invites}
-                    departments={departments}
-                    onRevoke={(invite) =>
-                      setDialog({ type: 'revoke-invite', invite })
-                    }
-                  />
-                )}
-              </TabsContent>
+              {invitesPeople && (
+                <TabsContent value='invites' className='pt-2'>
+                  {invites.length === 0 ? (
+                    <EmptyState
+                      icon={Link2}
+                      title={t('No invite links yet')}
+                      description={t(
+                        'Create a link for a role and a department, and send it to the people who should join.'
+                      )}
+                      action={
+                        <Button
+                          variant='outline'
+                          onClick={() => setDialog({ type: 'invite' })}
+                        >
+                          {t('Invite members')}
+                        </Button>
+                      }
+                      bordered
+                    />
+                  ) : (
+                    <InvitesTable
+                      invites={invites}
+                      departments={departments}
+                      onRevoke={(invite) =>
+                        setDialog({ type: 'revoke-invite', invite })
+                      }
+                    />
+                  )}
+                </TabsContent>
+              )}
             </Tabs>
           )}
         </SectionPageLayout.Content>
       </SectionPageLayout>
 
       {/* Outside the layout: it renders its named slots and nothing else. */}
-      {membership && (
+      {membership && runs && (
+        <MemberEditDialog
+          member={dialog?.type === 'member' ? dialog.member : null}
+          roles={roles}
+          departments={departments}
+          actor={membership}
+          onClose={close}
+          onSaved={refresh}
+        />
+      )}
+      {membership && invitesPeople && (
+        <InviteCreateDialog
+          open={dialog?.type === 'invite'}
+          roles={roles}
+          departments={departments}
+          actor={membership}
+          onClose={close}
+          onCreated={refresh}
+        />
+      )}
+      {runs && (
         <>
-          <MemberEditDialog
-            member={dialog?.type === 'member' ? dialog.member : null}
-            roles={roles}
+          <ServiceAccountDialog
+            open={dialog?.type === 'service-account'}
             departments={departments}
-            actor={membership}
-            onClose={close}
-            onSaved={refresh}
-          />
-          <InviteCreateDialog
-            open={dialog?.type === 'invite'}
-            roles={roles}
-            departments={departments}
-            actor={membership}
             onClose={close}
             onCreated={refresh}
           />
+          <DepartmentDialog
+            open={dialog?.type === 'department'}
+            department={
+              dialog?.type === 'department' ? dialog.department : undefined
+            }
+            onClose={close}
+            onSaved={refresh}
+          />
+          <ConfirmDialog
+            open={dialog?.type === 'delete-department'}
+            onOpenChange={(open) => !open && close()}
+            title={t('Delete this department?')}
+            desc={
+              dialog?.type === 'delete-department'
+                ? t(
+                    '“{{name}}” will be deleted. Its members and unused invite links move to “{{fallback}}”.',
+                    {
+                      name: dialog.department.name,
+                      fallback: defaultDepartment?.name ?? '',
+                    }
+                  )
+                : ''
+            }
+            destructive
+            confirmText={t('Delete')}
+            isLoading={working}
+            handleConfirm={() => {
+              if (dialog?.type !== 'delete-department') return
+              const { id } = dialog.department
+              void confirm(
+                () => deleteOrgDepartment(id),
+                t('Department deleted')
+              )
+            }}
+          />
         </>
       )}
-      <ServiceAccountDialog
-        open={dialog?.type === 'service-account'}
-        departments={departments}
-        onClose={close}
-        onCreated={refresh}
-      />
-      <DepartmentDialog
-        open={dialog?.type === 'department'}
-        department={
-          dialog?.type === 'department' ? dialog.department : undefined
-        }
-        onClose={close}
-        onSaved={refresh}
-      />
-      <ConfirmDialog
-        open={dialog?.type === 'delete-department'}
-        onOpenChange={(open) => !open && close()}
-        title={t('Delete this department?')}
-        desc={
-          dialog?.type === 'delete-department'
-            ? t(
-                '“{{name}}” will be deleted. Its members and unused invite links move to “{{fallback}}”.',
-                {
-                  name: dialog.department.name,
-                  fallback: defaultDepartment?.name ?? '',
-                }
-              )
-            : ''
-        }
-        destructive
-        confirmText={t('Delete')}
-        isLoading={working}
-        handleConfirm={() => {
-          if (dialog?.type !== 'delete-department') return
-          const { id } = dialog.department
-          void confirm(() => deleteOrgDepartment(id), t('Department deleted'))
-        }}
-      />
-      <ConfirmDialog
-        open={dialog?.type === 'revoke-invite'}
-        onOpenChange={(open) => !open && close()}
-        title={t('Revoke this invite link?')}
-        desc={t(
-          'The link stops working at once. People who already joined through it stay in the organization.'
-        )}
-        destructive
-        confirmText={t('Revoke')}
-        isLoading={working}
-        handleConfirm={() => {
-          if (dialog?.type !== 'revoke-invite') return
-          const { id } = dialog.invite
-          void confirm(() => revokeOrgInvite(id), t('Invite link revoked'))
-        }}
-      />
+      {invitesPeople && (
+        <ConfirmDialog
+          open={dialog?.type === 'revoke-invite'}
+          onOpenChange={(open) => !open && close()}
+          title={t('Revoke this invite link?')}
+          desc={t(
+            'The link stops working at once. People who already joined through it stay in the organization.'
+          )}
+          destructive
+          confirmText={t('Revoke')}
+          isLoading={working}
+          handleConfirm={() => {
+            if (dialog?.type !== 'revoke-invite') return
+            const { id } = dialog.invite
+            void confirm(() => revokeOrgInvite(id), t('Invite link revoked'))
+          }}
+        />
+      )}
     </>
   )
 }

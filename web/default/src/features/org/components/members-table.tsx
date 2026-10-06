@@ -18,10 +18,11 @@ import type { OrgDepartment, OrgMember } from '../types'
 type MembersTableProps = {
   members: OrgMember[]
   departments: OrgDepartment[]
-  onEdit: (member: OrgMember) => void
+  /** Leave out for a viewer who may not change members: the column goes with it. */
+  onEdit?: (member: OrgMember) => void
 }
 
-/** Everyone in the organization: people and service accounts. */
+/** The members the viewer may see: people and service accounts. */
 export function MembersTable({
   members,
   departments,
@@ -40,7 +41,9 @@ export function MembersTable({
             <TableHead className='px-3'>{t('Member')}</TableHead>
             <TableHead>{t('Role')}</TableHead>
             <TableHead>{t('Department')}</TableHead>
-            <TableHead className='px-3 text-right'>{t('Actions')}</TableHead>
+            {onEdit && (
+              <TableHead className='px-3 text-right'>{t('Actions')}</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -55,6 +58,14 @@ export function MembersTable({
             ]
               .filter(Boolean)
               .join(' · ')
+            // A department-scoped member manages their own department, which
+            // the column already names; only the further ones need saying.
+            // A viewer who cannot see a department is not shown its name.
+            const alsoManages = member.managed_department_ids
+              .filter((id) => id !== member.department_id)
+              .map((id) => departmentName.get(id))
+              .filter(Boolean)
+              .join(', ')
             return (
               <TableRow key={member.id}>
                 <TableCell className='px-3'>
@@ -86,18 +97,27 @@ export function MembersTable({
                 </TableCell>
                 <TableCell>
                   {departmentName.get(member.department_id) ?? '—'}
+                  {alsoManages && (
+                    <div className='text-muted-foreground text-xs'>
+                      {t('Also manages: {{departments}}', {
+                        departments: alsoManages,
+                      })}
+                    </div>
+                  )}
                 </TableCell>
-                <TableCell className='px-3 text-right'>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={() => onEdit(member)}
-                    aria-label={t('Edit {{name}}', { name })}
-                  >
-                    <Pencil aria-hidden='true' />
-                    {t('Edit')}
-                  </Button>
-                </TableCell>
+                {onEdit && (
+                  <TableCell className='px-3 text-right'>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={() => onEdit(member)}
+                      aria-label={t('Edit {{name}}', { name })}
+                    >
+                      <Pencil aria-hidden='true' />
+                      {t('Edit')}
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             )
           })}

@@ -8,7 +8,9 @@ import type {
   OrgInvitePreview,
   OrgMember,
   OrgMembership,
+  OrgPermissionCatalog,
   OrgRole,
+  OrgRoleInput,
 } from './types'
 
 export const orgQueryKeys = {
@@ -16,6 +18,7 @@ export const orgQueryKeys = {
   self: () => [...orgQueryKeys.all, 'self'] as const,
   departments: () => [...orgQueryKeys.all, 'departments'] as const,
   roles: () => [...orgQueryKeys.all, 'roles'] as const,
+  permissions: () => [...orgQueryKeys.all, 'permissions'] as const,
   members: () => [...orgQueryKeys.all, 'members'] as const,
   invites: () => [...orgQueryKeys.all, 'invites'] as const,
   invitePreview: (code: string) =>
@@ -32,7 +35,7 @@ export async function fetchOrgMembership(): Promise<OrgMembership | null> {
   return (res.data?.data as OrgMembership | null) ?? null
 }
 
-/** The organization's departments, the default one first, with head counts. */
+/** The departments the caller may see, the default one first, with head counts. */
 export async function fetchOrgDepartments(): Promise<OrgDepartment[]> {
   const res = await api.get('/api/org/departments')
   return (res.data?.data as OrgDepartment[]) ?? []
@@ -44,13 +47,57 @@ export async function fetchOrgRoles(): Promise<OrgRole[]> {
   return (res.data?.data as OrgRole[]) ?? []
 }
 
-/** Everyone in the organization, service accounts included. */
+/** What roles are made of: the primitives, the inherent powers and the role packs. */
+export async function fetchOrgPermissions(): Promise<OrgPermissionCatalog> {
+  const res = await api.get('/api/org/permissions')
+  return res.data?.data as OrgPermissionCatalog
+}
+
+/** Adds a custom role built from the primitives. */
+export async function createOrgRole(
+  input: OrgRoleInput
+): Promise<OrgApiResponse<OrgRole>> {
+  const res = await api.post('/api/org/roles', input)
+  return res.data
+}
+
+/** Changes a custom role; its holders are judged by it from their next request. */
+export async function updateOrgRole(
+  id: number,
+  input: OrgRoleInput
+): Promise<OrgApiResponse<OrgRole>> {
+  const res = await api.put(`/api/org/roles/${id}`, input)
+  return res.data
+}
+
+/** Deletes a custom role; the members who held it become Staff. */
+export async function deleteOrgRole(id: number): Promise<OrgApiResponse> {
+  const res = await api.delete(`/api/org/roles/${id}`)
+  return res.data
+}
+
+/**
+ * Copies a platform role pack into the organization as a custom role, under
+ * the name the page shows the pack by.
+ */
+export async function adoptOrgRolePack(
+  key: string,
+  name: string
+): Promise<OrgApiResponse<OrgRole>> {
+  const res = await api.post(
+    `/api/org/role-packs/${encodeURIComponent(key)}/adopt`,
+    { name }
+  )
+  return res.data
+}
+
+/** The members the caller may see, service accounts included. */
 export async function fetchOrgMembers(): Promise<OrgMember[]> {
   const res = await api.get('/api/org/members')
   return (res.data?.data as OrgMember[]) ?? []
 }
 
-/** The invite links that still admit new members, newest first. */
+/** The usable invite links the caller could have issued themselves, newest first. */
 export async function fetchOrgInvites(): Promise<OrgInvite[]> {
   const res = await api.get('/api/org/invites')
   return (res.data?.data as OrgInvite[]) ?? []
@@ -79,10 +126,18 @@ export async function deleteOrgDepartment(id: number): Promise<OrgApiResponse> {
   return res.data
 }
 
-/** Change a member's role, department, or both; omitted fields stay as they are. */
+/** A change to one member; omitted fields stay as they are. */
+export type OrgMemberPatch = {
+  role_id?: number
+  department_id?: number
+  /** Replaces the departments the member manages; their own is always one of them. */
+  managed_department_ids?: number[]
+}
+
+/** Changes a member's role, department, the departments they manage, or any of them at once. */
 export async function updateOrgMember(
   id: number,
-  patch: { role_id?: number; department_id?: number }
+  patch: OrgMemberPatch
 ): Promise<OrgApiResponse> {
   const res = await api.put(`/api/org/members/${id}`, patch)
   return res.data
