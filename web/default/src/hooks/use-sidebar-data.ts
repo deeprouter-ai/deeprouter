@@ -38,6 +38,7 @@ import {
   HelpCircle,
   Sparkles,
   Receipt,
+  Building2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -46,6 +47,10 @@ import {
   fetchMyPurchases,
   marketplaceQueryKeys,
 } from '@/features/marketplace/api'
+import {
+  canManageOrg,
+  useOrgMembership,
+} from '@/features/org/hooks/use-org-membership'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -60,6 +65,12 @@ export function useSidebarData(): SidebarData {
     staleTime: 5 * 60 * 1000,
   })
   const hasPurchases = (purchasesProbe?.total ?? 0) > 0
+
+  // Enterprise Org: the "Organization" group exists only for members who run
+  // their organization (owner and admins, until the permission engine lands).
+  // A personal account's probe answers null and the group never appears.
+  const { data: orgMembership } = useOrgMembership()
+  const managesOrg = canManageOrg(orgMembership)
 
   return {
     workspaces: [
@@ -115,6 +126,21 @@ export function useSidebarData(): SidebarData {
           },
         ],
       },
+      ...(managesOrg
+        ? [
+            {
+              id: 'org',
+              title: t('Organization'),
+              items: [
+                {
+                  title: t('Members & departments'),
+                  url: '/org/members',
+                  icon: Building2,
+                },
+              ],
+            },
+          ]
+        : []),
       {
         id: 'personal',
         title: t('Personal'),

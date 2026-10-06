@@ -52,6 +52,9 @@ export interface RegisterPayload {
   // Enterprise Org: set to sign up as a company — the backend creates this
   // organization and makes the new account its owner.
   org_name?: string
+  // Enterprise Org: the code of an invite link — the new account joins that
+  // organization with the role and department the link carries.
+  org_invite?: string
 }
 
 /**

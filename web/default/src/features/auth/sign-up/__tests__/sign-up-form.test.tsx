@@ -5,12 +5,16 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SignUpForm } from '../components/sign-up-form'
 
-// Enterprise Org P2 (meta-repo docs/enterprise-org-prd.md): the sign-up form
-// offers "create an organization for my company". Unticked, the request must
-// be exactly the personal sign-up it always was.
+// Enterprise Org (meta-repo docs/enterprise-org-prd.md): the sign-up form
+// offers "create an organization for my company" (P2), and joins an existing
+// one when the visitor arrived through an invite link (P3). With neither, the
+// request must be exactly the personal sign-up it always was.
 
 const mockRegister = vi.hoisted(() => vi.fn())
 const mockToastError = vi.hoisted(() => vi.fn())
+const mockHandleLoginSuccess = vi.hoisted(() => vi.fn())
+const mockSetWelcomeHandoff = vi.hoisted(() => vi.fn())
+const mockInvitePreview = vi.hoisted(() => vi.fn())
 
 vi.mock('@/features/auth/api', () => ({
   register: mockRegister,
@@ -29,7 +33,10 @@ vi.mock('@/features/auth/hooks/use-turnstile', () => ({
   }),
 }))
 vi.mock('@/features/auth/hooks/use-auth-redirect', () => ({
-  useAuthRedirect: () => ({ handleLoginSuccess: vi.fn() }),
+  useAuthRedirect: () => ({ handleLoginSuccess: mockHandleLoginSuccess }),
+}))
+vi.mock('@/features/org/hooks/use-org-invite-preview', () => ({
+  useOrgInvitePreview: mockInvitePreview,
 }))
 vi.mock('@/features/auth/hooks/use-email-verification', () => ({
   useEmailVerification: () => ({
@@ -44,12 +51,19 @@ vi.mock('@/features/auth/components/oauth-providers', () => ({
 }))
 vi.mock('@/features/auth/lib/storage', () => ({
   getAffiliateCode: () => '',
-  setWelcomeHandoff: vi.fn(),
+  setWelcomeHandoff: mockSetWelcomeHandoff,
   captureAcquisitionMeta: vi.fn(),
   readAcquisitionMeta: () => ({ channel: '', timezone: '' }),
 }))
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    // The key with its {{placeholders}} filled in, so a test can read the
+    // values a sentence was given.
+    t: (key: string, values?: Record<string, unknown>) =>
+      key.replace(/{{(\w+)}}/g, (_, name: string) =>
+        String(values?.[name] ?? '')
+      ),
+  }),
 }))
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: mockToastError },
@@ -77,8 +91,11 @@ function submit() {
 }
 
 beforeEach(() => {
-  mockRegister.mockReset().mockResolvedValue({ success: true, data: null })
+  mockRegister.mockReset().mockResolvedValue({ success: true, data: { id: 7 } })
   mockToastError.mockReset()
+  mockHandleLoginSuccess.mockReset()
+  mockSetWelcomeHandoff.mockReset()
+  mockInvitePreview.mockReset().mockReturnValue({ status: 'none' })
 })
 
 describe('sign-up form: company option', () => {
@@ -147,5 +164,112 @@ describe('sign-up form: company option', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: ORG_OPTION }))
     expect(screen.queryByTestId('oauth-providers')).toBeNull()
+  })
+})
+
+// Decision D24: whoever founds an organization goes straight to the Advanced
+// console. /welcome preselects "Everyday use" and saves it on the way out, so
+// a founder sent there would land in the Simple console, where there is no
+// organization management.
+describe('sign-up form: where a new account lands', () => {
+  it('sends a founder to the Advanced console, past the welcome page', async () => {
+    render(<SignUpForm />)
+    await fillAccount()
+    await userEvent.click(screen.getByRole('checkbox', { name: ORG_OPTION }))
+    await userEvent.type(screen.getByLabelText('Organization name'), 'Acme')
+    await submit()
+
+    await waitFor(() => expect(mockHandleLoginSuccess).toHaveBeenCalledTimes(1))
+    expect(mockHandleLoginSuccess).toHaveBeenCalledWith({ id: 7 }, '/dashboard')
+    // Nothing is stashed for a welcome page the founder never opens.
+    expect(mockSetWelcomeHandoff).not.toHaveBeenCalled()
+  })
+
+  it('still sends a personal sign-up to the welcome page', async () => {
+    render(<SignUpForm />)
+    await fillAccount()
+    await submit()
+
+    await waitFor(() => expect(mockHandleLoginSuccess).toHaveBeenCalledTimes(1))
+    expect(mockHandleLoginSuccess).toHaveBeenCalledWith({ id: 7 }, '/welcome')
+    expect(mockSetWelcomeHandoff).toHaveBeenCalledWith({ id: 7 })
+  })
+})
+
+describe('sign-up form: arriving through an invite link', () => {
+  const validInvite = {
+    status: 'valid',
+    preview: { org_name: 'Acme', role: 'manager', department: 'Sales' },
+  }
+
+  it('says where the link leads and joins that organization', async () => {
+    mockInvitePreview.mockReturnValue(validInvite)
+    render(<SignUpForm orgInvite='CODE123' />)
+
+    expect(mockInvitePreview).toHaveBeenCalledWith('CODE123')
+    expect(screen.getByRole('status')).toHaveTextContent("You're joining Acme")
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Department: Sales · Role: Manager'
+    )
+
+    await fillAccount()
+    await submit()
+
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1))
+    const payload = mockRegister.mock.calls[0][0]
+    expect(payload.org_invite).toBe('CODE123')
+    expect(payload.org_name).toBeUndefined()
+    // An invited member is not a founder: the welcome page asks them the
+    // usual question.
+    await waitFor(() =>
+      expect(mockHandleLoginSuccess).toHaveBeenCalledWith({ id: 7 }, '/welcome')
+    )
+  })
+
+  it('offers neither founding a company nor third-party sign-up', () => {
+    mockInvitePreview.mockReturnValue(validInvite)
+    render(<SignUpForm orgInvite='CODE123' />)
+
+    expect(screen.queryByRole('checkbox', { name: ORG_OPTION })).toBeNull()
+    // A third-party sign-up could not carry the invite code.
+    expect(screen.queryByTestId('oauth-providers')).toBeNull()
+  })
+
+  it('blocks the form when the link is dead, rather than making a personal account', async () => {
+    mockInvitePreview.mockReturnValue({ status: 'invalid' })
+    render(<SignUpForm orgInvite='EXPIRED' />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This invite link is invalid or has expired.'
+    )
+    expect(
+      screen.getByRole('link', { name: 'Sign up without an invite' })
+    ).toHaveAttribute('href', '/sign-up')
+    const button = screen.getByRole('button', { name: 'Create account' })
+    expect(button).toBeDisabled()
+
+    await fillAccount()
+    await userEvent.click(button)
+    expect(mockRegister).not.toHaveBeenCalled()
+  })
+
+  it('waits for the link to be checked before it lets anyone submit', () => {
+    mockInvitePreview.mockReturnValue({ status: 'loading' })
+    render(<SignUpForm orgInvite='CODE123' />)
+
+    expect(
+      screen.getByRole('button', { name: 'Create account' })
+    ).toBeDisabled()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('does not send an invite code when there is no invite link', async () => {
+    render(<SignUpForm />)
+    await fillAccount()
+    await submit()
+
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1))
+    expect(mockRegister.mock.calls[0][0].org_invite).toBeUndefined()
   })
 })

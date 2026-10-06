@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import i18n from 'i18next'
 import { api } from '@/lib/api'
 import type {
   LoginPayload,
@@ -107,6 +108,10 @@ export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
 export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   const res = await api.post(`/api/user/register`, payload, {
     params: { turnstile: payload.turnstile ?? '' },
+    // Say which language the page is in — the browser's own header need not
+    // match it. A new organization's starter departments are named in the
+    // language of this request.
+    headers: { 'Accept-Language': i18n.language },
   })
   return res.data
 }
