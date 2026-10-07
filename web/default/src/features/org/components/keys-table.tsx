@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react'
 import type { TFunction } from 'i18next'
-import { Bot, Pencil, RefreshCw, Snowflake, Sun, Trash2 } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  Bot,
+  Pencil,
+  RefreshCw,
+  Snowflake,
+  Sun,
+  Trash2,
+  Undo2,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +43,8 @@ type KeysTableProps = {
    * all out — a read-only member — and the column goes with them.
    */
   onEdit?: (key: OrgKey) => void
+  onAssign?: (key: OrgKey) => void
+  onReclaim?: (key: OrgKey) => void
   onRotate?: (key: OrgKey) => void
   onFreeze?: (key: OrgKey) => void
   onUnfreeze?: (key: OrgKey) => void
@@ -67,6 +78,8 @@ function limitsOf(key: OrgKey, t: TFunction): string {
 export function KeysTable({
   keys,
   onEdit,
+  onAssign,
+  onReclaim,
   onRotate,
   onFreeze,
   onUnfreeze,
@@ -74,7 +87,15 @@ export function KeysTable({
   busyKeyId,
 }: KeysTableProps) {
   const { t } = useTranslation()
-  const acts = Boolean(onEdit || onRotate || onFreeze || onUnfreeze || onDelete)
+  const acts = Boolean(
+    onEdit ||
+    onAssign ||
+    onReclaim ||
+    onRotate ||
+    onFreeze ||
+    onUnfreeze ||
+    onDelete
+  )
   // Read once: whether a key has expired is judged against the moment the
   // table appeared, and the list is fetched again after every action.
   const [now] = useState(() => Math.floor(Date.now() / 1000))
@@ -107,6 +128,13 @@ export function KeysTable({
                 <TableCell>
                   <div className='flex flex-wrap items-center gap-2'>
                     <span>{key.holder || t('Someone who has left')}</span>
+                    {/* The same words the key form uses for the owner: a key
+                        under the owner has been handed to nobody. */}
+                    {key.holder_is_owner && (
+                      <Badge variant='secondary'>
+                        {t('Not handed out yet')}
+                      </Badge>
+                    )}
                     {key.holder_is_service && (
                       <Badge variant='outline'>
                         <Bot aria-hidden='true' />
@@ -180,6 +208,32 @@ export function KeysTable({
                       >
                         <Pencil aria-hidden='true' />
                         {t('Edit')}
+                      </Button>
+                    )}
+                    {onAssign && (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        disabled={busy}
+                        onClick={() => onAssign(key)}
+                        aria-label={t('Assign {{name}}', { name: key.name })}
+                      >
+                        <ArrowRightLeft aria-hidden='true' />
+                        {t('Assign')}
+                      </Button>
+                    )}
+                    {/* A key under the owner has been handed to nobody: there
+                        is nothing to take back. */}
+                    {onReclaim && !key.holder_is_owner && (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        disabled={busy}
+                        onClick={() => onReclaim(key)}
+                        aria-label={t('Take back {{name}}', { name: key.name })}
+                      >
+                        <Undo2 aria-hidden='true' />
+                        {t('Take back')}
                       </Button>
                     )}
                     {onRotate && (

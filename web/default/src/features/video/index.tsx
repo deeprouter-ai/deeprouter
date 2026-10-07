@@ -35,6 +35,7 @@ import { getApiKeys, issueConnectToken } from '@/features/keys/api'
 import { API_KEY_STATUS } from '@/features/keys/constants'
 import { keyPermitsModel } from '@/features/keys/lib/model-limits'
 import type { ApiKey } from '@/features/keys/types'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
@@ -67,6 +68,10 @@ import {
  */
 export function VideoPage() {
   const { t, i18n } = useTranslation()
+  // A member of an organization makes no key of their own (Enterprise Org PRD
+  // D16): with no key that fits, the page says whom to ask rather than where
+  // to create one.
+  const isOrgMember = Boolean(useOrgMembership().data)
 
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null)
@@ -258,7 +263,17 @@ export function VideoPage() {
               )}
             </h3>
 
-            {keysLoaded && !apiKey ? (
+            {keysLoaded && !apiKey && isOrgMember ? (
+              <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
+                {keys.length > 0
+                  ? t(
+                      'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+                    )
+                  : t(
+                      'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+                    )}
+              </p>
+            ) : keysLoaded && !apiKey ? (
               <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
                 {keys.length > 0
                   ? t(

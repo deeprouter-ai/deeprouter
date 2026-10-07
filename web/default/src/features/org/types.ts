@@ -102,6 +102,8 @@ export type OrgMember = {
   is_service: boolean
   /** The departments a member with a department-scoped role manages, their own first. */
   managed_department_ids: number[]
+  /** How many of the organization's keys they hold — what removing them takes back. */
+  key_count: number
 }
 
 export type OrgInvite = {
@@ -128,6 +130,11 @@ export type OrgKey = {
   /** Empty when that account no longer exists. */
   holder: string
   holder_is_service: boolean
+  /**
+   * The key has been handed to nobody: it is parked under the owner, where a
+   * new key starts out and one that was taken back returns.
+   */
+  holder_is_owner: boolean
   /** The holder's department. */
   department_id: number
   department: string
@@ -150,11 +157,23 @@ export type OrgKey = {
 /**
  * A key together with its value. The value is there only for a service
  * account's key, and only in the answer to the request that made that value —
- * a creation or a rotation. A person's key never has one.
+ * a creation, a rotation, or handing the key to the account. A person's key
+ * never has one.
  */
 export type OrgKeyGrant = OrgKey & { value?: string }
 
-/** A member a new key can be made out to. */
+/**
+ * One of the caller's own keys as far as one purpose of the console goes:
+ * `models` are the models of that purpose the key may call, where the purpose
+ * names models at all.
+ */
+export type OrgOwnKey = {
+  id: number
+  name: string
+  models: string[]
+}
+
+/** A member a key can be made out to, or handed to. */
 export type OrgKeyHolder = {
   id: number
   name: string

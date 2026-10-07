@@ -1,22 +1,12 @@
 // Copyright (C) 2026 DeepRouter
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type { OrgKeyHolder } from '../types'
-
-/**
- * What the "who is it for" list is narrowed down by. A department or role id
- * of 0 leaves that one open.
- */
-export type HolderFilter = {
-  search: string
-  departmentId: number
-  roleId: number
-}
-
-/** A department or a role the list can be narrowed down to. */
-export type HolderFacet = {
-  id: number
-  name: string
-}
+import {
+  distinctFacets,
+  personMatches,
+  type PeopleFacet,
+  type PeopleFilter,
+} from './people-filter'
 
 /**
  * The holders in the order they are listed: the owner first — that row is
@@ -40,28 +30,17 @@ export function holdersInOrder(
  */
 export function holderMatches(
   holder: OrgKeyHolder,
-  filter: HolderFilter
+  filter: PeopleFilter
 ): boolean {
-  if (filter.departmentId && holder.department_id !== filter.departmentId) {
-    return false
-  }
-  if (filter.roleId && holder.role_id !== filter.roleId) return false
-  const search = filter.search.trim().toLowerCase()
-  return holder.name.toLowerCase().includes(search)
-}
-
-/** The given facets, each once, in the order of their ids. */
-function distinct(facets: HolderFacet[]): HolderFacet[] {
-  const byId = new Map(facets.map((facet) => [facet.id, facet]))
-  return [...byId.values()].sort((a, b) => a.id - b.id)
+  return personMatches(holder, [holder.name], filter)
 }
 
 /**
  * The departments the holders sit in, oldest first — which puts the default
  * department first, as the departments page does.
  */
-export function holderDepartments(holders: OrgKeyHolder[]): HolderFacet[] {
-  return distinct(
+export function holderDepartments(holders: OrgKeyHolder[]): PeopleFacet[] {
+  return distinctFacets(
     holders.map((holder) => ({
       id: holder.department_id,
       name: holder.department,
@@ -74,8 +53,8 @@ export function holderDepartments(holders: OrgKeyHolder[]): HolderFacet[] {
  * own, as the roles page lists them. Empty for a viewer who is not told
  * anybody's role, and there is then nothing to narrow down by.
  */
-export function holderRoles(holders: OrgKeyHolder[]): HolderFacet[] {
-  return distinct(
+export function holderRoles(holders: OrgKeyHolder[]): PeopleFacet[] {
+  return distinctFacets(
     holders
       .filter((holder) => holder.role_id > 0)
       .map((holder) => ({ id: holder.role_id, name: holder.role }))

@@ -20,11 +20,17 @@ import { Link } from '@tanstack/react-router'
 import { BookOpen, Plus, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import { useApiKeys } from './api-keys-provider'
 
 export function ApiKeysPrimaryButtons() {
   const { t } = useTranslation()
   const { setOpen, setCurrentRow, setResolvedKey } = useApiKeys()
+  // A member of an organization holds the keys they are handed and makes none
+  // of their own (Enterprise Org PRD D16); the backend refuses it too. Only a
+  // known member loses the button — a personal account keeps it even while,
+  // or if, the question cannot be answered.
+  const isOrgMember = Boolean(useOrgMembership().data)
   return (
     <div className='flex gap-2'>
       <Button
@@ -51,10 +57,12 @@ export function ApiKeysPrimaryButtons() {
           </Link>
         }
       />
-      <Button size='sm' onClick={() => setOpen('mode-picker')}>
-        <Plus className='h-4 w-4' />
-        {t('Create API Key')}
-      </Button>
+      {!isOrgMember && (
+        <Button size='sm' onClick={() => setOpen('mode-picker')}>
+          <Plus className='h-4 w-4' />
+          {t('Create API Key')}
+        </Button>
+      )}
     </div>
   )
 }

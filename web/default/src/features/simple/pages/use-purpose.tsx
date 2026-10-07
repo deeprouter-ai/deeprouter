@@ -15,18 +15,24 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { issueConnectToken } from '@/features/keys/api'
-import type { ApiKey } from '@/features/keys/types'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import {
   videoModelsForKey,
   type PromptLanguage,
 } from '@/features/video/lib/prompt-template'
 import { buildPurposePrompt } from '../lib/prompt'
-import { ensurePurposeKey } from '../lib/purpose-key'
+import {
+  ensurePurposeKey,
+  NoAssignedKeyError,
+  type PurposeKey,
+} from '../lib/purpose-key'
 import type { SimplePurpose } from '../lib/purposes'
 
 type Phase =
   | { state: 'preparing' }
-  | { state: 'ready'; scriptUrl: string; key: ApiKey }
+  | { state: 'ready'; scriptUrl: string; key: PurposeKey }
+  // A member of an organization who has been handed no key for this purpose.
+  | { state: 'unassigned' }
   | { state: 'failed'; message: string }
 
 /**
@@ -35,6 +41,10 @@ type Phase =
  * copied text never carries the key itself (same machinery as the video
  * page). Naming Claude / Codex is the deliberate CLAUDE.md §0 exception the
  * video page records: "paste it into your AI" cannot be acted on otherwise.
+ *
+ * A member of an organization makes no key of their own (Enterprise Org PRD
+ * D16): the page uses one they were handed, and when none of those can serve
+ * the purpose it says whom to ask instead of offering the button.
  */
 export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   const { t, i18n } = useTranslation()
@@ -43,6 +53,11 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   // decides which group a new key lands in, and creating early would pin it.
   const statusReady = !statusLoading || !!status
   const defaultUseAutoGroup = status?.default_use_auto_group === true
+  // Whether the user belongs to an organization decides where the key comes
+  // from, so that is known before a key is asked for — or made.
+  const membershipQuery = useOrgMembership()
+  const membershipReady = !membershipQuery.isLoading
+  const isOrgMember = Boolean(membershipQuery.data)
   const [phase, setPhase] = useState<Phase>({ state: 'preparing' })
   const [attempt, setAttempt] = useState(0)
   const [copied, setCopied] = useState(false)
@@ -50,11 +65,15 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   const [pickedModel, setPickedModel] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!statusReady) return
+    if (!statusReady || !membershipReady) return
     let cancelled = false
     void (async () => {
       try {
-        const key = await ensurePurposeKey(purpose.id, defaultUseAutoGroup)
+        const key = await ensurePurposeKey(
+          purpose.id,
+          defaultUseAutoGroup,
+          isOrgMember
+        )
         const res = await issueConnectToken(key.id, ['claude-code'])
         if (!res.success || !res.data) {
           throw new Error(res.message || '')
@@ -68,18 +87,28 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           })
         }
       } catch (error) {
-        if (!cancelled) {
-          setPhase({
-            state: 'failed',
-            message: error instanceof Error ? error.message : '',
-          })
+        if (cancelled) return
+        if (error instanceof NoAssignedKeyError) {
+          setPhase({ state: 'unassigned' })
+          return
         }
+        setPhase({
+          state: 'failed',
+          message: error instanceof Error ? error.message : '',
+        })
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [purpose.id, defaultUseAutoGroup, statusReady, attempt])
+  }, [
+    purpose.id,
+    defaultUseAutoGroup,
+    statusReady,
+    membershipReady,
+    isOrgMember,
+    attempt,
+  ])
 
   const language: PromptLanguage = i18n.language?.startsWith('zh') ? 'zh' : 'en'
   // Video models this key can call (its grant snapshot), cheapest first.
@@ -215,7 +244,26 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
         </p>
 
         <div className='mt-10 w-full'>
-          {phase.state === 'failed' ? (
+          {phase.state === 'unassigned' ? (
+            <div className='flex flex-col items-center gap-3'>
+              <p className='max-w-xs text-sm leading-relaxed'>
+                {t(
+                  'You have no key that can do this yet. Keys are handed out by your organization — ask an administrator for one.'
+                )}
+              </p>
+              <button
+                type='button'
+                onClick={() => {
+                  setPhase({ state: 'preparing' })
+                  setAttempt((n) => n + 1)
+                }}
+                className='border-border bg-card inline-flex h-11 items-center gap-2 rounded-full border px-5 text-sm font-medium active:scale-95'
+              >
+                <RotateCw className='size-4' />
+                {t('Check again')}
+              </button>
+            </div>
+          ) : phase.state === 'failed' ? (
             <div className='flex flex-col items-center gap-3'>
               <p className='text-destructive text-sm'>
                 {phase.message

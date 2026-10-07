@@ -14,6 +14,7 @@ import type {
   OrgKeyTemplate,
   OrgMember,
   OrgMembership,
+  OrgOwnKey,
   OrgPermissionCatalog,
   OrgRole,
   OrgRoleInput,
@@ -31,6 +32,7 @@ export const orgQueryKeys = {
     [...orgQueryKeys.all, 'invite-preview', code] as const,
   keys: () => [...orgQueryKeys.all, 'keys'] as const,
   keyHolders: () => [...orgQueryKeys.all, 'key-holders'] as const,
+  keyAssignees: () => [...orgQueryKeys.all, 'key-assignees'] as const,
   keyTemplates: () => [...orgQueryKeys.all, 'key-templates'] as const,
   keyModels: (holderId: number) =>
     [...orgQueryKeys.all, 'key-models', holderId] as const,
@@ -154,6 +156,18 @@ export async function updateOrgMember(
   return res.data
 }
 
+/**
+ * Takes a member — a person or a service account — out of the organization
+ * for good: their keys are taken back and their account is deleted. The answer
+ * says how many keys that was.
+ */
+export async function removeOrgMember(
+  id: number
+): Promise<OrgApiResponse<{ reclaimed_keys: number }>> {
+  const res = await api.delete(`/api/org/members/${id}`)
+  return res.data
+}
+
 /** Adds a service account — a member that holds keys and cannot sign in. */
 export async function createOrgServiceAccount(payload: {
   name: string
@@ -188,6 +202,22 @@ export async function fetchOrgKeys(): Promise<OrgKey[]> {
 export async function fetchOrgKeyHolders(): Promise<OrgKeyHolder[]> {
   const res = await api.get('/api/org/key-holders')
   return (res.data?.data as OrgKeyHolder[]) ?? []
+}
+
+/** The members the caller may hand a key to; the owner is not one of them. */
+export async function fetchOrgKeyAssignees(): Promise<OrgKeyHolder[]> {
+  const res = await api.get('/api/org/key-assignees')
+  return (res.data?.data as OrgKeyHolder[]) ?? []
+}
+
+/**
+ * The caller's own keys that work right now and can serve a purpose of the
+ * console ("video", "coding", …), newest first. A member of an organization
+ * makes no key of their own, so this is what the console sets a tool up with.
+ */
+export async function fetchOrgSelfKeys(purpose: string): Promise<OrgOwnKey[]> {
+  const res = await api.get('/api/org/self/keys', { params: { purpose } })
+  return (res.data?.data as OrgOwnKey[]) ?? []
 }
 
 /** The policy templates a key can be given. */
@@ -247,6 +277,32 @@ export async function freezeOrgKey(id: number): Promise<OrgApiResponse> {
 /** Makes a frozen key work again. */
 export async function unfreezeOrgKey(id: number): Promise<OrgApiResponse> {
   const res = await api.post(`/api/org/keys/${id}/unfreeze`)
+  return res.data
+}
+
+/**
+ * Hands a key to another member. It gets a new value on the way, so the copy
+ * its last holder has stops working; the answer carries the new value only
+ * when the new holder is a service account.
+ */
+export async function assignOrgKey(
+  id: number,
+  holderId: number
+): Promise<OrgApiResponse<OrgKeyGrant>> {
+  const res = await api.post(`/api/org/keys/${id}/assign`, {
+    holder_id: holderId,
+  })
+  return res.data
+}
+
+/**
+ * Takes a key back from its holder: frozen, with a new value, parked under the
+ * owner until it is handed to someone else.
+ */
+export async function reclaimOrgKey(
+  id: number
+): Promise<OrgApiResponse<OrgKey>> {
+  const res = await api.post(`/api/org/keys/${id}/reclaim`)
   return res.data
 }
 

@@ -14,16 +14,19 @@ import { Input } from '@/components/ui/input'
 import { CopyButton } from '@/components/copy-button'
 import type { OrgKeyGrant } from '../types'
 
+/** What was just done to the key the dialog is about. */
+export type KeyReadyReason = 'created' | 'rotated' | 'assigned'
+
 type KeyReadyDialogProps = {
-  /** The key that was just created or given a new value; null keeps this closed. */
+  /** The key that was just created, given a new value or handed over; null keeps this closed. */
   grant: OrgKeyGrant | null
-  /** Whether the value is a new one for an existing key, rather than a new key. */
-  rotated: boolean
+  reason: KeyReadyReason
   onClose: () => void
 }
 
 /**
- * What follows making a key or giving it a new value (Enterprise Org PRD D15).
+ * What follows making a key, giving it a new value or handing it to another
+ * holder (Enterprise Org PRD D15).
  *
  * A service account's key comes with its value, and this is the one time
  * anybody sees it — so the dialog says plainly that there is no second look,
@@ -34,11 +37,16 @@ type KeyReadyDialogProps = {
  */
 export function KeyReadyDialog({
   grant,
-  rotated,
+  reason,
   onClose,
 }: KeyReadyDialogProps) {
   const { t } = useTranslation()
   const value = grant?.value ? `sk-${grant.value}` : ''
+  const title = {
+    created: t('Key created'),
+    rotated: t('The key has a new value'),
+    assigned: t('Key assigned'),
+  }[reason]
 
   return (
     <AlertDialog
@@ -49,9 +57,7 @@ export function KeyReadyDialog({
         {grant && (
           <>
             <AlertDialogHeader>
-              <AlertDialogTitle>
-                {rotated ? t('The key has a new value') : t('Key created')}
-              </AlertDialogTitle>
+              <AlertDialogTitle>{title}</AlertDialogTitle>
               <AlertDialogDescription>
                 {value
                   ? t(

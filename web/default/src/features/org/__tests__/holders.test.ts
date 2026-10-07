@@ -6,8 +6,8 @@ import {
   holderMatches,
   holderRoles,
   holdersInOrder,
-  type HolderFilter,
 } from '../lib/holders'
+import type { PeopleFilter } from '../lib/people-filter'
 import type { OrgKeyHolder } from '../types'
 
 // Enterprise Org P5 (meta-repo docs/enterprise-org-prd.md §3, D34): finding
@@ -45,12 +45,12 @@ const paula = holder(6, 'paula', { ...product, role_id: 31, role: 'IT Ops' })
 const everyone = [sally, paula, bot, fiona, mark]
 
 /** A filter that leaves everything open, but for what is given. */
-function filter(over: Partial<HolderFilter> = {}): HolderFilter {
+function filter(over: Partial<PeopleFilter> = {}): PeopleFilter {
   return { search: '', departmentId: 0, roleId: 0, ...over }
 }
 
 /** The names of the holders a filter leaves, in the order given. */
-function namesUnder(over: Partial<HolderFilter>): string[] {
+function namesUnder(over: Partial<PeopleFilter>): string[] {
   return everyone
     .filter((each) => holderMatches(each, filter(over)))
     .map((each) => each.name)

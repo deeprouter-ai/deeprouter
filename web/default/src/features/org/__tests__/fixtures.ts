@@ -188,6 +188,7 @@ export function memberOf(over: Partial<OrgMember>): OrgMember {
     is_owner: false,
     is_service: false,
     managed_department_ids: [],
+    key_count: 0,
     ...over,
   }
 }
@@ -205,6 +206,7 @@ export function keyOf(over: Partial<OrgKey> = {}): OrgKey {
     holder_id: 3,
     holder: 'sally',
     holder_is_service: false,
+    holder_is_owner: false,
     department_id: 11,
     department: 'Sales',
     policy_template: '',
@@ -255,6 +257,14 @@ export const keyHolders: OrgKeyHolder[] = [
     is_owner: false,
   },
 ]
+
+/**
+ * Whom a key can be handed to, as `GET /api/org/key-assignees` answers an
+ * admin: everyone a key can be made out to, the owner left out.
+ */
+export const keyAssignees: OrgKeyHolder[] = keyHolders.filter(
+  (holder) => !holder.is_owner
+)
 
 /** What `GET /api/org/key-templates` answers. */
 export const keyTemplates: OrgKeyTemplate[] = [

@@ -13,23 +13,33 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrgKeysPage } from '../keys'
 import type { OrgKey, OrgKeyHolder, OrgMembership } from '../types'
-import { keyHolders, keyOf, keyTemplates, membershipOf } from './fixtures'
+import {
+  keyAssignees,
+  keyHolders,
+  keyOf,
+  keyTemplates,
+  membershipOf,
+} from './fixtures'
 
-// Enterprise Org P5 (meta-repo docs/enterprise-org-prd.md §3): the
+// Enterprise Org P5 and P6 (meta-repo docs/enterprise-org-prd.md §3): the
 // "Organization keys" page. The backend decides what is allowed and never
 // sends a key's value in a list; these tests pin what the page offers each
 // kind of member, what it asks the backend for, and the one moment a value is
-// on the screen — a service account's, right after it was made.
+// on the screen — a service account's, right after it was made, replaced or
+// handed to the account.
 
 const api = vi.hoisted(() => ({
   fetchOrgMembership: vi.fn(),
   fetchOrgKeys: vi.fn(),
   fetchOrgKeyHolders: vi.fn(),
+  fetchOrgKeyAssignees: vi.fn(),
   fetchOrgKeyTemplates: vi.fn(),
   fetchOrgKeyModels: vi.fn(),
   createOrgKey: vi.fn(),
   updateOrgKey: vi.fn(),
   rotateOrgKey: vi.fn(),
+  assignOrgKey: vi.fn(),
+  reclaimOrgKey: vi.fn(),
   freezeOrgKey: vi.fn(),
   unfreezeOrgKey: vi.fn(),
   deleteOrgKey: vi.fn(),
@@ -95,10 +105,25 @@ const frozenKey = keyOf({
   status: 2,
   holder_id: 1,
   holder: 'Fiona Founder',
+  holder_is_owner: true,
   department_id: 10,
   department: 'General',
 })
 const keys = [designKey, buildKey, frozenKey]
+
+/** Bo, a colleague of sally's in Sales: someone to hand her key to. */
+const bo: OrgKeyHolder = {
+  id: 5,
+  name: 'bo',
+  department_id: 11,
+  department: 'Sales',
+  role_id: 4,
+  role: 'staff',
+  is_service: false,
+  is_owner: false,
+}
+/** Whom a key can be handed to: sally, the service account and bo. */
+const assignees = [...keyAssignees, bo]
 
 /** A key limited to two models someone picked by hand. */
 const pickedKey = keyOf({
@@ -283,6 +308,22 @@ function enter(label: string | RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } })
 }
 
+/** Opens the form that hands a key to someone else, and returns it. */
+async function openAssign(key: OrgKey): Promise<HTMLElement> {
+  await userEvent.click(
+    screen.getByRole('button', { name: `Assign ${key.name}` })
+  )
+  return screen.findByRole('dialog')
+}
+
+/** Picks who the key goes to in the open assign form. */
+async function chooseAssignee(name: string) {
+  await userEvent.click(dropdown('Assign to'))
+  await screen.findByPlaceholderText('Search by name')
+  await userEvent.click(person(name))
+  await waitFor(() => expect(peopleOpen()).toBe(false))
+}
+
 /** The names of the action buttons a key's row offers, in order. */
 function actionsOf(key: OrgKey): string[] {
   return within(rowOf(key.name))
@@ -307,6 +348,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.fetchOrgKeys.mockResolvedValue(keys)
   api.fetchOrgKeyHolders.mockResolvedValue(keyHolders)
+  api.fetchOrgKeyAssignees.mockResolvedValue(assignees)
   api.fetchOrgKeyTemplates.mockResolvedValue(keyTemplates)
   api.fetchOrgKeyModels.mockResolvedValue(OFFERED)
   api.createOrgKey.mockImplementation((input: { name: string }) =>
@@ -316,6 +358,13 @@ beforeEach(() => {
     })
   )
   api.rotateOrgKey.mockResolvedValue({ success: true, data: designKey })
+  api.assignOrgKey.mockImplementation((_id: number, holderId: number) =>
+    Promise.resolve({
+      success: true,
+      data: keyOf({ holder_id: holderId, holder: 'bo' }),
+    })
+  )
+  api.reclaimOrgKey.mockResolvedValue({ success: true, data: frozenKey })
   for (const call of [
     api.updateOrgKey,
     api.freezeOrgKey,
@@ -339,6 +388,7 @@ describe('the list', () => {
     expect(design).toHaveTextContent('Used $0')
     expect(design).toHaveTextContent('Working')
     expect(design).not.toHaveTextContent('Service account')
+    expect(design).not.toHaveTextContent('Not handed out yet')
 
     const build = rowOf('Nightly build')
     expect(build).toHaveTextContent('CI Pipeline')
@@ -347,7 +397,13 @@ describe('the list', () => {
     expect(build).toHaveTextContent('No limit')
     expect(build).toHaveTextContent('60 requests/min')
 
-    expect(rowOf('Old laptop')).toHaveTextContent('Frozen')
+    // A key under the owner has been handed to nobody, and says so in the
+    // words the key form uses for it.
+    const parked = rowOf('Old laptop')
+    expect(parked).toHaveTextContent('Frozen')
+    expect(parked).toHaveTextContent('Fiona Founder')
+    expect(parked).toHaveTextContent('Not handed out yet')
+    expect(build).not.toHaveTextContent('Not handed out yet')
   })
 
   it('shows a key that ran out or ran past its date as what it is', async () => {
@@ -429,13 +485,17 @@ describe('what each role is offered', () => {
       expect(screen.getByRole('button', { name: 'New key' })).toBeEnabled()
       expect(actionsOf(designKey)).toEqual([
         'Edit',
+        'Assign',
+        'Take back',
         'New value',
         'Freeze',
         'Delete',
       ])
-      // A frozen key is offered the way back instead.
+      // A frozen key is offered the way back instead — and one parked under
+      // the owner has been handed to nobody, so there is nothing to take back.
       expect(actionsOf(frozenKey)).toEqual([
         'Edit',
+        'Assign',
         'New value',
         'Unfreeze',
         'Delete',
@@ -450,16 +510,22 @@ describe('what each role is offered', () => {
     expect(rowOf('Design tools')).toHaveTextContent('sk-abcd**********wxyz')
     expect(screen.queryByRole('button')).toBeNull()
     expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull()
-    // Whom a key can be made out to is nobody's business who cannot make one.
+    // Whom a key can be made out to is nobody's business who cannot make one,
+    // and whom one can be handed to nobody's who cannot hand one out.
     expect(api.fetchOrgKeyHolders).not.toHaveBeenCalled()
+    expect(api.fetchOrgKeyAssignees).not.toHaveBeenCalled()
   })
 
-  it('offers a manager nothing here: handing keys out is not on this page', async () => {
+  it('offers a manager what key.assign brings: handing a key on and taking it back', async () => {
     // The preset manager holds key.read and key.assign (PRD §2).
     await renderPage(membershipOf('manager'))
 
-    expect(rowOf('Design tools')).toBeInTheDocument()
-    expect(screen.queryByRole('button')).toBeNull()
+    expect(actionsOf(designKey)).toEqual(['Assign', 'Take back'])
+    expect(actionsOf(buildKey)).toEqual(['Assign', 'Take back'])
+    expect(screen.queryByRole('button', { name: 'New key' })).toBeNull()
+    expect(api.fetchOrgKeyAssignees).toHaveBeenCalledTimes(1)
+    // A manager makes no keys, so is not told whom one could be made for.
+    expect(api.fetchOrgKeyHolders).not.toHaveBeenCalled()
   })
 
   it('offers a custom role exactly the actions it grants', async () => {
@@ -484,9 +550,18 @@ describe('what each role is offered', () => {
     expect(actionsOf(designKey)).toEqual(['Edit', 'New value'])
     editor.unmount()
 
-    await renderPage(customRole('Key Maker', ['key.read', 'key.create']))
+    const maker = await renderPage(
+      customRole('Key Maker', ['key.read', 'key.create'])
+    )
     expect(screen.getByRole('button', { name: 'New key' })).toBeEnabled()
     expect(actionsOf(designKey)).toEqual([])
+    // Making keys is not handing them out.
+    expect(api.fetchOrgKeyAssignees).not.toHaveBeenCalled()
+    maker.unmount()
+
+    await renderPage(customRole('Key Mover', ['key.read', 'key.assign']))
+    expect(actionsOf(designKey)).toEqual(['Assign', 'Take back'])
+    expect(actionsOf(frozenKey)).toEqual(['Assign'])
   })
 })
 
@@ -1516,6 +1591,247 @@ describe('giving a key a new value', () => {
 
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(api.rotateOrgKey).not.toHaveBeenCalled()
+  })
+})
+
+describe('handing a key to someone else', () => {
+  it('asks who, with nobody chosen, and offers everyone but its holder', async () => {
+    await renderPage()
+    const form = await openAssign(designKey)
+
+    expect(form).toHaveTextContent('Assign “Design tools”')
+    expect(form).toHaveTextContent(
+      'It is held by sally now. It gets a new value on the way, so the one sally has stops working at once.'
+    )
+    // Nobody to begin with: a key is not handed over by pressing Enter on
+    // whoever happened to be first.
+    expect(dropdown('Assign to')).toHaveTextContent('Choose a member')
+    expect(within(form).getByRole('button', { name: 'Assign' })).toBeDisabled()
+
+    await userEvent.click(dropdown('Assign to'))
+    await screen.findByPlaceholderText('Search by name')
+    // Not sally, who has it; and the owner is on nobody's list of assignees.
+    expect(people()).toEqual([
+      'bo | Sales · Staff',
+      'CI Pipeline | Service account | General · Staff',
+    ])
+    expect(api.assignOrgKey).not.toHaveBeenCalled()
+  })
+
+  it('hands it to a person: says how they get the value, and shows none', async () => {
+    // Acceptance: 分配/回收：admin 可分配给组织内任意成员……再次分配时自动换值.
+    await renderPage()
+    const form = await openAssign(designKey)
+    await chooseAssignee('bo')
+
+    expect(dropdown('Assign to')).toHaveTextContent('bo · Sales')
+    expect(form).toHaveTextContent(
+      'The new value is not shown to you. bo installs it into their own tools with one-click setup, from their API keys page.'
+    )
+    await userEvent.click(within(form).getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() => expect(api.assignOrgKey).toHaveBeenCalledWith(100, 5))
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith(
+        '“Design tools” now belongs to bo',
+        undefined
+      )
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+    await waitFor(() => expect(api.fetchOrgKeys).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows a service account the new value once', async () => {
+    // PRD D15: 服务账号的 key 在归到服务账号名下的那一刻向操作者展示一次.
+    api.assignOrgKey.mockResolvedValue({
+      success: true,
+      data: { ...buildKey, value: SECRET },
+    })
+    await renderPage()
+    const form = await openAssign(designKey)
+    await chooseAssignee('CI Pipeline')
+    expect(form).toHaveTextContent(
+      'A service account cannot sign in, so the new value is shown to you once, right after this. Save it then.'
+    )
+    await userEvent.click(within(form).getByRole('button', { name: 'Assign' }))
+    await waitFor(() => expect(api.assignOrgKey).toHaveBeenCalledWith(100, 4))
+
+    const field = await screen.findByRole('textbox', { name: 'Full key' })
+    expect(field).toHaveValue(`sk-${SECRET}`)
+    const shown = field.closest('[role="alertdialog"]') as HTMLElement
+    expect(shown).toHaveTextContent('Key assigned')
+    // A line of confirmation would be one more place to miss the value from.
+    expect(mockToast.success).not.toHaveBeenCalled()
+
+    await userEvent.click(
+      within(shown).getByRole('button', { name: 'I have saved it' })
+    )
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(document.body.innerHTML).not.toContain(SECRET)
+  })
+
+  it('says so when the key arrives frozen', async () => {
+    // Whoever may not unfreeze keys hands a frozen one over as it is.
+    api.assignOrgKey.mockResolvedValue({
+      success: true,
+      data: keyOf({ holder_id: 5, holder: 'bo', status: 2 }),
+    })
+    await renderPage(membershipOf('manager'))
+    const form = await openAssign(designKey)
+    await chooseAssignee('bo')
+    await userEvent.click(within(form).getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith(
+        '“Design tools” now belongs to bo',
+        {
+          description:
+            'It is not switched on, so it will not work for them until someone who may unfreeze keys does that.',
+        }
+      )
+    )
+  })
+
+  it('says a parked key has been handed to nobody yet', async () => {
+    await renderPage()
+    const form = await openAssign(frozenKey)
+
+    expect(form).toHaveTextContent(
+      'It has not been handed to anyone yet. It gets a new value when it is.'
+    )
+    // Everyone on the list could be chosen here, the first of them included —
+    // and still nobody is until someone picks.
+    expect(dropdown('Assign to')).toHaveTextContent('Choose a member')
+    expect(within(form).getByRole('button', { name: 'Assign' })).toBeDisabled()
+    await userEvent.click(dropdown('Assign to'))
+    await screen.findByPlaceholderText('Search by name')
+    // The owner holds it, and is not on the list anyway: everyone else is.
+    expect(people().map((row) => row.split(' | ')[0])).toEqual([
+      'bo',
+      'CI Pipeline',
+      'sally',
+    ])
+  })
+
+  it('keeps the form open when the backend refuses', async () => {
+    api.assignOrgKey.mockResolvedValue({ success: false, message: 'refused' })
+    await renderPage()
+    const form = await openAssign(designKey)
+    await chooseAssignee('bo')
+    await userEvent.click(within(form).getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() => expect(api.assignOrgKey).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(within(form).getByRole('button', { name: 'Assign' })).toBeEnabled()
+    )
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(mockToast.success).not.toHaveBeenCalled()
+    expect(api.fetchOrgKeys).toHaveBeenCalledTimes(1)
+  })
+
+  it('survives a request that fails outright', async () => {
+    // A 403 reaches the page as a rejection; the interceptor has said why.
+    api.assignOrgKey.mockRejectedValue(new Error('403'))
+    await renderPage()
+    const form = await openAssign(designKey)
+    await chooseAssignee('bo')
+    await userEvent.click(within(form).getByRole('button', { name: 'Assign' }))
+
+    await waitFor(() =>
+      expect(within(form).getByRole('button', { name: 'Assign' })).toBeEnabled()
+    )
+    expect(mockToast.success).not.toHaveBeenCalled()
+  })
+
+  it('hands nothing over on cancel, and starts afresh the next time', async () => {
+    await renderPage()
+    const form = await openAssign(designKey)
+    await chooseAssignee('bo')
+    await userEvent.click(within(form).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(api.assignOrgKey).not.toHaveBeenCalled()
+
+    await openAssign(designKey)
+    expect(dropdown('Assign to')).toHaveTextContent('Choose a member')
+  })
+
+  it('says so when there is nobody else to hand it to', async () => {
+    api.fetchOrgKeyAssignees.mockResolvedValue([keyAssignees[0]])
+    await renderPage()
+    const form = await openAssign(designKey)
+
+    expect(form).toHaveTextContent(
+      'There is nobody else you can assign this key to.'
+    )
+    expect(screen.queryByRole('combobox', { name: 'Assign to' })).toBeNull()
+    expect(within(form).getByRole('button', { name: 'Assign' })).toBeDisabled()
+  })
+})
+
+describe('taking a key back', () => {
+  it('says what it does, and takes the key back only on confirm', async () => {
+    // Acceptance: 回收后 key 自动冻结并挂回 owner 名下.
+    await renderPage()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Take back Design tools' })
+    )
+
+    const confirm = screen.getByRole('alertdialog')
+    expect(confirm).toHaveTextContent('Take this key back?')
+    expect(confirm).toHaveTextContent(
+      '“Design tools” stops working at once and gets a new value, so the one sally has is dead for good. It goes back under the owner, frozen, until it is assigned to someone else.'
+    )
+    expect(api.reclaimOrgKey).not.toHaveBeenCalled()
+
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Take back' })
+    )
+    await waitFor(() => expect(api.reclaimOrgKey).toHaveBeenCalledWith(100))
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith('Key taken back')
+    )
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await waitFor(() => expect(api.fetchOrgKeys).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps the key where it is when the question is answered with no', async () => {
+    await renderPage()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Take back Design tools' })
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(api.reclaimOrgKey).not.toHaveBeenCalled()
+  })
+
+  it('claims nothing when the backend refuses', async () => {
+    api.reclaimOrgKey.mockResolvedValue({ success: false, message: 'refused' })
+    await renderPage()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Take back Design tools' })
+    )
+    await userEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Take back',
+      })
+    )
+
+    await waitFor(() => expect(api.reclaimOrgKey).toHaveBeenCalledTimes(1))
+    expect(mockToast.success).not.toHaveBeenCalled()
+    expect(api.fetchOrgKeys).toHaveBeenCalledTimes(1)
+  })
+
+  it('is not offered for a key nobody was handed', async () => {
+    await renderPage()
+    expect(
+      screen.queryByRole('button', { name: 'Take back Old laptop' })
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Take back Nightly build' })
+    ).toBeEnabled()
   })
 })
 

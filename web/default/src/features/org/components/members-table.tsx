@@ -1,6 +1,6 @@
 // Copyright (C) 2026 DeepRouter
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { Bot, Pencil } from 'lucide-react'
+import { Bot, Pencil, UserMinus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,11 +15,18 @@ import {
 import { orgRoleLabel } from '../lib/roles'
 import type { OrgDepartment, OrgMember } from '../types'
 
-type MembersTableProps = {
+export type MembersTableProps = {
   members: OrgMember[]
   departments: OrgDepartment[]
-  /** Leave out for a viewer who may not change members: the column goes with it. */
+  /** Leave out for a viewer who may not change members: the button goes with it. */
   onEdit?: (member: OrgMember) => void
+  /**
+   * Leave out for a viewer who may not remove members. With it, the button
+   * shows on the rows `removable` says yes to — never on all of them: nobody
+   * removes the owner, or themselves.
+   */
+  onRemove?: (member: OrgMember) => void
+  removable?: (member: OrgMember) => boolean
 }
 
 /** The members the viewer may see: people and service accounts. */
@@ -27,8 +34,11 @@ export function MembersTable({
   members,
   departments,
   onEdit,
+  onRemove,
+  removable,
 }: MembersTableProps) {
   const { t } = useTranslation()
+  const acts = Boolean(onEdit || onRemove)
   const departmentName = new Map(
     departments.map((department) => [department.id, department.name])
   )
@@ -41,7 +51,7 @@ export function MembersTable({
             <TableHead className='px-3'>{t('Member')}</TableHead>
             <TableHead>{t('Role')}</TableHead>
             <TableHead>{t('Department')}</TableHead>
-            {onEdit && (
+            {acts && (
               <TableHead className='px-3 text-right'>{t('Actions')}</TableHead>
             )}
           </TableRow>
@@ -105,17 +115,33 @@ export function MembersTable({
                     </div>
                   )}
                 </TableCell>
-                {onEdit && (
-                  <TableCell className='px-3 text-right'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => onEdit(member)}
-                      aria-label={t('Edit {{name}}', { name })}
-                    >
-                      <Pencil aria-hidden='true' />
-                      {t('Edit')}
-                    </Button>
+                {acts && (
+                  <TableCell className='px-3 text-right whitespace-nowrap'>
+                    {onEdit && (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        onClick={() => onEdit(member)}
+                        aria-label={t('Edit {{name}}', { name })}
+                      >
+                        <Pencil aria-hidden='true' />
+                        {t('Edit')}
+                      </Button>
+                    )}
+                    {onRemove && removable?.(member) && (
+                      <Button
+                        variant='ghost'
+                        size='sm'
+                        className='text-destructive hover:text-destructive'
+                        onClick={() => onRemove(member)}
+                        aria-label={t('Remove {{name}} from the organization', {
+                          name,
+                        })}
+                      >
+                        <UserMinus aria-hidden='true' />
+                        {t('Remove from organization')}
+                      </Button>
+                    )}
                   </TableCell>
                 )}
               </TableRow>

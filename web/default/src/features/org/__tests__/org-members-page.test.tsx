@@ -14,7 +14,7 @@ import type {
 } from '../types'
 import { memberOf, membershipOf, presetRoles } from './fixtures'
 
-// Enterprise Org P3 and P4 (meta-repo docs/enterprise-org-prd.md): the
+// Enterprise Org P3, P4 and P6 (meta-repo docs/enterprise-org-prd.md): the
 // "Members & departments" page. The backend decides what is allowed; these
 // tests pin what the page offers each kind of member and what it asks the
 // backend for.
@@ -29,11 +29,14 @@ const api = vi.hoisted(() => ({
   renameOrgDepartment: vi.fn(),
   deleteOrgDepartment: vi.fn(),
   updateOrgMember: vi.fn(),
+  removeOrgMember: vi.fn(),
   createOrgServiceAccount: vi.fn(),
   createOrgInvite: vi.fn(),
   revokeOrgInvite: vi.fn(),
 }))
 const mockToast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+/** Who is signed in: Fiona the founder unless a test says otherwise. */
+const viewer = vi.hoisted(() => ({ id: 1 }))
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -42,7 +45,7 @@ vi.mock('../api', async (importOriginal) => ({
 vi.mock('sonner', () => ({ toast: mockToast }))
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>
-    selector({ auth: { user: { id: 1 } } }),
+    selector({ auth: { user: { id: viewer.id } } }),
 }))
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -165,6 +168,11 @@ const PINNED = 'The owner and admins always belong to “General”.'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  viewer.id = 1
+  api.removeOrgMember.mockResolvedValue({
+    success: true,
+    data: { reclaimed_keys: 0 },
+  })
   api.fetchOrgMembers.mockResolvedValue(members)
   api.fetchOrgDepartments.mockResolvedValue(departments)
   api.fetchOrgRoles.mockResolvedValue(roles)
@@ -348,6 +356,400 @@ describe('members', () => {
       expect(screen.queryByText('Edit member')).not.toBeInTheDocument()
     )
     expect(api.updateOrgMember).not.toHaveBeenCalled()
+  })
+})
+
+describe('finding a member', () => {
+  // PRD D39: the list is found in the way the "who is it for" list of a key
+  // is (D34) — by typing, by department, by role. Product and two more people
+  // are there so that each of the three has something to tell apart.
+  const withProduct: OrgDepartment[] = [
+    ...departments,
+    { id: 12, name: 'Product', is_default: false, member_count: 1 },
+  ]
+  const mona = memberOf({
+    id: 5,
+    username: 'mona',
+    role_id: 3,
+    role: 'manager',
+    department_id: 11,
+    managed_department_ids: [11],
+  })
+  const paula = memberOf({
+    id: 6,
+    username: 'paula',
+    email: 'paula@acme.test',
+    department_id: 12,
+  })
+  const company = [...members, mona, paula]
+
+  /** The names on the rows of the members table, top to bottom. */
+  function listed(): string[] {
+    const [, ...rows] = screen.getAllByRole('row')
+    return rows.map((row) => row.querySelector('td span')?.textContent ?? '')
+  }
+  const search = () =>
+    screen.getByRole('searchbox', { name: 'Search by name, username or email' })
+  /** Removes a member through their row and the question that follows. */
+  async function removeThroughThePage(name: string) {
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: `Remove ${name} from the organization`,
+      })
+    )
+    await userEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Remove from organization',
+      })
+    )
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  }
+
+  beforeEach(() => {
+    api.fetchOrgDepartments.mockResolvedValue(withProduct)
+    api.fetchOrgMembers.mockResolvedValue(company)
+  })
+
+  it('finds a member by a name, a username or an email, whatever the case', async () => {
+    await renderPage()
+    expect(listed()).toEqual([
+      'Fiona Founder',
+      'adam',
+      'sally',
+      'CI Pipeline',
+      'mona',
+      'paula',
+    ])
+
+    await userEvent.type(search(), 'FIONA')
+    expect(listed()).toEqual(['Fiona Founder'])
+    // What a service account is told apart by: the generated username.
+    await userEvent.clear(search())
+    await userEvent.type(search(), 'svc-')
+    expect(listed()).toEqual(['CI Pipeline'])
+    await userEvent.clear(search())
+    await userEvent.type(search(), 'paula@')
+    expect(listed()).toEqual(['paula'])
+    // The number on the tab is the organization's, not the search's.
+    expect(screen.getByRole('tab', { name: /Members/ })).toHaveTextContent('6')
+  })
+
+  it('narrows the list down to a department, to a role, and to both', async () => {
+    await renderPage()
+    // What there is to narrow down to is read off the people themselves.
+    expect(await optionsOf('Department')).toEqual([
+      'All departments',
+      'General',
+      'Sales',
+      'Product',
+    ])
+    expect(await optionsOf('Role')).toEqual([
+      'All roles',
+      'Owner',
+      'Admin',
+      'Manager',
+      'Staff',
+    ])
+
+    await choose('Department', 'Sales')
+    expect(listed()).toEqual(['sally', 'mona'])
+    await choose('Role', 'Staff')
+    expect(listed()).toEqual(['sally'])
+
+    await choose('Department', 'All departments')
+    expect(listed()).toEqual(['sally', 'CI Pipeline', 'paula'])
+    // What is typed, on top of a filter.
+    await userEvent.type(search(), 'p')
+    expect(listed()).toEqual(['CI Pipeline', 'paula'])
+  })
+
+  it('says so when nobody matches, and lists everyone again without the search', async () => {
+    await renderPage()
+
+    await userEvent.type(search(), 'zzz')
+    expect(screen.getByText('Nobody matches.')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).toBeNull()
+
+    await userEvent.clear(search())
+    expect(screen.queryByText('Nobody matches.')).toBeNull()
+    expect(listed()).toHaveLength(6)
+  })
+
+  it('leaves out a filter that has one choice', async () => {
+    // A manager of Sales sees Sales alone: nothing to tell apart by department.
+    api.fetchOrgDepartments.mockResolvedValue([departments[1]])
+    api.fetchOrgMembers.mockResolvedValue([mona, members[2]])
+    await renderPage(
+      membershipOf('manager', {
+        department_id: 11,
+        managed_department_ids: [11],
+      })
+    )
+
+    expect(screen.queryByRole('combobox', { name: 'Department' })).toBeNull()
+    expect(await optionsOf('Role')).toEqual(['All roles', 'Manager', 'Staff'])
+    expect(search()).toBeInTheDocument()
+  })
+
+  it('offers the search alone where everyone has one role and one department', async () => {
+    api.fetchOrgDepartments.mockResolvedValue([departments[1]])
+    api.fetchOrgMembers.mockResolvedValue([
+      members[2],
+      memberOf({ id: 7, username: 'sam', department_id: 11 }),
+    ])
+    await renderPage(membershipOf('readonly'))
+
+    expect(screen.queryByRole('combobox')).toBeNull()
+    await userEvent.type(search(), 'sam')
+    expect(listed()).toEqual(['sam'])
+  })
+
+  it('keeps what was chosen when the list changes under it', async () => {
+    await renderPage()
+    await choose('Department', 'Sales')
+    expect(listed()).toEqual(['sally', 'mona'])
+
+    api.fetchOrgMembers.mockResolvedValue(
+      company.filter((member) => member !== mona)
+    )
+    await removeThroughThePage('mona')
+
+    await waitFor(() => expect(listed()).toEqual(['sally']))
+    expect(dropdown('Department')).toHaveTextContent('Sales')
+  })
+
+  it('opens a filter again when what it was set to is gone', async () => {
+    await renderPage()
+    await choose('Department', 'Product')
+    expect(listed()).toEqual(['paula'])
+
+    // The last person of Product leaves, and Product with them: left on it,
+    // the table would be empty with no way of saying why.
+    api.fetchOrgMembers.mockResolvedValue(
+      company.filter((member) => member !== paula)
+    )
+    await removeThroughThePage('paula')
+
+    await waitFor(() =>
+      expect(listed()).toEqual([
+        'Fiona Founder',
+        'adam',
+        'sally',
+        'CI Pipeline',
+        'mona',
+      ])
+    )
+    expect(dropdown('Department')).toHaveTextContent('All departments')
+    expect(await optionsOf('Department')).toEqual([
+      'All departments',
+      'General',
+      'Sales',
+    ])
+  })
+})
+
+describe('removing a member', () => {
+  /** The button that removes the member of that name, if the row offers it. */
+  const removeButton = (name: string) =>
+    screen.queryByRole('button', {
+      name: `Remove ${name} from the organization`,
+    })
+  /** A second admin, for looking at one admin through the eyes of another. */
+  const anna = memberOf({ id: 6, username: 'anna', role_id: 2, role: 'admin' })
+
+  it('lets the owner remove anyone but themselves', async () => {
+    await renderPage()
+
+    expect(removeButton('Fiona Founder')).toBeNull()
+    for (const name of ['adam', 'sally', 'CI Pipeline']) {
+      expect(removeButton(name)).toBeEnabled()
+    }
+  })
+
+  it('keeps an admin from removing the owner, another admin, or themselves', async () => {
+    // Adam the admin is signed in. Dismissing an admin is the owner's alone.
+    viewer.id = 2
+    api.fetchOrgMembers.mockResolvedValue([...members, anna])
+    await renderPage(adminMembership)
+
+    for (const name of ['Fiona Founder', 'adam', 'anna']) {
+      expect(removeButton(name)).toBeNull()
+    }
+    expect(removeButton('sally')).toBeEnabled()
+    expect(removeButton('CI Pipeline')).toBeEnabled()
+    // Editing is still offered on every row.
+    expect(screen.getByRole('button', { name: 'Edit anna' })).toBeEnabled()
+  })
+
+  it('offers it to a role that may remove members, and nothing else on the row', async () => {
+    // The HR pack: member.remove across the organization, no power to edit.
+    // Hana of HR is signed in, and is on the list like everyone else.
+    viewer.id = 9
+    api.fetchOrgMembers.mockResolvedValue([
+      ...members,
+      memberOf({ id: 9, username: 'hana', role_id: 20, role: 'HR Ops' }),
+      memberOf({ id: 8, username: 'hugo', role_id: 20, role: 'HR Ops' }),
+    ])
+    await renderPage(
+      membershipOf('staff', {
+        role: 'HR Ops',
+        role_scope: 'org',
+        permissions: ['member.read', 'member.invite', 'member.remove'],
+      })
+    )
+
+    expect(removeButton('sally')).toBeEnabled()
+    expect(removeButton('CI Pipeline')).toBeEnabled()
+    expect(removeButton('Fiona Founder')).toBeNull()
+    expect(removeButton('adam')).toBeNull()
+    // Not themselves — although a colleague with the very same role is theirs
+    // to remove.
+    expect(removeButton('hana')).toBeNull()
+    expect(removeButton('hugo')).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Edit sally' })).toBeNull()
+  })
+
+  it('offers it to nobody who may not remove members', async () => {
+    for (const membership of [
+      membershipOf('manager'),
+      membershipOf('readonly'),
+    ]) {
+      api.fetchOrgMembership.mockResolvedValue(membership)
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+      const view = render(
+        <QueryClientProvider client={queryClient}>
+          <OrgMembersPage />
+        </QueryClientProvider>
+      )
+      await screen.findByRole('tab', { name: /Members/ })
+      expect(removeButton('sally')).toBeNull()
+      expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull()
+      view.unmount()
+    }
+  })
+
+  it('says what removing a person means, and removes them only on confirm', async () => {
+    // Acceptance: 成员被移出组织时，其名下的组织 key 全部按回收处理（冻结并挂回 owner
+    // 名下），历史用量保留.
+    api.fetchOrgMembers.mockResolvedValue([
+      members[0],
+      members[1],
+      { ...members[2], key_count: 2 },
+      members[3],
+    ])
+    api.removeOrgMember.mockResolvedValue({
+      success: true,
+      data: { reclaimed_keys: 2 },
+    })
+    await renderPage()
+    await userEvent.click(removeButton('sally') as HTMLElement)
+
+    const confirm = screen.getByRole('alertdialog')
+    expect(confirm).toHaveTextContent('Remove sally from the organization?')
+    expect(confirm).toHaveTextContent(
+      'Their account is deleted: they can no longer sign in, and nobody can sign up with the same username or email again.'
+    )
+    expect(confirm).toHaveTextContent(
+      'The 2 key(s) held under this account are taken back: they stop working at once, get a new value and go back under the owner, frozen.'
+    )
+    expect(confirm).toHaveTextContent(
+      'What it has spent stays in the usage records. This cannot be undone.'
+    )
+    expect(api.removeOrgMember).not.toHaveBeenCalled()
+
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Remove from organization' })
+    )
+    await waitFor(() => expect(api.removeOrgMember).toHaveBeenCalledWith(3))
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'sally is no longer in the organization',
+        { description: '2 key(s) were taken back.' }
+      )
+    )
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await waitFor(() => expect(api.fetchOrgMembers).toHaveBeenCalledTimes(2))
+  })
+
+  it('says a member without keys holds none', async () => {
+    await renderPage()
+    await userEvent.click(removeButton('sally') as HTMLElement)
+
+    const confirm = screen.getByRole('alertdialog')
+    expect(confirm).toHaveTextContent('This account holds no keys.')
+    expect(confirm).not.toHaveTextContent('are taken back')
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Remove from organization' })
+    )
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'sally is no longer in the organization',
+        undefined
+      )
+    )
+  })
+
+  it('deletes a service account in words of its own', async () => {
+    api.fetchOrgMembers.mockResolvedValue([
+      ...members.slice(0, 3),
+      { ...members[3], key_count: 1 },
+    ])
+    await renderPage()
+    await userEvent.click(removeButton('CI Pipeline') as HTMLElement)
+
+    const confirm = screen.getByRole('alertdialog')
+    expect(confirm).toHaveTextContent('Delete the service account CI Pipeline?')
+    expect(confirm).toHaveTextContent('The service account is deleted.')
+    expect(confirm).not.toHaveTextContent('sign in')
+    expect(confirm).toHaveTextContent(
+      'The 1 key(s) held under this account are taken back'
+    )
+    await userEvent.click(
+      within(confirm).getByRole('button', { name: 'Delete' })
+    )
+    await waitFor(() => expect(api.removeOrgMember).toHaveBeenCalledWith(4))
+    await waitFor(() =>
+      expect(mockToast.success).toHaveBeenCalledWith(
+        'CI Pipeline is no longer in the organization',
+        undefined
+      )
+    )
+  })
+
+  it('removes nobody when the question is answered with no', async () => {
+    await renderPage()
+    await userEvent.click(removeButton('sally') as HTMLElement)
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(api.removeOrgMember).not.toHaveBeenCalled()
+  })
+
+  it('claims nothing when the backend refuses, or the request fails', async () => {
+    api.removeOrgMember.mockResolvedValueOnce({
+      success: false,
+      message: 'refused',
+    })
+    await renderPage()
+    await userEvent.click(removeButton('sally') as HTMLElement)
+    const confirm = screen.getByRole('alertdialog')
+    const button = within(confirm).getByRole('button', {
+      name: 'Remove from organization',
+    })
+    await userEvent.click(button)
+    await waitFor(() => expect(api.removeOrgMember).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+
+    // A 403 reaches the page as a rejection; the interceptor has said why.
+    api.removeOrgMember.mockRejectedValueOnce(new Error('403'))
+    await userEvent.click(button)
+    await waitFor(() => expect(api.removeOrgMember).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mockToast.success).not.toHaveBeenCalled()
+    expect(api.fetchOrgMembers).toHaveBeenCalledTimes(1)
   })
 })
 

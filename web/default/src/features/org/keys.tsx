@@ -13,31 +13,41 @@ import { ErrorState } from '@/components/error-state'
 import { SectionPageLayout } from '@/components/layout'
 import {
   deleteOrgKey,
+  fetchOrgKeyAssignees,
   fetchOrgKeyHolders,
   fetchOrgKeyTemplates,
   fetchOrgKeys,
   freezeOrgKey,
   orgQueryKeys,
+  reclaimOrgKey,
   rotateOrgKey,
   unfreezeOrgKey,
 } from './api'
+import { KeyAssignDialog } from './components/key-assign-dialog'
 import { KeyDialog } from './components/key-dialog'
-import { KeyReadyDialog } from './components/key-ready-dialog'
+import {
+  KeyReadyDialog,
+  type KeyReadyReason,
+} from './components/key-ready-dialog'
 import { KeysTable } from './components/keys-table'
 import { useOrgMembership } from './hooks/use-org-membership'
+import { isSwitchedOn } from './lib/keys'
 import { holds } from './lib/permissions'
 import type { OrgKey, OrgKeyGrant } from './types'
 
 /** Which dialog of the page is open, and on what. */
 type OpenDialog =
   | { type: 'key'; key?: OrgKey }
+  | { type: 'assign'; key: OrgKey }
+  | { type: 'reclaim'; key: OrgKey }
   | { type: 'rotate'; key: OrgKey }
   | { type: 'delete'; key: OrgKey }
 
 /**
  * "Organization keys" — the third page of the organization area (Enterprise
  * Org PRD §3, §6): the keys the company has made, who holds each, what each
- * may call and spend, and the ways to change, replace, freeze and delete them.
+ * may call and spend, and the ways to change, hand over, take back, replace,
+ * freeze and delete them.
  *
  * No key's value is ever on this page. A person's key reaches its holder
  * through one-click setup on their own keys page; a service account's is shown
@@ -52,7 +62,7 @@ export function OrgKeysPage() {
   const [dialog, setDialog] = useState<OpenDialog | null>(null)
   const [ready, setReady] = useState<{
     grant: OrgKeyGrant
-    rotated: boolean
+    reason: KeyReadyReason
   } | null>(null)
   const [busyKeyId, setBusyKeyId] = useState<number | null>(null)
   const close = () => setDialog(null)
@@ -60,6 +70,7 @@ export function OrgKeysPage() {
   const membershipQuery = useOrgMembership()
   const membership = membershipQuery.data
   const creates = holds(membership, 'key.create')
+  const assigns = holds(membership, 'key.assign')
 
   const keysQuery = useQuery({
     queryKey: orgQueryKeys.keys(),
@@ -78,8 +89,21 @@ export function OrgKeysPage() {
     enabled: creates,
   })
 
+  // …and whom one can be handed to by whoever may hand them out.
+  const assigneesQuery = useQuery({
+    queryKey: orgQueryKeys.keyAssignees(),
+    queryFn: fetchOrgKeyAssignees,
+    enabled: assigns,
+  })
+
   const keys = keysQuery.data ?? []
-  const queries = [membershipQuery, keysQuery, templatesQuery, holdersQuery]
+  const queries = [
+    membershipQuery,
+    keysQuery,
+    templatesQuery,
+    holdersQuery,
+    assigneesQuery,
+  ]
   const failed = queries.some((query) => query.isError)
   const loading = !membership || queries.some((query) => query.isLoading)
   const refresh = () =>
@@ -116,7 +140,7 @@ export function OrgKeysPage() {
         // A service account's new value has to be seen now or never; a
         // person's is not shown, so a line of confirmation is all there is.
         if (res.data.value) {
-          setReady({ grant: res.data, rotated: true })
+          setReady({ grant: res.data, reason: 'rotated' })
         } else {
           toast.success(t('The key has a new value'))
         }
@@ -128,6 +152,33 @@ export function OrgKeysPage() {
     }
   }
 
+  // A key that went to a service account comes back with its new value, to be
+  // seen now or never. One that went to a person comes back without: a line of
+  // confirmation — and a warning when it arrived frozen, which it does when
+  // whoever handed it over may not unfreeze keys.
+  const assigned = (grant: OrgKeyGrant) => {
+    refresh()
+    if (grant.value) {
+      setReady({ grant, reason: 'assigned' })
+      return
+    }
+    toast.success(
+      t('“{{name}}” now belongs to {{holder}}', {
+        name: grant.name,
+        holder: grant.holder,
+      }),
+      isSwitchedOn(grant)
+        ? undefined
+        : {
+            description: t(
+              'It is not switched on, so it will not work for them until someone who may unfreeze keys does that.'
+            ),
+          }
+    )
+  }
+
+  const assigning = dialog?.type === 'assign' ? dialog.key : null
+  const reclaiming = dialog?.type === 'reclaim' ? dialog.key : null
   const rotating = dialog?.type === 'rotate' ? dialog.key : null
   const deleting = dialog?.type === 'delete' ? dialog.key : null
 
@@ -211,6 +262,16 @@ export function OrgKeysPage() {
                       ? (key) => setDialog({ type: 'key', key })
                       : undefined
                   }
+                  onAssign={
+                    assigns
+                      ? (key) => setDialog({ type: 'assign', key })
+                      : undefined
+                  }
+                  onReclaim={
+                    assigns
+                      ? (key) => setDialog({ type: 'reclaim', key })
+                      : undefined
+                  }
                   onRotate={
                     holds(membership, 'key.rotate')
                       ? (key) => setDialog({ type: 'rotate', key })
@@ -259,14 +320,48 @@ export function OrgKeysPage() {
         onClose={close}
         onCreated={(grant) => {
           refresh()
-          setReady({ grant, rotated: false })
+          setReady({ grant, reason: 'created' })
         }}
         onUpdated={refresh}
       />
+      <KeyAssignDialog
+        assigning={assigning}
+        assignees={assigneesQuery.data ?? []}
+        onClose={close}
+        onAssigned={assigned}
+      />
       <KeyReadyDialog
         grant={ready?.grant ?? null}
-        rotated={ready?.rotated ?? false}
+        reason={ready?.reason ?? 'created'}
         onClose={() => setReady(null)}
+      />
+      <ConfirmDialog
+        open={reclaiming !== null}
+        onOpenChange={(open) => !open && close()}
+        title={t('Take this key back?')}
+        desc={
+          reclaiming === null
+            ? ''
+            : t(
+                '“{{name}}” stops working at once and gets a new value, so the one {{holder}} has is dead for good. It goes back under the owner, frozen, until it is assigned to someone else.',
+                {
+                  name: reclaiming.name,
+                  holder: reclaiming.holder || t('Someone who has left'),
+                }
+              )
+        }
+        destructive
+        confirmText={t('Take back')}
+        isLoading={reclaiming !== null && busyKeyId === reclaiming.id}
+        handleConfirm={() => {
+          if (reclaiming) {
+            void act(
+              reclaiming,
+              () => reclaimOrgKey(reclaiming.id),
+              t('Key taken back')
+            )
+          }
+        }}
       />
       <ConfirmDialog
         open={rotating !== null}

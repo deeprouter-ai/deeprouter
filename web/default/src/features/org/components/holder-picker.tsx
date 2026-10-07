@@ -15,7 +15,6 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command'
-import { Label } from '@/components/ui/label'
 import {
   Popover,
   PopoverContent,
@@ -26,12 +25,12 @@ import {
   holderMatches,
   holderRoles,
   holdersInOrder,
-  type HolderFacet,
 } from '../lib/holders'
 import { keyHolderLabel } from '../lib/keys'
+import { ANY } from '../lib/people-filter'
 import { orgRoleLabel } from '../lib/roles'
 import type { OrgKeyHolder } from '../types'
-import { OrgSelect } from './org-select'
+import { PeopleFacetSelect } from './people-facet-select'
 
 /**
  * How many people the list shows at once. A company can have thousands, and
@@ -40,15 +39,15 @@ import { OrgSelect } from './org-select'
  */
 const MAX_ROWS = 100
 
-/** The choice of a filter that leaves it open. No department or role has id 0. */
-const ANY = 0
-
 type HolderPickerProps = {
   /** The id the field's label points at. */
   id: string
   holders: OrgKeyHolder[]
+  /** The id of whoever is chosen; one that is nobody's leaves the field open. */
   value: number
   onChange: (holderId: number) => void
+  /** What the field says while nobody is chosen. */
+  placeholder?: string
 }
 
 /**
@@ -61,6 +60,7 @@ export function HolderPicker({
   holders,
   value,
   onChange,
+  placeholder,
 }: HolderPickerProps) {
   const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -128,8 +128,8 @@ export function HolderPicker({
           />
         }
       >
-        <span className='truncate'>
-          {chosen ? keyHolderLabel(t, chosen) : ''}
+        <span className={cn('truncate', !chosen && 'text-muted-foreground')}>
+          {chosen ? keyHolderLabel(t, chosen) : (placeholder ?? '')}
         </span>
         <HugeiconsIcon
           icon={UnfoldMoreIcon}
@@ -165,7 +165,7 @@ export function HolderPicker({
               }}
             >
               {byDepartment && (
-                <HolderFilterSelect
+                <PeopleFacetSelect
                   id={`${id}-department`}
                   label={t('Department')}
                   any={t('All departments')}
@@ -175,7 +175,7 @@ export function HolderPicker({
                 />
               )}
               {byRole && (
-                <HolderFilterSelect
+                <PeopleFacetSelect
                   id={`${id}-role`}
                   label={t('Role')}
                   any={t('All roles')}
@@ -221,47 +221,6 @@ export function HolderPicker({
         </Command>
       </PopoverContent>
     </Popover>
-  )
-}
-
-type HolderFilterSelectProps = {
-  id: string
-  /** What the filter narrows down by. Read out by a screen reader, not shown. */
-  label: string
-  /** The words for leaving the filter open. */
-  any: string
-  choices: HolderFacet[]
-  value: number
-  onChange: (id: number) => void
-}
-
-/** One way to narrow the list down: left open, or set to one of its choices. */
-function HolderFilterSelect({
-  id,
-  label,
-  any,
-  choices,
-  value,
-  onChange,
-}: HolderFilterSelectProps) {
-  return (
-    <>
-      <Label htmlFor={id} className='sr-only'>
-        {label}
-      </Label>
-      <OrgSelect
-        id={id}
-        options={[
-          { value: ANY, label: any },
-          ...choices.map((choice) => ({
-            value: choice.id,
-            label: choice.name,
-          })),
-        ]}
-        value={value}
-        onChange={onChange}
-      />
-    </>
   )
 }
 

@@ -42,6 +42,8 @@ import {
   DataTablePage,
 } from '@/components/data-table'
 import { StatusBadge } from '@/components/status-badge'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
+import { holds } from '@/features/org/lib/permissions'
 import { getApiKeys, searchApiKeys } from '../api'
 import {
   API_KEY_STATUS,
@@ -49,11 +51,15 @@ import {
   API_KEY_STATUSES,
   ERROR_MESSAGES,
 } from '../constants'
-import { isOrgKey } from '../lib/org-key'
+import { isOrgKey, orgEmptyStateCopy } from '../lib/org-key'
 import { type ApiKey } from '../types'
 import { ApiKeyCell } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
-import { ApiKeysEmptyState } from './api-keys-empty-state'
+import {
+  ApiKeysEmptyState,
+  ApiKeysOrgEmptyState,
+  OrgKeysLink,
+} from './api-keys-empty-state'
 import { useApiKeys } from './api-keys-provider'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -91,10 +97,13 @@ function ApiKeysMobileList({
   table,
   isLoading,
   onCreate,
+  orgMember,
 }: {
   table: ReturnType<typeof useReactTable<ApiKey>>
   isLoading: boolean
   onCreate: () => void
+  /** Set for a member of an organization, who is not offered a key of their own. */
+  orgMember?: { createsOrgKeys: boolean }
 }) {
   const { t } = useTranslation()
   const rows = table.getRowModel().rows
@@ -104,7 +113,11 @@ function ApiKeysMobileList({
   if (!rows.length) {
     return (
       <div className='rounded-lg border p-4'>
-        <ApiKeysEmptyState onCreate={onCreate} />
+        {orgMember ? (
+          <ApiKeysOrgEmptyState createsOrgKeys={orgMember.createsOrgKeys} />
+        ) : (
+          <ApiKeysEmptyState onCreate={onCreate} />
+        )}
       </div>
     )
   }
@@ -175,6 +188,16 @@ export function ApiKeysTable() {
   const { t } = useTranslation()
   const { refreshTrigger, setOpen } = useApiKeys()
   const handleCreate = () => setOpen('mode-picker')
+  // A member of an organization holds the keys they are handed and makes none
+  // of their own (Enterprise Org PRD D16), so their empty list says where keys
+  // come from instead of offering to create one.
+  const membership = useOrgMembership().data
+  const orgMember = membership
+    ? { createsOrgKeys: holds(membership, 'key.create') }
+    : undefined
+  const orgCopy = orgMember
+    ? orgEmptyStateCopy(t, orgMember.createsOrgKeys)
+    : undefined
   const columns = useApiKeysColumns()
   const [rowSelection, setRowSelection] = useState({})
   const [sorting, setSorting] = useState<SortingState>([])
@@ -299,11 +322,18 @@ export function ApiKeysTable() {
       columns={columns}
       isLoading={isLoading}
       isFetching={isFetching}
-      emptyTitle={t('Create your first API key')}
-      emptyDescription={t(
-        '30 seconds to get a key, then drop it into any AI client.'
-      )}
-      emptyAction={<ApiKeysEmptyState onCreate={handleCreate} />}
+      emptyTitle={orgCopy?.title ?? t('Create your first API key')}
+      emptyDescription={
+        orgCopy?.description ??
+        t('30 seconds to get a key, then drop it into any AI client.')
+      }
+      emptyAction={
+        orgMember ? (
+          orgMember.createsOrgKeys && <OrgKeysLink />
+        ) : (
+          <ApiKeysEmptyState onCreate={handleCreate} />
+        )
+      }
       skeletonKeyPrefix='api-keys-skeleton'
       toolbarProps={{
         searchPlaceholder: t('Filter by name or key...'),
@@ -320,6 +350,7 @@ export function ApiKeysTable() {
           table={table}
           isLoading={isLoading}
           onCreate={handleCreate}
+          orgMember={orgMember}
         />
       }
       getRowClassName={(row) =>
