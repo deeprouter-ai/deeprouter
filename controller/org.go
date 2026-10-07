@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
@@ -41,6 +42,19 @@ const (
 	msgOrgServiceAccountRole        = "org.service_account_role"
 	msgOrgServiceAccountLogin       = "org.service_account_login"
 	msgOrgInviteInvalid             = "org.invite_invalid"
+	msgOrgKeyNotFound               = "org.key_not_found"
+	msgOrgKeyNameInvalid            = "org.key_name_invalid"
+	msgOrgKeyQuotaInvalid           = "org.key_quota_invalid"
+	msgOrgKeyLimitInvalid           = "org.key_limit_invalid"
+	msgOrgKeyExpiryInvalid          = "org.key_expiry_invalid"
+	msgOrgKeyTemplateUnknown        = "org.key_template_unknown"
+	msgOrgKeyTemplateEmpty          = "org.key_template_empty"
+	msgOrgKeyModelsWithTemplate     = "org.key_models_with_template"
+	msgOrgKeyModelsUnavailable      = "org.key_models_unavailable"
+	msgOrgKeyLimitReached           = "org.key_limit_reached"
+	msgOrgKeyExpired                = "org.key_expired"
+	msgOrgKeyExhausted              = "org.key_exhausted"
+	msgOrgKeyManagedByOrg           = "org.key_managed_by_org"
 )
 
 // errOrgSignUpAmbiguous means a sign-up asked both to found an organization
@@ -79,6 +93,19 @@ var orgRefusals = []struct {
 	{orgservice.ErrInvalidServiceAccountName, msgOrgServiceAccountNameInvalid, http.StatusOK},
 	{orgservice.ErrServiceAccountRole, msgOrgServiceAccountRole, http.StatusOK},
 	{orgservice.ErrInviteNotFound, msgOrgInviteInvalid, http.StatusOK},
+	{orgservice.ErrKeyNotFound, msgOrgKeyNotFound, http.StatusOK},
+	{orgservice.ErrInvalidKeyName, msgOrgKeyNameInvalid, http.StatusOK},
+	{orgservice.ErrInvalidKeyQuota, msgOrgKeyQuotaInvalid, http.StatusOK},
+	{orgservice.ErrInvalidKeyLimit, msgOrgKeyLimitInvalid, http.StatusOK},
+	{orgservice.ErrInvalidKeyExpiry, msgOrgKeyExpiryInvalid, http.StatusOK},
+	{orgservice.ErrKeyTemplateUnknown, msgOrgKeyTemplateUnknown, http.StatusOK},
+	{orgservice.ErrKeyTemplateEmpty, msgOrgKeyTemplateEmpty, http.StatusOK},
+	{orgservice.ErrKeyModelsWithTemplate, msgOrgKeyModelsWithTemplate, http.StatusOK},
+	{orgservice.ErrKeyModelsUnavailable, msgOrgKeyModelsUnavailable, http.StatusOK},
+	{orgservice.ErrKeyLimitReached, msgOrgKeyLimitReached, http.StatusOK},
+	{orgservice.ErrKeyExpired, msgOrgKeyExpired, http.StatusOK},
+	{orgservice.ErrKeyExhausted, msgOrgKeyExhausted, http.StatusOK},
+	{errOrgKeyManagedByOrg, msgOrgKeyManagedByOrg, http.StatusForbidden},
 	{errOrgSignUpAmbiguous, i18n.MsgInvalidParams, http.StatusOK},
 }
 
@@ -89,12 +116,23 @@ func orgError(c *gin.Context, err error) {
 		if errors.Is(err, refusal.err) {
 			c.JSON(refusal.status, gin.H{
 				"success": false,
-				"message": common.TranslateMessage(c, refusal.key),
+				"message": common.TranslateMessage(c, refusal.key, orgRefusalDetails(err)),
 			})
 			return
 		}
 	}
 	common.ApiError(c, err)
+}
+
+// orgRefusalDetails returns what a refusal's message names besides the refusal
+// itself: the models a hand-picked list could not take. Every other refusal
+// says all there is to say without it.
+func orgRefusalDetails(err error) map[string]any {
+	var unavailable *orgservice.KeyModelsUnavailableError
+	if errors.As(err, &unavailable) {
+		return map[string]any{"Models": strings.Join(unavailable.Models, ", ")}
+	}
+	return nil
 }
 
 // orgActor loads the caller as a member of their organization, with the

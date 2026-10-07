@@ -359,6 +359,8 @@ func TestOrgTokenFields_AreNotWritableThroughThePersonalKeyEndpoints(t *testing.
 		orgKey := model.Token{UserId: 1, Name: "org-key", Key: "org-key-value", Status: common.TokenStatusEnabled,
 			ExpiredTime: -1, UnlimitedQuota: true, OrgId: 3, CreatedBy: 9, PolicyTemplate: "creative"}
 		require.NoError(t, env.db.Create(&orgKey).Error)
+		var stored model.Token
+		require.NoError(t, env.db.First(&stored, orgKey.Id).Error)
 		detach := map[string]any{
 			"id":              orgKey.Id,
 			"name":            "org-key",
@@ -370,12 +372,16 @@ func TestOrgTokenFields_AreNotWritableThroughThePersonalKeyEndpoints(t *testing.
 		}
 		ctx, recorder = newAuthenticatedContext(t, http.MethodPut, "/api/token/", detach, 1)
 		UpdateToken(ctx)
-		require.True(t, decodeAPIResponse(t, recorder).Success)
+		// Since P5 the personal endpoint does not touch an organization key at
+		// all, so there is nothing left for it to detach.
+		refused := decodeAPIResponse(t, recorder)
+		require.False(t, refused.Success)
+		require.Equal(t, http.StatusForbidden, recorder.Code)
+		require.Equal(t, msgOrgKeyManagedByOrg, refused.Message)
 		var reloaded model.Token
 		require.NoError(t, env.db.First(&reloaded, orgKey.Id).Error)
-		require.Equal(t, 3, reloaded.OrgId)
-		require.Equal(t, 9, reloaded.CreatedBy)
-		require.Equal(t, "creative", reloaded.PolicyTemplate)
+		require.Equal(t, stored, reloaded)
+		require.Equal(t, []any{3, 9, "creative"}, []any{reloaded.OrgId, reloaded.CreatedBy, reloaded.PolicyTemplate})
 	})
 }
 

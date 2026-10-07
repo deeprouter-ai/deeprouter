@@ -441,6 +441,15 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 		require.NoError(t, err)
 		intoProduct := env.invite(t, owner, orgmodel.RoleStaff, product.Id)
 		adminLink := env.invite(t, owner, orgmodel.RoleAdmin, 0)
+		// Three organization keys in a staff member's hands: a working one, and
+		// two frozen ones that cannot simply be unfrozen.
+		staffKey := env.seedKey(t, staff, owner.OrgId, "staff's key")
+		spentKey := env.seedKey(t, staff, owner.OrgId, "spent")
+		expiredKey := env.seedKey(t, staff, owner.OrgId, "expired")
+		require.NoError(t, env.db.Model(&model.Token{}).Where("id = ?", spentKey.Id).
+			Updates(map[string]any{"status": common.TokenStatusDisabled, "remain_quota": 0}).Error)
+		require.NoError(t, env.db.Model(&model.Token{}).Where("id = ?", expiredKey.Id).
+			Updates(map[string]any{"status": common.TokenStatusDisabled, "expired_time": time.Now().Unix() - 60}).Error)
 		role := func(name string, scope string, permissions ...string) map[string]any {
 			return map[string]any{"name": name, "scope": scope, "permissions": permissions}
 		}
@@ -497,6 +506,32 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusForbidden, msgOrgForbidden},
 			{"a manager cannot read the audit log", ListOrgAuditLogs, http.MethodGet, nil, manager.Id, nil,
 				http.StatusForbidden, msgOrgForbidden},
+
+			// Keys: holding one gives no say over it, and assigning is not creating.
+			{"staff cannot list the organization's keys", ListOrgKeys, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"staff cannot read the policy templates", ListOrgKeyTemplates, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"staff cannot list who a key can be for", ListOrgKeyHolders, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"staff cannot list the models a key can be limited to", ListOrgKeyModels, http.MethodGet, nil, staff.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager fills in no key form, and is offered no models for one", ListOrgKeyModels, http.MethodGet, nil, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"nor is a read-only member", ListOrgKeyModels, http.MethodGet, nil, readonly.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a holder cannot change their own key", UpdateOrgKey, http.MethodPut, map[string]any{"unlimited_quota": true}, staff.Id, []gin.Param{idParam(staffKey.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a holder cannot rotate their own key", RotateOrgKey, http.MethodPost, nil, staff.Id, []gin.Param{idParam(staffKey.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a holder cannot unfreeze their own key", UnfreezeOrgKey, http.MethodPost, nil, staff.Id, []gin.Param{idParam(spentKey.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a holder cannot delete their own key", DeleteOrgKey, http.MethodDelete, nil, staff.Id, []gin.Param{idParam(staffKey.Id)},
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot create a key", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "holder_id": manager.Id}, manager.Id, nil,
+				http.StatusForbidden, msgOrgForbidden},
+			{"a manager cannot rotate a key", RotateOrgKey, http.MethodPost, nil, manager.Id, []gin.Param{idParam(staffKey.Id)},
+				http.StatusForbidden, msgOrgForbidden},
 		}
 		// Acceptance: readonly … 发起的任何写操作均被拒绝. Every writing endpoint
 		// there is, tried by a member who may read all of it.
@@ -514,6 +549,12 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 			{name: "create a service account", handler: CreateOrgServiceAccount, method: http.MethodPost, body: map[string]any{"name": "Bot"}},
 			{name: "issue an invite link", handler: CreateOrgInvite, method: http.MethodPost, body: map[string]any{"role_id": staffRole}},
 			{name: "revoke an invite link", handler: RevokeOrgInvite, method: http.MethodDelete, params: []gin.Param{idParam(intoProduct.Id)}},
+			{name: "create a key", handler: CreateOrgKey, method: http.MethodPost, body: map[string]any{"name": "K"}},
+			{name: "change a key", handler: UpdateOrgKey, method: http.MethodPut, body: map[string]any{"name": "K"}, params: []gin.Param{idParam(staffKey.Id)}},
+			{name: "rotate a key", handler: RotateOrgKey, method: http.MethodPost, params: []gin.Param{idParam(staffKey.Id)}},
+			{name: "freeze a key", handler: FreezeOrgKey, method: http.MethodPost, params: []gin.Param{idParam(staffKey.Id)}},
+			{name: "unfreeze a key", handler: UnfreezeOrgKey, method: http.MethodPost, params: []gin.Param{idParam(spentKey.Id)}},
+			{name: "delete a key", handler: DeleteOrgKey, method: http.MethodDelete, params: []gin.Param{idParam(staffKey.Id)}},
 		} {
 			write.name = "readonly cannot " + write.name
 			write.userID, write.status, write.message = readonly.Id, http.StatusForbidden, msgOrgForbidden
@@ -578,6 +619,36 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 				http.StatusOK, msgOrgRoleNotFound},
 			{"an unknown role pack", AdoptOrgRolePack, http.MethodPost, map[string]any{}, owner.Id, []gin.Param{{Key: "key", Value: "no_such_pack"}},
 				http.StatusOK, msgOrgRolePackNotFound},
+			{"a key needs a name", CreateOrgKey, http.MethodPost, map[string]any{"name": "  "}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyNameInvalid},
+			{"a key's quota cannot be negative", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "remain_quota": -1}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyQuotaInvalid},
+			{"a key's limits cannot be negative", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "rpm_limit": -1}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyLimitInvalid},
+			{"a key cannot be born expired", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "expired_time": 1}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyExpiryInvalid},
+			{"a policy template must be one the platform offers", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "policy_template": "everything"}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyTemplateUnknown},
+			{"a key takes a template or a list of models, not both", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "policy_template": "coding", "model_limits": []string{"gpt-4o"}}, owner.Id, nil,
+				http.StatusOK, msgOrgKeyModelsWithTemplate},
+			{"a key is for a member of the organization", CreateOrgKey, http.MethodPost, map[string]any{"name": "K", "holder_id": solo.Id}, owner.Id, nil,
+				http.StatusOK, msgOrgMemberNotFound},
+			{"the models of a key are asked for a member", ListOrgKeyModels, http.MethodGet, nil, owner.Id, nil,
+				http.StatusOK, msgOrgMemberNotFound},
+			{"an unknown key to change", UpdateOrgKey, http.MethodPut, map[string]any{"name": "K"}, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgKeyNotFound},
+			{"an unknown key to rotate", RotateOrgKey, http.MethodPost, nil, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgKeyNotFound},
+			{"an unknown key to freeze", FreezeOrgKey, http.MethodPost, nil, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgKeyNotFound},
+			{"an unknown key to unfreeze", UnfreezeOrgKey, http.MethodPost, nil, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgKeyNotFound},
+			{"an unknown key to delete", DeleteOrgKey, http.MethodDelete, nil, owner.Id, []gin.Param{idParam(424242)},
+				http.StatusOK, msgOrgKeyNotFound},
+			{"a key with no quota left stays frozen", UnfreezeOrgKey, http.MethodPost, nil, owner.Id, []gin.Param{idParam(spentKey.Id)},
+				http.StatusOK, msgOrgKeyExhausted},
+			{"an expired key stays frozen", UnfreezeOrgKey, http.MethodPost, nil, owner.Id, []gin.Param{idParam(expiredKey.Id)},
+				http.StatusOK, msgOrgKeyExpired},
 			{"a path id must be a number", DeleteOrgDepartment, http.MethodDelete, nil, owner.Id, []gin.Param{{Key: "id", Value: "abc"}},
 				http.StatusOK, i18n.MsgInvalidParams},
 			{"a body must be JSON", CreateOrgDepartment, http.MethodPost, nil, owner.Id, nil,
@@ -606,6 +677,10 @@ func TestOrgEndpoints_AnswerRefusalsWithTheRightStatus(t *testing.T) {
 		}
 		require.Equal(t, staff.DepartmentId, env.userByName(t, "staff").DepartmentId)
 		require.EqualValues(t, 1, env.count(t, &orgmodel.OrgRole{}, "id = ? AND name = ? AND permissions = ?", custom.Id, "Key Desk", "key.read"))
+		require.EqualValues(t, 3, env.count(t, &model.Token{}, "org_id = ?", owner.OrgId), "no key was made, and none is gone")
+		require.Equal(t, staffKey, env.key(t, staffKey.Id))
+		require.Equal(t, common.TokenStatusDisabled, env.key(t, spentKey.Id).Status)
+		require.Equal(t, common.TokenStatusDisabled, env.key(t, expiredKey.Id).Status)
 	})
 }
 

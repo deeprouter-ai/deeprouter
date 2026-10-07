@@ -14,12 +14,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// forEachDialect runs fn against a fresh database holding the users table and
-// the migrated org tables.
+// forEachDialect runs fn against a fresh database holding the users and keys
+// tables and the migrated org tables.
 func forEachDialect(t *testing.T, fn func(t *testing.T, db *gorm.DB)) {
 	t.Helper()
+	// No Redis in these tests: the flag is on until the gateway's start-up
+	// turns it off, and changing a key tells the token cache.
+	common.RedisEnabled = false
 	orgtest.ForEachDialect(t, func(t *testing.T, db *gorm.DB) {
-		require.NoError(t, db.AutoMigrate(&platformmodel.User{}))
+		require.NoError(t, db.AutoMigrate(&platformmodel.User{}, &platformmodel.Token{}))
 		require.NoError(t, orgmodel.Migrate(db))
 		fn(t, db)
 	})

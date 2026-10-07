@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	orgmodel "github.com/QuantumNous/new-api/internal/org/model"
 	platformmodel "github.com/QuantumNous/new-api/model"
 	"github.com/stretchr/testify/require"
@@ -30,11 +31,15 @@ const (
 	kindITOps    = "it-ops"  // the three role packs, adopted as custom roles
 	kindHROps    = "hr-ops"  // — the one non-admin role that invites company-wide
 	kindFinance  = "finance" // — and one that sees usage and nothing else
+	// kindKeyDesk is a custom role with every key primitive and nothing else,
+	// limited to departments and sitting in Sales: the one member whose key
+	// actions stop at a department line.
+	kindKeyDesk = "key-desk"
 )
 
 // allKinds lists the cast in a fixed order, so a failure names the same actor
 // on every run.
-var allKinds = []string{kindOwner, kindAdmin, kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance}
+var allKinds = []string{kindOwner, kindAdmin, kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance, kindKeyDesk}
 
 // Who an action is open to, as a space-separated list of kinds.
 const (
@@ -42,6 +47,13 @@ const (
 	runners = kindOwner + " " + kindAdmin
 	// readers hold member.read somewhere, directly or through a write.
 	readers = runners + " " + kindManager + " " + kindReadonly + " " + kindITOps + " " + kindHROps
+	// keyReaders hold key.read somewhere, directly or through a write.
+	keyReaders = runners + " " + kindManager + " " + kindReadonly + " " + kindITOps + " " + kindHROps + " " + kindKeyDesk
+	// keyMakers hold every key primitive across the whole organization.
+	keyMakers = runners + " " + kindITOps
+	// keyStoppers may freeze and delete keys across the whole organization:
+	// the key makers, and HR Ops for cleaning up after a leaver.
+	keyStoppers = keyMakers + " " + kindHROps
 )
 
 // cast is one organization with a member of every kind.
@@ -74,6 +86,7 @@ func newCast(t *testing.T, db *gorm.DB, name string) cast {
 	join(kindITOps, seedRole(t, db, org.id, "IT Ops", orgmodel.ScopeOrg, packPermissions(t, "it_ops")...).Id, general)
 	join(kindHROps, seedRole(t, db, org.id, "HR Ops", orgmodel.ScopeOrg, packPermissions(t, "hr_ops")...).Id, general)
 	join(kindFinance, seedRole(t, db, org.id, "Finance", orgmodel.ScopeOrg, packPermissions(t, "finance")...).Id, general)
+	join(kindKeyDesk, seedRole(t, db, org.id, "Key Desk", orgmodel.ScopeDept, everyKeyWrite...).Id, c.sales.Id)
 	bot, err := CreateServiceAccount(db, c.actors[kindOwner], "CI", 0)
 	require.NoError(t, err)
 	c.actors[kindBot] = actorFor(t, db, bot.Id)
@@ -116,6 +129,13 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	promoted := seedMember(t, db, org, fmt.Sprintf("promoted-in-%d", org.id), orgmodel.RoleStaff)
 	lead := seedMemberIn(t, db, org, fmt.Sprintf("lead-in-%d", org.id), managerRole, support.Id)
 	edited := seedRole(t, db, org.id, "Edited", orgmodel.ScopeOrg, "usage.read")
+	// A holder of keys in each of two departments, and a key of each to act
+	// on any number of times.
+	inSales := seedMemberIn(t, db, org, fmt.Sprintf("holder-in-sales-of-%d", org.id), staffRole, c.sales.Id)
+	inProduct := seedMemberIn(t, db, org, fmt.Sprintf("holder-in-product-of-%d", org.id), staffRole, c.product.Id)
+	salesKey := seedKey(t, db, org, inSales.Id, "held in Sales")
+	productKey := seedKey(t, db, org, inProduct.Id, "held in Product")
+	models := fixedModels(testCatalogue)
 
 	// Victims are written straight to the database, so that making one does
 	// not depend on the actor.
@@ -134,6 +154,27 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 		}
 		require.NoError(t, db.Create(&invite).Error)
 		return invite.Id
+	}
+	spareKey := func(holderID int) int {
+		return seedKey(t, db, org, holderID, fmt.Sprintf("Spare %d", next())).Id
+	}
+	// Freezing takes a key that is not frozen and unfreezing one that is, so
+	// each sets the stage first — straight in the table, like the victims.
+	withStatus := func(keyID int, status int) int {
+		require.NoError(t, db.Model(&platformmodel.Token{}).Where("id = ?", keyID).Update("status", status).Error)
+		return keyID
+	}
+	createKey := func(actor *Actor, holderID int) error {
+		_, err := CreateKey(db, actor, KeyInput{Name: fmt.Sprintf("Made %d", next()), HolderId: holderID}, models)
+		return err
+	}
+	renameKey := func(actor *Actor, keyID int) error {
+		_, err := UpdateKey(db, actor, keyID, KeyPatch{Name: strPtr(fmt.Sprintf("Renamed %d", next()))}, models)
+		return err
+	}
+	rotateKey := func(actor *Actor, keyID int) error {
+		_, err := RotateKey(db, actor, keyID)
+		return err
 	}
 	// Picking whichever of two values is not the current one makes a change
 	// of every call, however often it runs.
@@ -236,6 +277,75 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			return RevokeInvite(db, actor, spareInvite(managerRole, c.sales.Id))
 		}},
 
+		// --- key.read, wherever it reaches ----------------------------------------
+		{name: "list keys", openTo: keyReaders, run: func(actor *Actor) error {
+			_, err := ListKeys(db, actor)
+			return err
+		}},
+		{name: "read the policy templates", openTo: keyReaders, run: func(actor *Actor) error {
+			_, err := ListKeyTemplates(actor)
+			return err
+		}},
+
+		// --- key.create — with key.assign when the key is for someone (PRD D30) ----
+		{name: "list who a key can be for", openTo: keyMakers + " " + kindKeyDesk, run: func(actor *Actor) error {
+			_, err := ListKeyHolders(db, actor)
+			return err
+		}},
+		{name: "create a key parked under the owner", openTo: keyMakers, audited: orgmodel.AuditKeyCreate, run: func(actor *Actor) error {
+			return createKey(actor, 0)
+		}},
+		{name: "create a key for a member of Sales", openTo: keyMakers + " " + kindKeyDesk, audited: orgmodel.AuditKeyCreate, run: func(actor *Actor) error {
+			return createKey(actor, inSales.Id)
+		}},
+		{name: "create a key for a member of Product", openTo: keyMakers, audited: orgmodel.AuditKeyCreate, run: func(actor *Actor) error {
+			return createKey(actor, inProduct.Id)
+		}},
+
+		// --- key.create or key.update, reaching the member the key is for ---------
+		{name: "list the models a key for a member of Sales can be limited to", openTo: keyMakers + " " + kindKeyDesk, run: func(actor *Actor) error {
+			_, err := ListKeyModels(db, actor, inSales.Id, models)
+			return err
+		}},
+		{name: "list the models a key for a member of Product can be limited to", openTo: keyMakers, run: func(actor *Actor) error {
+			_, err := ListKeyModels(db, actor, inProduct.Id, models)
+			return err
+		}},
+
+		// --- the other key primitives, each on a key held in Sales and on one
+		// held in Product: the first is within the key desk's reach, the second
+		// is not ---------------------------------------------------------------
+		{name: "change a key held in Sales", openTo: keyMakers + " " + kindKeyDesk, audited: orgmodel.AuditKeyUpdate, run: func(actor *Actor) error {
+			return renameKey(actor, salesKey.Id)
+		}},
+		{name: "change a key held in Product", openTo: keyMakers, audited: orgmodel.AuditKeyUpdate, run: func(actor *Actor) error {
+			return renameKey(actor, productKey.Id)
+		}},
+		{name: "rotate a key held in Sales", openTo: keyMakers + " " + kindKeyDesk, audited: orgmodel.AuditKeyRotate, run: func(actor *Actor) error {
+			return rotateKey(actor, salesKey.Id)
+		}},
+		{name: "rotate a key held in Product", openTo: keyMakers, audited: orgmodel.AuditKeyRotate, run: func(actor *Actor) error {
+			return rotateKey(actor, productKey.Id)
+		}},
+		{name: "freeze a key held in Sales", openTo: keyStoppers + " " + kindKeyDesk, audited: orgmodel.AuditKeyFreeze, run: func(actor *Actor) error {
+			return FreezeKey(db, actor, withStatus(salesKey.Id, common.TokenStatusEnabled))
+		}},
+		{name: "freeze a key held in Product", openTo: keyStoppers, audited: orgmodel.AuditKeyFreeze, run: func(actor *Actor) error {
+			return FreezeKey(db, actor, withStatus(productKey.Id, common.TokenStatusEnabled))
+		}},
+		{name: "unfreeze a key held in Sales", openTo: keyStoppers + " " + kindKeyDesk, audited: orgmodel.AuditKeyUnfreeze, run: func(actor *Actor) error {
+			return UnfreezeKey(db, actor, withStatus(salesKey.Id, common.TokenStatusDisabled))
+		}},
+		{name: "unfreeze a key held in Product", openTo: keyStoppers, audited: orgmodel.AuditKeyUnfreeze, run: func(actor *Actor) error {
+			return UnfreezeKey(db, actor, withStatus(productKey.Id, common.TokenStatusDisabled))
+		}},
+		{name: "delete a key held in Sales", openTo: keyStoppers + " " + kindKeyDesk, audited: orgmodel.AuditKeyDelete, spawns: "keys", run: func(actor *Actor) error {
+			return DeleteKey(db, actor, spareKey(inSales.Id))
+		}},
+		{name: "delete a key held in Product", openTo: keyStoppers, audited: orgmodel.AuditKeyDelete, spawns: "keys", run: func(actor *Actor) error {
+			return DeleteKey(db, actor, spareKey(inProduct.Id))
+		}},
+
 		// --- audit.read, across the whole organization ---------------------------
 		{name: "read the audit log", openTo: runners + " " + kindReadonly, run: func(actor *Actor) error {
 			_, _, err := ListAuditLogs(db, actor, 0, 10)
@@ -253,6 +363,7 @@ func orgRowCounts(t *testing.T, db *gorm.DB, orgID int) map[string]int64 {
 		"roles":       &orgmodel.OrgRole{},
 		"invites":     &orgmodel.OrgInvite{},
 		"members":     &platformmodel.User{},
+		"keys":        &platformmodel.Token{},
 		"audit":       &orgmodel.OrgAuditLog{},
 	} {
 		var n int64
@@ -268,7 +379,7 @@ func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
 		actions := managementActions(t, db, c)
-		require.Len(t, actions, 23, "a new management action belongs in managementActions")
+		require.Len(t, actions, 41, "a new management action belongs in managementActions")
 		require.Len(t, c.actors, len(allKinds))
 
 		for _, action := range actions {
@@ -340,7 +451,7 @@ func TestUpdateMember_RefusesBeforeLookingAnythingUp(t *testing.T) {
 			"departments to manage": {ManagedDepartmentIds: intsPtr(c.sales.Id)},
 		}
 		before := orgRowCounts(t, db, c.org.id)
-		for _, kind := range []string{kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance} {
+		for _, kind := range []string{kindManager, kindReadonly, kindStaff, kindBot, kindITOps, kindHROps, kindFinance, kindKeyDesk} {
 			actor := c.actors[kind]
 			for target, memberID := range targets {
 				if memberID == 0 {

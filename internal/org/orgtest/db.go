@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -118,9 +119,15 @@ func openMySQL(t *testing.T, adminDSN string) *gorm.DB {
 	return db
 }
 
-// scratchName returns a database name no other test run is using.
+// scratchSerial numbers the scratch databases one test process creates.
+var scratchSerial atomic.Int64
+
+// scratchName returns a database name no other test run is using. The clock
+// alone does not make it so: `go test` runs the packages that use this helper
+// as separate processes at the same time, and on Windows the clock moves in
+// steps long enough for two of them to read the same instant.
 func scratchName() string {
-	return fmt.Sprintf("org_test_%d", time.Now().UnixNano())
+	return fmt.Sprintf("org_test_%d_%d_%d", time.Now().UnixNano(), os.Getpid(), scratchSerial.Add(1))
 }
 
 // replaceDatabase swaps the database name of a DSN: the path segment after

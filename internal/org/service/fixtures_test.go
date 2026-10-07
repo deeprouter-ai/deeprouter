@@ -127,6 +127,74 @@ func lastAudit(t *testing.T, db *gorm.DB, orgID int) orgmodel.OrgAuditLog {
 	return records[len(records)-1]
 }
 
+// testCatalogue is what the purposes of the policy templates resolve to in
+// these tests: two rule tables that share an entry, and two exact lists.
+var testCatalogue = map[string][]string{
+	"chat":   {"claude-*", "gpt-4o*", "deeprouter-auto"},
+	"coding": {"claude-sonnet-*", "o1*", "deeprouter-auto"},
+	"image":  {"dall-e-3"},
+	"video":  {"MiniMax-H3"},
+}
+
+// testServable is what every member can be served in these tests: the models
+// a hand-picked list is chosen from. It is deliberately out of order, and
+// names one model twice, the way a catalogue read channel by channel does.
+var testServable = []string{"gpt-4o", "MiniMax-H3", "claude-sonnet-5", "dall-e-3", "claude-opus-4-8", "gpt-4o"}
+
+// fixedCatalogue is a ModelCatalogue that answers from tables, whoever holds
+// the key.
+type fixedCatalogue struct {
+	purposes map[string][]string
+	servable []string
+}
+
+// PurposeModels answers a purpose from the table.
+func (c fixedCatalogue) PurposeModels(_ int, purpose string) ([]string, error) {
+	return c.purposes[purpose], nil
+}
+
+// ServableModels answers with the same list for every holder.
+func (c fixedCatalogue) ServableModels(int) ([]string, error) {
+	return c.servable, nil
+}
+
+// fixedModels is a catalogue whose policy templates resolve from table and
+// whose members can all be served testServable.
+func fixedModels(table map[string][]string) fixedCatalogue {
+	return fixedCatalogue{purposes: table, servable: testServable}
+}
+
+// seedKey writes an organization key held by holderID straight into the table,
+// without the checks CreateKey makes. It has spent a quarter of its quota.
+func seedKey(t *testing.T, db *gorm.DB, org testOrg, holderID int, name string) platformmodel.Token {
+	t.Helper()
+	value, err := common.GenerateKey()
+	require.NoError(t, err)
+	key := platformmodel.Token{
+		UserId:       holderID,
+		OrgId:        org.id,
+		CreatedBy:    org.owner.Id,
+		Name:         name,
+		Key:          value,
+		Status:       common.TokenStatusEnabled,
+		CreatedTime:  1700000000,
+		AccessedTime: 1700000000,
+		ExpiredTime:  -1,
+		RemainQuota:  750,
+		UsedQuota:    250,
+	}
+	require.NoError(t, db.Create(&key).Error)
+	return reloadKey(t, db, key.Id)
+}
+
+// reloadKey reads a key row back from the database, deleted or not.
+func reloadKey(t *testing.T, db *gorm.DB, id int) platformmodel.Token {
+	t.Helper()
+	var key platformmodel.Token
+	require.NoError(t, db.Unscoped().First(&key, id).Error)
+	return key
+}
+
 // intPtr returns a pointer to n, for the optional fields of a MemberPatch.
 func intPtr(n int) *int { return &n }
 

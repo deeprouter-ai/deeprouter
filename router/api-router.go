@@ -458,6 +458,19 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.POST("/invites", controller.CreateOrgInvite)
 			orgRoute.DELETE("/invites/:id", controller.RevokeOrgInvite)
 
+			// Creating and rotating answer with the key's value when it is a
+			// service account's, so neither answer may be cached anywhere.
+			orgRoute.GET("/keys", controller.ListOrgKeys)
+			orgRoute.POST("/keys", middleware.DisableCache(), controller.CreateOrgKey)
+			orgRoute.PUT("/keys/:id", controller.UpdateOrgKey)
+			orgRoute.DELETE("/keys/:id", controller.DeleteOrgKey)
+			orgRoute.POST("/keys/:id/rotate", middleware.DisableCache(), controller.RotateOrgKey)
+			orgRoute.POST("/keys/:id/freeze", controller.FreezeOrgKey)
+			orgRoute.POST("/keys/:id/unfreeze", controller.UnfreezeOrgKey)
+			orgRoute.GET("/key-holders", controller.ListOrgKeyHolders)
+			orgRoute.GET("/key-templates", controller.ListOrgKeyTemplates)
+			orgRoute.GET("/key-models", controller.ListOrgKeyModels)
+
 			orgRoute.GET("/audit-logs", controller.ListOrgAuditLogs)
 		}
 		// The one organization route without a sign-in: the sign-up page asks

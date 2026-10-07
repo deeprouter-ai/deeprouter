@@ -84,6 +84,10 @@ func GetTokenKey(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Enterprise Org: closed to organization keys (controller/org_keys.go).
+	if refuseOrgKeys(c, id) {
+		return
+	}
 	token, err := model.GetTokenByIds(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -255,6 +259,10 @@ func AddToken(c *gin.Context) {
 func DeleteToken(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	userId := c.GetInt("id")
+	// Enterprise Org: closed to organization keys (controller/org_keys.go).
+	if refuseOrgKeys(c, id) {
+		return
+	}
 	err := model.DeleteTokenById(id, userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -273,6 +281,10 @@ func UpdateToken(c *gin.Context) {
 	err := c.ShouldBindJSON(&token)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+	// Enterprise Org: closed to organization keys (controller/org_keys.go).
+	if refuseOrgKeys(c, token.Id) {
 		return
 	}
 	if len(token.Name) > 50 {
@@ -351,6 +363,10 @@ func DeleteTokenBatch(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	// Enterprise Org: closed to organization keys (controller/org_keys.go).
+	if refuseOrgKeys(c, tokenBatch.Ids...) {
+		return
+	}
 	userId := c.GetInt("id")
 	count, err := model.BatchDeleteTokens(tokenBatch.Ids, userId)
 	if err != nil {
@@ -372,6 +388,10 @@ func GetTokenKeysBatch(c *gin.Context) {
 	}
 	if len(tokenBatch.Ids) > 100 {
 		common.ApiErrorI18n(c, i18n.MsgBatchTooMany, map[string]any{"Max": 100})
+		return
+	}
+	// Enterprise Org: closed to organization keys (controller/org_keys.go).
+	if refuseOrgKeys(c, tokenBatch.Ids...) {
 		return
 	}
 	userId := c.GetInt("id")
