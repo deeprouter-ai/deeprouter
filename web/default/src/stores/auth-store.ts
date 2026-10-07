@@ -48,6 +48,11 @@ export interface AuthUser {
   stripe_customer?: string
   sidebar_modules?: string
   permissions?: UserPermissions
+  /**
+   * DeepRouter Enterprise Org: the organization the account belongs to. Absent
+   * for a personal account. See `features/org/hooks/use-wallet-view.ts`.
+   */
+  org_id?: number
 }
 
 interface AuthState {

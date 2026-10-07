@@ -21,10 +21,34 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SectionPageLayout } from '@/components/layout'
+import { CompanyWalletNotice } from '@/features/org/components/company-wallet-notice'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { getUserHome } from './api'
 import type { UserHomeData } from './types'
 
+/**
+ * The personal home page: the account's balance and plan. DeepRouter
+ * Enterprise Org: a member of an organization spends neither — their keys
+ * spend the company wallet — so they are told that instead.
+ */
 export function UserHome() {
+  const { t } = useTranslation()
+  const walletView = useWalletView()
+  if (walletView === 'pending') return null
+  if (walletView === 'company') {
+    return (
+      <SectionPageLayout>
+        <SectionPageLayout.Title>{t('Home')}</SectionPageLayout.Title>
+        <SectionPageLayout.Content>
+          <CompanyWalletNotice className='mx-auto w-full max-w-2xl' />
+        </SectionPageLayout.Content>
+      </SectionPageLayout>
+    )
+  }
+  return <OwnHome />
+}
+
+function OwnHome() {
   const { t } = useTranslation()
   const query = useQuery({
     queryKey: ['user-home'],

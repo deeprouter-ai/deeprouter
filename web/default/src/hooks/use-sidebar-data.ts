@@ -53,6 +53,7 @@ import {
   canSeeOrg,
   useOrgMembership,
 } from '@/features/org/hooks/use-org-membership'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { holds } from '@/features/org/lib/permissions'
 
 export function useSidebarData(): SidebarData {
@@ -74,6 +75,7 @@ export function useSidebarData(): SidebarData {
   // key.read — and is not there at all when that is none of them, as for
   // Staff. A personal account's probe answers null and the group never appears.
   const { data: orgMembership } = useOrgMembership()
+  const walletView = useWalletView()
   const orgItems = [
     ...(canSeeOrg(orgMembership)
       ? [
@@ -166,11 +168,17 @@ export function useSidebarData(): SidebarData {
             url: '/home',
             icon: Home,
           },
-          {
-            title: t('Wallet'),
-            url: '/wallet',
-            icon: Wallet,
-          },
+          // Enterprise Org: the wallet is the account holder's own. A member
+          // of an organization has none — their keys spend the company's.
+          ...(walletView === 'own'
+            ? [
+                {
+                  title: t('Wallet'),
+                  url: '/wallet',
+                  icon: Wallet,
+                },
+              ]
+            : []),
           {
             title: t('My Skills'),
             url: '/user/skills',

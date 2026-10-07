@@ -54,6 +54,7 @@ import {
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import { isOrgKey } from '@/features/keys/lib/org-key'
 import type { ApiKey } from '@/features/keys/types'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { getReferralSummary } from '../../api'
 import { useApiInfo } from '../../hooks/use-status-data'
 import { AnnouncementsPanel } from './announcements-panel'
@@ -544,6 +545,9 @@ export function OverviewDashboard() {
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  // DeepRouter Enterprise Org: adding credit is not a step for a member of an
+  // organization — their keys spend the company wallet.
+  const spendsOwnBalance = useWalletView() === 'own'
 
   const apiKeysQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'api-keys'],
@@ -589,13 +593,17 @@ export function OverviewDashboard() {
         icon: KeyRound,
         completed: Boolean(preferredKey),
       },
-      {
-        title: t('Add credits'),
-        description: t('Keep enough balance before production traffic'),
-        to: '/wallet',
-        icon: CreditCard,
-        completed: remainQuota > 0 || usedQuota > 0,
-      },
+      ...(spendsOwnBalance
+        ? [
+            {
+              title: t('Add credits'),
+              description: t('Keep enough balance before production traffic'),
+              to: '/wallet' as const,
+              icon: CreditCard,
+              completed: remainQuota > 0 || usedQuota > 0,
+            },
+          ]
+        : []),
       {
         title: t('Send a request'),
         description: t('Verify it works from your AI tool'),
@@ -604,7 +612,7 @@ export function OverviewDashboard() {
         completed: requestCount > 0,
       },
     ],
-    [preferredKey, remainQuota, requestCount, t, usedQuota]
+    [preferredKey, remainQuota, requestCount, spendsOwnBalance, t, usedQuota]
   )
 
   const quickActions = useMemo<QuickAction[]>(

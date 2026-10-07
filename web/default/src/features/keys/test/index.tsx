@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import { getUserModels, sendChatCompletion } from '@/features/playground/api'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
@@ -94,7 +95,29 @@ type TestResult = {
   errorMessage?: string
 }
 
+/**
+ * The key self-check page, for the accounts it can work for. An account that
+ * belongs to an organization is sent back to its keys: the check runs on the
+ * playground endpoint, which spends with no key at all, and that endpoint is
+ * closed to organization accounts (Enterprise Org, meta-repo
+ * `docs/enterprise-org-prd.md` §4) — all it could show them is a refusal.
+ */
 export function KeySelfCheckPage() {
+  const navigate = useNavigate()
+  const orgId = useAuthStore((s) => s.auth.user?.org_id)
+  const { data: membership } = useOrgMembership()
+  const inOrg = Boolean(orgId || membership)
+
+  useEffect(() => {
+    if (inOrg) navigate({ to: '/keys', replace: true })
+  }, [inOrg, navigate])
+
+  if (inOrg) return null
+  return <SelfCheck />
+}
+
+/** The check itself: one prompt, one reply, nothing kept. */
+function SelfCheck() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.auth.user)

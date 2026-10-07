@@ -15,6 +15,25 @@ describe('consoleModeFor', () => {
     expect(consoleModeFor({ setting: undefined })).toBe('simple')
     expect(consoleModeFor({ setting: 'not json' })).toBe('simple')
     expect(consoleModeFor(null)).toBe('simple')
+    expect(consoleModeFor({ setting: '{"persona":"unset"}', org_id: 0 })).toBe(
+      'simple'
+    )
+  })
+
+  // Enterprise Org D42: the members of an organization work in the Advanced
+  // console until they choose otherwise.
+  it('defaults a member of an organization who has not chosen to Advanced', () => {
+    expect(consoleModeFor({ setting: '{"persona":"unset"}', org_id: 5 })).toBe(
+      'advanced'
+    )
+    expect(consoleModeFor({ setting: undefined, org_id: 5 })).toBe('advanced')
+    expect(consoleModeFor({ setting: 'not json', org_id: 5 })).toBe('advanced')
+  })
+
+  it('leaves a member who chose Simple in Simple', () => {
+    expect(consoleModeFor({ setting: { persona: 'casual' }, org_id: 5 })).toBe(
+      'simple'
+    )
   })
 })
 
@@ -22,6 +41,13 @@ describe('homePathFor', () => {
   it('sends each mode to its own home', () => {
     expect(homePathFor({ setting: { persona: 'casual' } })).toBe('/simple')
     expect(homePathFor({ setting: { persona: 'dev' } })).toBe('/dashboard')
+  })
+
+  it('sends a member of an organization who has not chosen to the Advanced home', () => {
+    expect(homePathFor({ setting: { persona: 'unset' }, org_id: 5 })).toBe(
+      '/dashboard'
+    )
+    expect(homePathFor({ setting: { persona: 'unset' } })).toBe('/simple')
   })
 })
 

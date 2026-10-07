@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { getUserAvatarFallback } from '@/lib/avatar'
 import { SignOutDialog } from '@/components/sign-out-dialog'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { updateUserLanguage } from '@/features/profile/api'
 import { persistPersona } from '@/features/profile/lib/persist-persona'
 import { ADVANCED_HOME } from '../lib/mode'
@@ -66,6 +67,9 @@ export function SimpleMe() {
 
   const name = user?.display_name || user?.username || ''
   const zh = i18n.language?.startsWith('zh')
+  // Enterprise Org: a member's keys spend the company wallet; there is
+  // nothing for them to add credit to.
+  const walletView = useWalletView()
 
   const toggleLanguage = async () => {
     const next = zh ? 'en' : 'zh'
@@ -104,11 +108,13 @@ export function SimpleMe() {
       </section>
 
       <ul className='bg-card border-border divide-border divide-y overflow-hidden rounded-2xl border'>
-        <Row
-          icon={Wallet}
-          label={t('Add credit')}
-          onClick={() => navigate({ to: '/simple', search: { topup: true } })}
-        />
+        {walletView === 'own' && (
+          <Row
+            icon={Wallet}
+            label={t('Add credit')}
+            onClick={() => navigate({ to: '/simple', search: { topup: true } })}
+          />
+        )}
         <Row
           icon={Languages}
           label={t('Language')}

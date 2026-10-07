@@ -157,3 +157,36 @@ describe('sidebar: the Organization group', () => {
     ])
   })
 })
+
+// Enterprise Org P7: the wallet is the account holder's own. The keys of an
+// organization's members spend the company wallet — the owner's balance — so
+// only a personal account and the owner are shown the way to it.
+describe('sidebar: the Wallet entry', () => {
+  /** The titles of the Personal group for one viewer. */
+  async function personalEntriesFor(answer: OrgMembership | null) {
+    const groups = await sidebarGroupsFor(answer)
+    const group = groups.find((candidate) => candidate.id === 'personal')
+    return group?.items.map((item) => item.title)
+  }
+
+  it('is there for a personal account and for the owner', async () => {
+    for (const viewer of [null, membershipOf('owner')]) {
+      expect(await personalEntriesFor(viewer)).toEqual([
+        'Home',
+        'Wallet',
+        'My Skills',
+        'Profile',
+      ])
+    }
+  })
+
+  it('is not there for any other member', async () => {
+    for (const role of ['admin', 'manager', 'staff', 'readonly'] as const) {
+      expect(await personalEntriesFor(membershipOf(role)), role).toEqual([
+        'Home',
+        'My Skills',
+        'Profile',
+      ])
+    }
+  })
+})

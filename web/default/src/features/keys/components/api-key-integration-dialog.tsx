@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import {
   API_KEY_PLACEHOLDER,
   buildIntegrationSnippets,
@@ -81,6 +82,9 @@ export function ApiKeyIntegrationDialog({
   const { t } = useTranslation()
   const [step, setStep] = useState(1)
   const [lang, setLang] = useState<IntegrationLanguage>('claude-code')
+  // The one-click test runs on the playground endpoint, which is closed to
+  // organization accounts (Enterprise Org PRD §4): they are not sent to it.
+  const inOrg = Boolean(useOrgMembership().data)
 
   const baseUrl = defaultBaseUrl()
   const model = modelNameForPurpose(purpose)
@@ -225,20 +229,22 @@ export function ApiKeyIntegrationDialog({
                   )}
                 </p>
               </div>
-              <div className='space-y-2'>
-                <p className='text-muted-foreground text-xs'>
-                  {t('Not a developer? Run a one-click test instead:')}
-                </p>
-                <Button
-                  size='sm'
-                  variant='outline'
-                  render={
-                    <Link to='/keys/test' onClick={handleClose}>
-                      {t('Test this key →')}
-                    </Link>
-                  }
-                />
-              </div>
+              {!inOrg && (
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('Not a developer? Run a one-click test instead:')}
+                  </p>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    render={
+                      <Link to='/keys/test' onClick={handleClose}>
+                        {t('Test this key →')}
+                      </Link>
+                    }
+                  />
+                </div>
+              )}
               <p className='text-muted-foreground text-xs leading-relaxed'>
                 {t(
                   'Lost the key value? Regenerate it from the table — your balance stays safe.'

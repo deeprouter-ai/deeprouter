@@ -23,6 +23,7 @@ import { getRoleLabel } from '@/lib/roles'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/status-badge'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { getUserInitials, getDisplayName } from '../lib'
 import type { UserProfile } from '../types'
 
@@ -37,6 +38,9 @@ interface ProfileHeaderProps {
 
 export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
   const { t } = useTranslation()
+  // DeepRouter Enterprise Org: a member's keys spend the company wallet, so
+  // the balance on their own account is left out of what they are shown.
+  const spendsOwnBalance = useWalletView() === 'own'
 
   if (loading) {
     return (
@@ -78,12 +82,16 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
   const initials = getUserInitials(profile)
   const roleLabel = getRoleLabel(profile.role)
   const stats = [
-    {
-      label: t('Current Balance'),
-      value: formatQuota(profile.quota),
-      description: t('Remaining quota'),
-      icon: WalletCards,
-    },
+    ...(spendsOwnBalance
+      ? [
+          {
+            label: t('Current Balance'),
+            value: formatQuota(profile.quota),
+            description: t('Remaining quota'),
+            icon: WalletCards,
+          },
+        ]
+      : []),
     {
       label: t('Total Usage'),
       value: formatQuota(profile.used_quota),
@@ -139,7 +147,13 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
         </div>
       </div>
       <div className='border-t'>
-        <div className='divide-border/60 grid grid-cols-3 divide-x'>
+        <div
+          className={
+            stats.length === 3
+              ? 'divide-border/60 grid grid-cols-3 divide-x'
+              : 'divide-border/60 grid grid-cols-2 divide-x'
+          }
+        >
           {stats.map((item) => (
             <div key={item.label} className='min-w-0 px-3 py-3 sm:px-5 sm:py-4'>
               <div className='flex items-center gap-2'>

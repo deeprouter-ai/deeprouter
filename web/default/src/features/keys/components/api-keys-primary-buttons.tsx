@@ -29,7 +29,9 @@ export function ApiKeysPrimaryButtons() {
   // A member of an organization holds the keys they are handed and makes none
   // of their own (Enterprise Org PRD D16); the backend refuses it too. Only a
   // known member loses the button — a personal account keeps it even while,
-  // or if, the question cannot be answered.
+  // or if, the question cannot be answered. The one-tap test goes with it:
+  // it runs on the playground endpoint, which is closed to organization
+  // accounts (PRD §4).
   const isOrgMember = Boolean(useOrgMembership().data)
   return (
     <div className='flex gap-2'>
@@ -47,16 +49,18 @@ export function ApiKeysPrimaryButtons() {
         <BookOpen className='h-4 w-4' />
         {t('Setup guide')}
       </Button>
-      <Button
-        size='sm'
-        variant='outline'
-        render={
-          <Link to='/keys/test'>
-            <Sparkles className='h-4 w-4' />
-            {t('Test a key')}
-          </Link>
-        }
-      />
+      {!isOrgMember && (
+        <Button
+          size='sm'
+          variant='outline'
+          render={
+            <Link to='/keys/test'>
+              <Sparkles className='h-4 w-4' />
+              {t('Test a key')}
+            </Link>
+          }
+        />
+      )}
       {!isOrgMember && (
         <Button size='sm' onClick={() => setOpen('mode-picker')}>
           <Plus className='h-4 w-4' />

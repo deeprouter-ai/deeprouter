@@ -64,13 +64,15 @@ describe('the buttons above the list', () => {
     expect(mocks.setOpen).toHaveBeenCalledWith('mode-picker')
   })
 
-  it('offer a member of an organization no key to create, and everything else', () => {
+  it('offer a member of an organization the setup guide, and neither a key to create nor the one-tap test', () => {
     mocks.membership = { data: { org_id: 1, permissions: [] } }
     render(<ApiKeysPrimaryButtons />)
 
     expect(screen.queryByRole('button', { name: 'Create API Key' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Setup guide' })).toBeEnabled()
-    expect(screen.getByText('Test a key')).toBeInTheDocument()
+    // The one-tap test runs on the playground endpoint, which is closed to
+    // organization accounts since P7 (PRD §4).
+    expect(screen.queryByText('Test a key')).toBeNull()
   })
 
   it('keep the button for a personal account while the answer is not in, or never comes', () => {
@@ -81,6 +83,7 @@ describe('the buttons above the list', () => {
     render(<ApiKeysPrimaryButtons />)
 
     expect(screen.getByRole('button', { name: 'Create API Key' })).toBeEnabled()
+    expect(screen.getByText('Test a key')).toBeInTheDocument()
   })
 })
 
