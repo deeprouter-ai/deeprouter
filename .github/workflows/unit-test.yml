@@ -81,7 +81,10 @@ jobs:
           # regression guards; hailuo also covers the v2/H3 request conversion).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the
           # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
-          go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
+          # TestOrg: Enterprise Org's company wallet on the billing path - whose
+          # balance pays, the usage-log stamp, task refunds, the low-balance
+          # reminder (service/org_wallet_test.go).
+          go test ./service/ -run 'TestGeminiToOpenAIRequest|TestOrg' -count=1 -timeout 60s
           go test ./relay/channel/openai/ -run 'TestConvertOpenAIRequest' -count=1 -timeout 60s
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s

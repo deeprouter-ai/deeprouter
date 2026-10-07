@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	commonRelay "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -248,6 +249,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		RequestId: requestId,
 		Other:     otherStr,
 	}
+	log.stampOrgFromRequest(c) // DeepRouter Enterprise Org, see org_log.go
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
@@ -269,6 +271,7 @@ type RecordTaskBillingLogParams struct {
 	TokenId   int
 	Group     string
 	Other     map[string]interface{}
+	OrgSpend  commonRelay.OrgSpend // DeepRouter Enterprise Org, see org_log.go
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -296,6 +299,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Group:     params.Group,
 		Other:     common.MapToJsonStr(params.Other),
 	}
+	log.stampOrg(params.OrgSpend)
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		common.SysLog("failed to record task billing log: " + err.Error())

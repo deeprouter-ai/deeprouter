@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/i18n"
 	orgmodel "github.com/QuantumNous/new-api/internal/org/model"
 	orgservice "github.com/QuantumNous/new-api/internal/org/service"
 	"github.com/QuantumNous/new-api/model"
@@ -194,7 +195,10 @@ func TestOrgAuditLogs_AreReadByPageWithTheAddressOfEachRequest(t *testing.T) {
 // an organization endpoint can answer with has to exist in every language the
 // gateway speaks.
 func TestOrgMessages_AreTranslatedInEveryLocale(t *testing.T) {
-	keys := []string{msgOrgOwnerCannotDeleteAccount, msgOrgMemberCannotDeleteAccount, msgOrgServiceAccountLogin}
+	keys := []string{msgOrgOwnerCannotDeleteAccount, msgOrgMemberCannotDeleteAccount, msgOrgServiceAccountLogin,
+		// What the relay path and the wallet reminder say (i18n/org_keys.go).
+		i18n.MsgOrgWalletUnavailable, i18n.MsgOrgWalletInsufficient, i18n.MsgOrgPlaygroundClosed,
+		i18n.MsgOrgWalletLowTitle, i18n.MsgOrgWalletLowBody, i18n.MsgOrgWalletLowBodyHTML}
 	for _, refusal := range orgRefusals {
 		if strings.HasPrefix(refusal.key, "org.") {
 			keys = append(keys, refusal.key)

@@ -554,6 +554,12 @@ func GetSelf(c *gin.Context) {
 		"sidebar_modules":              userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":                  permissions,                // 新增权限字段
 	}
+	// DeepRouter Enterprise Org: a member's console must know at once that
+	// the balance above is not what their keys spend (internal/org/README.md,
+	// "The company wallet"). A personal account's answer is exactly what it was.
+	if user.OrgId != 0 {
+		responseData["org_id"] = user.OrgId
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

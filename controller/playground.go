@@ -29,6 +29,11 @@ func Playground(c *gin.Context) {
 		return
 	}
 
+	// DeepRouter Enterprise Org: closed to members, see org_wallet.go.
+	if newAPIError = orgPlaygroundRefusal(c); newAPIError != nil {
+		return
+	}
+
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAI, nil, nil)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())

@@ -15,7 +15,9 @@ changing the code.
 
 Handlers live in `controller/org.go` and `controller/org_keys.go`, routes under
 `/api/org` in `router/api-router.go`. The web pages are
-`web/default/src/features/org`.
+`web/default/src/features/org`. What an organization key does on the relay
+path — whose balance pays, how its usage is stamped — is under "The company
+wallet" below.
 
 ## Four rules that are not negotiable
 
@@ -307,6 +309,112 @@ alike. In one transaction it
 - `MemberView.KeyCount` is what the page shows before it asks for
   confirmation: how many keys removing this member would take back.
 
+## The company wallet
+
+An organization holds no money of its own: the company wallet is **the
+owner's account balance** (PRD §7.3). A request made with an organization key
+is paid from it and recorded under whoever made the request — the member's
+`user_id` and key on the usage log, the member's `used_quota` — with two
+stamps on the log line: the organization, and the department the member was
+in at that moment. Topping up, payments and redemption codes are untouched:
+the owner tops up their own account.
+
+- 🔴 **This is the one place the relay path reads the organization tables, and
+  it asks no permission question** (rule 3 above). `SpendOf`
+  (`service/wallet.go` here) answers three things for an organization key in
+  one query — the holder's department, the organization's owner, and whether
+  the owner's account can be charged — and `middleware.attachOrgSpend` puts
+  them on the request. `TokenAuth` calls it only when `token.OrgId != 0`; a
+  personal key never gets there.
+- **Nothing is cached, on purpose.** A member who changes department is
+  stamped with the new one from the next request, and an owner the platform
+  disables stops the organization's spending at once. It costs an
+  organization key one query per request — and saves it one, because an
+  organization key skips the "has a subscription?" query a personal key
+  makes. A request made with a personal key runs exactly the queries it did.
+- **The branch is one method.** `RelayInfo.WalletUserId()`
+  (`relay/common/org_spend.go`) answers whose balance pays: the owner for an
+  organization key, `UserId` for anything else. The places that take money
+  from a balance or put it back call it where they used to say
+  `relayInfo.UserId`. A zero `OrgSpend` changes nothing, which is what keeps a
+  personal account's billing as it was.
+- **An organization key never spends a subscription** — not its holder's and
+  not the owner's (`NewBillingSession` forces `wallet_only`).
+- 🔴 **A refusal never says what the company has left.** The platform's own
+  "not enough balance" message quotes the balance. For an organization key
+  `orgWalletError` replaces it (same error code, so clients that react to it
+  still do): the wallet is the owner's to see, not the member's whose call was
+  refused. It and the helpers named below live in the platform's
+  `service/org_wallet.go` — the billing package at the repository root, not
+  this directory's `service/`.
+- **A wallet that cannot be charged refuses the key outright.** `SpendOf`
+  answers `ErrNoWallet` when the holder is no longer a member, or when the
+  owner's account is disabled or deleted; the request is a 403 before anything
+  is spent. Disabling the owner's account is therefore how the platform
+  suspends a whole organization. The same goes for missing organization
+  tables (rule 4): an organization key is refused, a personal key is served.
+- **A task remembers who paid.** A video is paid when it is submitted and
+  settled or refunded minutes later by the poller, with no request to ask.
+  The platform's `model.TaskPrivateData` keeps the request's `OrgSpend`, and
+  `taskWalletUserId` reads it back, so the refund reaches the company
+  wallet — not the member, who never paid — and its log line carries the same
+  stamp.
+- **The low-balance reminder goes to the owner and the admins**
+  (`notifyOrgWalletLow`, with `WalletWatchers` from here), each through their own
+  notification settings and in their own language, and never to the member
+  whose request crossed the line. "Low" is the owner's own warning threshold,
+  or the platform's default. It runs after settlement, off the request path.
+  Auto top-up likewise looks at the owner's settings.
+- **Two entrances are closed rather than billed wrongly**
+  (`controller/org_wallet.go`):
+  - the **playground endpoint** (`POST /pg/chat/completions`) refuses every
+    organization account, the owner's too. It sends requests with no key, on
+    the caller's own balance: a member's spending there would never reach the
+    company's reports, and the owner's would leave the wallet with nothing to
+    show for it. The playground page is gone from the console already. ⚠️ The
+    **key self-check page** (`/keys/test`, `web/default/src/features/keys/test`)
+    is still built on this endpoint, so the console offers it to no
+    organization account — not on the keys page, not at the end of the setup
+    guide, not from the welcome page — and sends one that opens it back to its
+    keys;
+  - the **Midjourney proxy** (`/mj/*`) refuses organization keys. Its task
+    table has nowhere to record who paid, so a failed task would be refunded
+    into the holder's own account.
+- **The console hides a member's own balance.** `GET /api/user/self` carries
+  `org_id` for a member (and nothing new for a personal account), so the
+  console knows from the first page that the balance in that answer is not
+  what the member's keys spend. `features/org/hooks/use-wallet-view.ts` is
+  the one decision — `own` for a personal account and for the owner,
+  `company` for every other member, `pending` until a member is known to be
+  the owner or not — and every place that shows a balance, offers a top-up or
+  nudges about credit asks it. The welcome page after sign-up goes further:
+  a member gets an introduction of their own there (`MemberIntro` in
+  `web/default/src/features/welcome`) — who pays, where keys come from, and
+  the steps that are true for someone who is handed their keys and never
+  sees a key's value — in place of the personal one. This is presentation
+  only: nothing on the
+  backend stops a member from topping up their own, unused, account.
+
+### Where the branch sits in upstream files
+
+Every one of these is a line or two in a file that comes from upstream. A
+rebase that drops one silently breaks billing for organization keys, and the
+tests named beside it are what would notice.
+
+| File | What is there | Guarded by |
+|---|---|---|
+| `middleware/auth.go` (`TokenAuth`) | `attachOrgSpend` for a key with `org_id` | `router` `TestOrgWallet_ThroughTheRealGateway` |
+| `relay/common/relay_info.go` | the `OrgSpend` field, filled in `genBaseRelayInfo` | `service` `TestOrgWallet_TheRequestCarriesWhoPays` |
+| `service/billing_session.go` | `wallet_only` for organization keys; `WalletUserId()` in `tryWallet` | `service` `TestOrgWallet_*` |
+| `service/billing.go` | `orgWalletError` around the pre-consume error | `service` `…AnEmptyCompanyWalletRefuses…` |
+| `service/quota.go` | `WalletUserId()` in `PostConsumeQuota` and `PreWssConsumeQuota`; the reminder's branch | `service` `TestOrgWallet_*` |
+| `service/text_quota.go` | `MaybeAutoTopup` on `WalletUserId()` | **nothing** — it needs Redis and Stripe to observe |
+| `service/task_billing.go` | `taskWalletUserId`; `OrgSpend` on the two task log lines | `service` `…ATaskIs…` |
+| `model/task.go`, `controller/relay.go` (`RelayTask`) | the task keeps `OrgSpend` | `router` (the video task) |
+| `model/log.go` | `stampOrgFromRequest`, `stampOrg` | `service`, `router` |
+| `controller/relay.go` (`RelayMidjourney`), `controller/playground.go` | the two refusals | `router` |
+| `controller/user.go` (`GetSelf`) | `org_id` for a member | `controller` `TestOrgSelf_TheProfile…` |
+
 ## The audit log
 
 Every management write goes into `org_audit_logs` (D17): who, what, on which
@@ -369,6 +477,9 @@ target, the values before and after, the request's address, when.
   can be made out to, for the form to search and filter; handing a key to
   another member and taking it back; a member's own keys by purpose, for the
   console.
+- The company wallet: an organization key spends the owner's balance, its
+  usage is stamped with the organization and the member's department, and the
+  owner and the admins hear when the wallet runs low.
 - The personal endpoints closed to members: creating a key, deleting one's own
   account.
 - The audit log: written by every management write, read by page.
@@ -415,9 +526,15 @@ is missing from a locale file.
   query on `users` that is meant to see members has to go through GORM's
   default scope (which hides deleted rows) — `Unscoped()` belongs only where a
   name is looked up for something that outlived the account.
-- **Someone who joins by invite gets no starter key** (PRD D16), and their
-  console mode is not decided for them. The founder's is: sign-up stores them
-  as a `team` persona so they land in the Advanced console (PRD D24).
+- **Someone who joins by invite gets no starter key** (PRD D16). Their console
+  mode is not stored for them at sign-up, but it has a default (PRD D42):
+  until they choose, a member works in the Advanced console. The console
+  decides that in one place — `consoleModeFor` in
+  `web/default/src/features/simple/lib/mode.ts`, which treats an account with
+  no stored choice and an `org_id` in its profile as Advanced — and the
+  welcome page offers a member `team`. The founder's mode is stored: sign-up
+  saves them as a `team` persona so they land in the Advanced console (PRD
+  D24).
 
 ## Not here yet, and where it will hook in
 
@@ -425,10 +542,13 @@ is missing from a locale file.
   member's username and email stay taken — so there is no way to bring the
   same account back, and none to move an existing personal account into an
   organization. Not in v1.
-- **The billing branch and log stamp** (P7) — until then an organization key
-  spends its holder's own balance — and **alerts** (P8) — the powers
-  `org.settings` and `alert.handle` are defined and have no endpoint yet —
-  and **reports and the audit log page** (P9; the endpoint is here).
+- **Alerts** (P8) — the powers `org.settings` and `alert.handle` are defined
+  and have no endpoint yet — and **reports and the audit log page** (P9; the
+  endpoint is here). The usage log lines they will read are stamped since P7.
+- **Midjourney for organization keys.** Refused until its task table can say
+  who paid for a task.
+- **Stopping a member from topping up their own account.** The console
+  offers them no way to; the payment endpoints do not ask.
 
 ## Testing
 
@@ -437,7 +557,7 @@ when its DSN is set — a scratch database is created and dropped per test:
 
 ```bash
 go test ./internal/org/...
-go test ./controller/ ./router/ -run TestOrg
+go test ./controller/ ./router/ ./service/ -run TestOrg
 
 # the same suites against a real server
 export TEST_POSTGRES_DSN=postgresql://root:123456@localhost:5432/postgres

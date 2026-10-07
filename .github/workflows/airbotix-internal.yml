@@ -16,6 +16,20 @@ on:
       - 'relay/airbotix_policy_test.go'
       - 'relay/kids_coverage_matrix_test.go'
       - 'service/airbotix_billing.go'
+      - 'service/org_wallet.go'
+      - 'service/org_wallet_test.go'
+      - 'service/billing.go'
+      - 'service/billing_session.go'
+      - 'service/quota.go'
+      - 'service/task_billing.go'
+      - 'service/text_quota.go'
+      - 'middleware/auth.go'
+      - 'middleware/org_wallet.go'
+      - 'model/log.go'
+      - 'model/org_log.go'
+      - 'model/task.go'
+      - 'relay/common/relay_info.go'
+      - 'relay/common/org_spend.go'
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
@@ -43,6 +57,20 @@ on:
       - 'relay/airbotix_policy_test.go'
       - 'relay/kids_coverage_matrix_test.go'
       - 'service/airbotix_billing.go'
+      - 'service/org_wallet.go'
+      - 'service/org_wallet_test.go'
+      - 'service/billing.go'
+      - 'service/billing_session.go'
+      - 'service/quota.go'
+      - 'service/task_billing.go'
+      - 'service/text_quota.go'
+      - 'middleware/auth.go'
+      - 'middleware/org_wallet.go'
+      - 'model/log.go'
+      - 'model/org_log.go'
+      - 'model/task.go'
+      - 'relay/common/relay_info.go'
+      - 'relay/common/org_spend.go'
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
@@ -121,7 +149,10 @@ jobs:
           # regression guards; hailuo also covers the v2/H3 request conversion).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the
           # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
-          go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
+          # TestOrg: Enterprise Org's company wallet on the billing path - whose
+          # balance pays, the usage-log stamp, task refunds, the low-balance
+          # reminder (service/org_wallet_test.go).
+          go test ./service/ -run 'TestGeminiToOpenAIRequest|TestOrg' -count=1 -timeout 60s
           go test ./relay/channel/openai/ -run 'TestConvertOpenAIRequest' -count=1 -timeout 60s
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s

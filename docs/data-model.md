@@ -68,8 +68,10 @@ Columns added to platform tables — all default to zero and are `omitempty` in 
 | `tokens.org_id` | `bigint`, indexed | `0` | Organization that owns the key |
 | `tokens.created_by` | `bigint` | `0` | Who created an org key (the holder is `user_id`) |
 | `tokens.policy_template` | `varchar(64)` | `''` | Policy template applied to an org key |
-| `logs.org_id` | `bigint`, indexed | `0` | Stamped when an org key is used |
+| `logs.org_id` | `bigint`, indexed | `0` | Stamped when an org key is used: on the usage line of the request, and on the refund or settlement line of a task it started |
 | `logs.department_id` | `bigint`, indexed | `0` | The user's department at that moment — moving someone never rewrites past bills |
+
+One JSON column gains fields instead of the table gaining columns: `tasks.private_data` keeps `org_id`, `org_department_id` and `org_wallet_user_id` for a task submitted with an org key — who paid for it, so that a refund decided minutes later goes back to the company wallet. They are left out of a personal task's data altogether.
 
 The org tables migrate fail-soft (`internal/org/model.Migrate` logs and carries on); the columns above migrate with the core `AutoMigrate` and are fatal on failure.
 

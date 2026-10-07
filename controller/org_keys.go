@@ -60,21 +60,31 @@ func refuseOrgKeys(c *gin.Context, ids ...int) bool {
 // organization; a personal account passes untouched.
 //
 // It asks about the caller, not about a key — which is what sets it apart from
-// refuseOrgKeys — and it reads a deleted account's row too: a member who was
-// removed may still hold a session.
+// refuseOrgKeys.
 func refuseOrgMember(c *gin.Context) bool {
-	var orgIDs []int
-	err := model.DB.Unscoped().Model(&model.User{}).
-		Where("id = ?", c.GetInt("id")).Limit(1).Pluck("org_id", &orgIDs).Error
+	orgID, err := callerOrgID(c)
 	if err != nil {
 		common.ApiError(c, err)
 		return true
 	}
-	if len(orgIDs) == 0 || orgIDs[0] == 0 {
+	if orgID == 0 {
 		return false
 	}
 	orgError(c, errOrgMemberPersonalKey)
 	return true
+}
+
+// callerOrgID returns the organization the caller's account belongs to, 0 for
+// a personal account. It reads a deleted account's row too: a member who was
+// removed may still hold a session, and is not a personal account for it.
+func callerOrgID(c *gin.Context) (int, error) {
+	var orgIDs []int
+	err := model.DB.Unscoped().Model(&model.User{}).
+		Where("id = ?", c.GetInt("id")).Limit(1).Pluck("org_id", &orgIDs).Error
+	if err != nil || len(orgIDs) == 0 {
+		return 0, err
+	}
+	return orgIDs[0], nil
 }
 
 // orgModelCatalogue answers the organization package's questions about models
