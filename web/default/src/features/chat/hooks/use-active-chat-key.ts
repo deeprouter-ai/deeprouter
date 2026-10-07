@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth-store'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import { API_KEY_STATUS } from '@/features/keys/constants'
+import { isOrgKey } from '@/features/keys/lib/org-key'
 
 export async function fetchActiveChatKey() {
   const result = await getApiKeys({ p: 1, size: 50 })
@@ -28,7 +29,11 @@ export async function fetchActiveChatKey() {
   }
 
   const items = result.data?.items ?? []
-  const active = items.find((item) => item.status === API_KEY_STATUS.ENABLED)
+  // An organization key's value cannot be fetched (Enterprise Org PRD D15),
+  // so only a personal key can be handed to a chat link.
+  const active = items.find(
+    (item) => item.status === API_KEY_STATUS.ENABLED && !isOrgKey(item)
+  )
   if (!active) {
     throw new Error('No enabled API keys found. Create or enable one first.')
   }

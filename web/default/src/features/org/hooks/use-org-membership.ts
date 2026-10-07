@@ -55,11 +55,15 @@ export function canSeeOrg(
 /**
  * The `beforeLoad` gate of the organization pages. Organization roles are not
  * the platform role, so it asks the backend who this user is in their
- * organization and sends anyone without a place there to the 403 page. It is
- * a courtesy — every /api/org call checks again — that keeps people off pages
- * which could only show them errors.
+ * organization and sends anyone whose role does not grant the page's primitive
+ * to the 403 page: `member.read` for the pages about people, `key.read` for
+ * the keys page. It is a courtesy — every /api/org call checks again — that
+ * keeps people off pages which could only show them errors.
  */
-export async function requireOrgAccess(queryClient: QueryClient) {
+export async function requireOrgAccess(
+  queryClient: QueryClient,
+  primitive: string = 'member.read'
+) {
   const userId = useAuthStore.getState().auth.user?.id
   let membership: OrgMembership | null
   try {
@@ -73,7 +77,7 @@ export async function requireOrgAccess(queryClient: QueryClient) {
     // failure itself and offers a retry, where a 403 would be a wrong answer.
     return
   }
-  if (!canSeeOrg(membership)) {
+  if (!holds(membership, primitive)) {
     throw redirect({ to: '/403' })
   }
 }

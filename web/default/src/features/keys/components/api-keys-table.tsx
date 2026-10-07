@@ -49,6 +49,7 @@ import {
   API_KEY_STATUSES,
   ERROR_MESSAGES,
 } from '../constants'
+import { isOrgKey } from '../lib/org-key'
 import { type ApiKey } from '../types'
 import { ApiKeyCell } from './api-keys-cells'
 import { useApiKeysColumns } from './api-keys-columns'
@@ -259,7 +260,9 @@ export function ApiKeysTable() {
       globalFilter,
       pagination,
     },
-    enableRowSelection: true,
+    // The bulk actions copy and delete, neither of which an organization key
+    // allows from this page.
+    enableRowSelection: (row) => !isOrgKey(row.original),
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,

@@ -40,6 +40,7 @@ import {
   Receipt,
   Building2,
   ShieldCheck,
+  KeyRound,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -52,6 +53,7 @@ import {
   canSeeOrg,
   useOrgMembership,
 } from '@/features/org/hooks/use-org-membership'
+import { holds } from '@/features/org/lib/permissions'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -67,12 +69,36 @@ export function useSidebarData(): SidebarData {
   })
   const hasPurchases = (purchasesProbe?.total ?? 0) > 0
 
-  // Enterprise Org: the "Organization" group exists for members whose role
-  // lets them see members, departments and roles — the owner and admins, a
-  // manager, a read-only member — and not for Staff. A personal account's
-  // probe answers null and the group never appears.
+  // Enterprise Org: the "Organization" group holds the pages a member's role
+  // lets them see — the two about people take member.read, the keys page
+  // key.read — and is not there at all when that is none of them, as for
+  // Staff. A personal account's probe answers null and the group never appears.
   const { data: orgMembership } = useOrgMembership()
-  const seesOrg = canSeeOrg(orgMembership)
+  const orgItems = [
+    ...(canSeeOrg(orgMembership)
+      ? [
+          {
+            title: t('Members & departments'),
+            url: '/org/members',
+            icon: Building2,
+          },
+          {
+            title: t('Roles & permissions'),
+            url: '/org/roles',
+            icon: ShieldCheck,
+          },
+        ]
+      : []),
+    ...(holds(orgMembership, 'key.read')
+      ? [
+          {
+            title: t('Organization keys'),
+            url: '/org/keys',
+            icon: KeyRound,
+          },
+        ]
+      : []),
+  ]
 
   return {
     workspaces: [
@@ -128,25 +154,8 @@ export function useSidebarData(): SidebarData {
           },
         ],
       },
-      ...(seesOrg
-        ? [
-            {
-              id: 'org',
-              title: t('Organization'),
-              items: [
-                {
-                  title: t('Members & departments'),
-                  url: '/org/members',
-                  icon: Building2,
-                },
-                {
-                  title: t('Roles & permissions'),
-                  url: '/org/roles',
-                  icon: ShieldCheck,
-                },
-              ],
-            },
-          ]
+      ...(orgItems.length > 0
+        ? [{ id: 'org', title: t('Organization'), items: orgItems }]
         : []),
       {
         id: 'personal',

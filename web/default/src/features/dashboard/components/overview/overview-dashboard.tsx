@@ -52,6 +52,7 @@ import {
   CardStaggerItem,
 } from '@/components/page-transition'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { isOrgKey } from '@/features/keys/lib/org-key'
 import type { ApiKey } from '@/features/keys/types'
 import { getReferralSummary } from '../../api'
 import { useApiInfo } from '../../hooks/use-status-data'
@@ -152,6 +153,15 @@ function normalizeEndpoint(sourceUrl?: string): string {
 
 function getPreferredKey(keys: ApiKey[]): ApiKey | null {
   return keys.find((item) => item.status === 1) ?? keys[0] ?? null
+}
+
+/**
+ * The id of the key whose value may be fetched for the snippet below, or 0.
+ * An organization key's value may not be (Enterprise Org PRD D15): the snippet
+ * then shows a placeholder.
+ */
+function revealableKeyId(key: ApiKey | null): number {
+  return key && !isOrgKey(key) ? key.id : 0
 }
 
 function formatDisplayKey(key?: string): string {
@@ -558,14 +568,15 @@ export function OverviewDashboard() {
     [apiKeysQuery.data]
   )
 
+  const revealKeyId = revealableKeyId(preferredKey)
   const realKeyQuery = useQuery({
-    queryKey: ['dashboard', 'overview', 'token-key', preferredKey?.id],
+    queryKey: ['dashboard', 'overview', 'token-key', revealKeyId],
     queryFn: async () => {
-      if (!preferredKey?.id) return ''
-      const result = await fetchTokenKey(preferredKey.id)
+      if (!revealKeyId) return ''
+      const result = await fetchTokenKey(revealKeyId)
       return result.success && result.data?.key ? `sk-${result.data.key}` : ''
     },
-    enabled: Boolean(preferredKey?.id),
+    enabled: revealKeyId !== 0,
     staleTime: 5 * 60 * 1000,
   })
 

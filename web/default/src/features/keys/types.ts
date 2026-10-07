@@ -54,6 +54,11 @@ export const apiKeySchema = z.object({
   rpm_limit: z.number().optional().default(0),
   tpm_limit: z.number().optional().default(0),
   monthly_limit: z.number().optional().default(0),
+  // Enterprise Org (meta-repo docs/enterprise-org-prd.md): set on a key that
+  // belongs to an organization, absent on a personal one. Such a key is only
+  // looked at here — it is changed on the organization's keys page, and its
+  // value reaches its holder through one-click setup, never through this page.
+  org_id: z.number().optional().default(0),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>

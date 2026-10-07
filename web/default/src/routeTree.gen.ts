@@ -63,6 +63,7 @@ import { Route as SimpleUsePurposeRouteImport } from './routes/simple/use.$purpo
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedOrgRolesRouteImport } from './routes/_authenticated/org/roles'
 import { Route as AuthenticatedOrgMembersRouteImport } from './routes/_authenticated/org/members'
+import { Route as AuthenticatedOrgKeysRouteImport } from './routes/_authenticated/org/keys'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedKeysTestRouteImport } from './routes/_authenticated/keys/test'
 import { Route as AuthenticatedHelpPricingRouteImport } from './routes/_authenticated/help/pricing'
@@ -370,6 +371,11 @@ const AuthenticatedOrgMembersRoute = AuthenticatedOrgMembersRouteImport.update({
   path: '/org/members',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOrgKeysRoute = AuthenticatedOrgKeysRouteImport.update({
+  id: '/org/keys',
+  path: '/org/keys',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
@@ -565,6 +571,7 @@ export interface FileRoutesByFullPath {
   '/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/org/keys': typeof AuthenticatedOrgKeysRoute
   '/org/members': typeof AuthenticatedOrgMembersRoute
   '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -643,6 +650,7 @@ export interface FileRoutesByTo {
   '/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/org/keys': typeof AuthenticatedOrgKeysRoute
   '/org/members': typeof AuthenticatedOrgMembersRoute
   '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -726,6 +734,7 @@ export interface FileRoutesById {
   '/_authenticated/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/_authenticated/keys/test': typeof AuthenticatedKeysTestRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/org/keys': typeof AuthenticatedOrgKeysRoute
   '/_authenticated/org/members': typeof AuthenticatedOrgMembersRoute
   '/_authenticated/org/roles': typeof AuthenticatedOrgRolesRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
@@ -808,6 +817,7 @@ export interface FileRouteTypes {
     | '/help/pricing'
     | '/keys/test'
     | '/models/$section'
+    | '/org/keys'
     | '/org/members'
     | '/org/roles'
     | '/usage-logs/$section'
@@ -886,6 +896,7 @@ export interface FileRouteTypes {
     | '/help/pricing'
     | '/keys/test'
     | '/models/$section'
+    | '/org/keys'
     | '/org/members'
     | '/org/roles'
     | '/usage-logs/$section'
@@ -968,6 +979,7 @@ export interface FileRouteTypes {
     | '/_authenticated/help/pricing'
     | '/_authenticated/keys/test'
     | '/_authenticated/models/$section'
+    | '/_authenticated/org/keys'
     | '/_authenticated/org/members'
     | '/_authenticated/org/roles'
     | '/_authenticated/usage-logs/$section'
@@ -1415,6 +1427,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOrgMembersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/org/keys': {
+      id: '/_authenticated/org/keys'
+      path: '/org/keys'
+      fullPath: '/org/keys'
+      preLoaderRoute: typeof AuthenticatedOrgKeysRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/models/$section': {
       id: '/_authenticated/models/$section'
       path: '/models/$section'
@@ -1691,6 +1710,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHelpPricingRoute: typeof AuthenticatedHelpPricingRoute
   AuthenticatedKeysTestRoute: typeof AuthenticatedKeysTestRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
+  AuthenticatedOrgKeysRoute: typeof AuthenticatedOrgKeysRoute
   AuthenticatedOrgMembersRoute: typeof AuthenticatedOrgMembersRoute
   AuthenticatedOrgRolesRoute: typeof AuthenticatedOrgRolesRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
@@ -1724,6 +1744,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHelpPricingRoute: AuthenticatedHelpPricingRoute,
   AuthenticatedKeysTestRoute: AuthenticatedKeysTestRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
+  AuthenticatedOrgKeysRoute: AuthenticatedOrgKeysRoute,
   AuthenticatedOrgMembersRoute: AuthenticatedOrgMembersRoute,
   AuthenticatedOrgRolesRoute: AuthenticatedOrgRolesRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,

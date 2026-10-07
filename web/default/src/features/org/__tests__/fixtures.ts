@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import type {
   OrgInherentPower,
+  OrgKey,
+  OrgKeyHolder,
+  OrgKeyTemplate,
   OrgMember,
   OrgMembership,
   OrgPermissionCatalog,
@@ -188,3 +191,73 @@ export function memberOf(over: Partial<OrgMember>): OrgMember {
     ...over,
   }
 }
+
+/**
+ * A working key held by sally, a person in department 11, as `GET
+ * /api/org/keys` lists it: the value masked, no template, 10 dollars left.
+ */
+export function keyOf(over: Partial<OrgKey> = {}): OrgKey {
+  return {
+    id: 100,
+    name: 'Design tools',
+    key: 'abcd**********wxyz',
+    status: 1,
+    holder_id: 3,
+    holder: 'sally',
+    holder_is_service: false,
+    department_id: 11,
+    department: 'Sales',
+    policy_template: '',
+    model_limits: [],
+    remain_quota: 5000000,
+    used_quota: 0,
+    unlimited_quota: false,
+    expired_time: -1,
+    rpm_limit: 0,
+    tpm_limit: 0,
+    monthly_limit: 0,
+    created_time: 1790000000,
+    accessed_time: 1790000000,
+    ...over,
+  }
+}
+
+/** Whom a key can be made out to, as `GET /api/org/key-holders` answers an admin. */
+export const keyHolders: OrgKeyHolder[] = [
+  {
+    id: 1,
+    name: 'Fiona Founder',
+    department_id: 10,
+    department: 'General',
+    role_id: 1,
+    role: 'owner',
+    is_service: false,
+    is_owner: true,
+  },
+  {
+    id: 3,
+    name: 'sally',
+    department_id: 11,
+    department: 'Sales',
+    role_id: 4,
+    role: 'staff',
+    is_service: false,
+    is_owner: false,
+  },
+  {
+    id: 4,
+    name: 'CI Pipeline',
+    department_id: 10,
+    department: 'General',
+    role_id: 4,
+    role: 'staff',
+    is_service: true,
+    is_owner: false,
+  },
+]
+
+/** What `GET /api/org/key-templates` answers. */
+export const keyTemplates: OrgKeyTemplate[] = [
+  { key: 'creative', purposes: ['image', 'video', 'chat'] },
+  { key: 'coding', purposes: ['coding'] },
+]

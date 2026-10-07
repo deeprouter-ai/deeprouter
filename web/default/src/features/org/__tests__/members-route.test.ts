@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { QueryClient } from '@tanstack/react-query'
 import { isRedirect } from '@tanstack/react-router'
+import { Route as KeysRoute } from '@/routes/_authenticated/org/keys'
 import { Route as MembersRoute } from '@/routes/_authenticated/org/members'
 import { Route as RolesRoute } from '@/routes/_authenticated/org/roles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrgMembership } from '../types'
 import { membershipOf } from './fixtures'
 
-// Enterprise Org P3 and P4: who may open the organization pages. The backend
+// Enterprise Org P3 to P5: who may open the organization pages. The backend
 // checks every call again; this gate only keeps people off pages that have
 // nothing for them — and must not turn anyone away because the question
-// failed.
+// failed. The pages about people take member.read, the keys page key.read.
 
 const mockFetchOrgMembership = vi.hoisted(() => vi.fn())
 
@@ -73,9 +74,65 @@ describe.each([
     }
   })
 
-  it('sends staff, a usage-only role and personal accounts to the 403 page', async () => {
+  it('sends staff, roles that do not show members and personal accounts to the 403 page', async () => {
     for (const answer of [
       membershipOf('staff'),
+      membershipOf('staff', {
+        role: 'Finance Ops',
+        role_scope: 'org',
+        permissions: ['usage.read'],
+      }),
+      // Seeing keys is not seeing people.
+      membershipOf('staff', {
+        role: 'Key Desk',
+        role_scope: 'org',
+        permissions: ['key.read', 'key.freeze'],
+      }),
+      null,
+    ]) {
+      mockFetchOrgMembership.mockResolvedValue(answer)
+      expect(await gate(route), answer?.role ?? 'personal').toBe('/403')
+    }
+  })
+
+  it('does not call a failed lookup a refusal', async () => {
+    // Offline or rate-limited: the page loads and shows its own retry.
+    mockFetchOrgMembership.mockRejectedValue(new Error('429'))
+    expect(await gate(route)).toBeNull()
+  })
+})
+
+describe('/org/keys gate', () => {
+  const route = KeysRoute as GatedRoute
+
+  it('lets in everyone whose role shows them keys', async () => {
+    const allowed: OrgMembership[] = [
+      membershipOf('owner'),
+      membershipOf('admin'),
+      membershipOf('manager'),
+      membershipOf('readonly'),
+      // A custom role that sees keys and no people.
+      membershipOf('staff', {
+        role: 'Key Desk',
+        role_scope: 'org',
+        permissions: ['key.read', 'key.freeze'],
+      }),
+    ]
+    for (const answer of allowed) {
+      mockFetchOrgMembership.mockResolvedValue(answer)
+      expect(await gate(route), answer.role).toBeNull()
+    }
+  })
+
+  it('sends staff, roles that do not show keys and personal accounts to the 403 page', async () => {
+    for (const answer of [
+      membershipOf('staff'),
+      // Seeing people is not seeing keys.
+      membershipOf('staff', {
+        role: 'HR',
+        role_scope: 'org',
+        permissions: ['member.read', 'member.invite'],
+      }),
       membershipOf('staff', {
         role: 'Finance Ops',
         role_scope: 'org',
@@ -89,7 +146,6 @@ describe.each([
   })
 
   it('does not call a failed lookup a refusal', async () => {
-    // Offline or rate-limited: the page loads and shows its own retry.
     mockFetchOrgMembership.mockRejectedValue(new Error('429'))
     expect(await gate(route)).toBeNull()
   })

@@ -8,9 +8,10 @@ import { membershipOf } from '@/features/org/__tests__/fixtures'
 import type { OrgMembership } from '@/features/org/types'
 import { useSidebarData } from '../use-sidebar-data'
 
-// Enterprise Org P3 and P4: the "Organization" group of the sidebar exists for
-// members whose role shows them the organization's members and roles. Everyone
-// else — personal accounts above all — must see the sidebar exactly as it was.
+// Enterprise Org P3 to P5: the "Organization" group of the sidebar holds the
+// pages a member's role shows them — the two about people for member.read, the
+// keys page for key.read. Everyone else — personal accounts above all — must
+// see the sidebar exactly as it was.
 
 const mockFetchOrgMembership = vi.hoisted(() => vi.fn())
 
@@ -50,7 +51,7 @@ beforeEach(() => {
 })
 
 describe('sidebar: the Organization group', () => {
-  it('is there, right after General, for everyone who may see members', async () => {
+  it('is there, right after General, for the preset roles that see people and keys', async () => {
     for (const viewer of [
       membershipOf('owner'),
       membershipOf('admin'),
@@ -73,8 +74,44 @@ describe('sidebar: the Organization group', () => {
           title: 'Roles & permissions',
           url: '/org/roles',
         }),
+        expect.objectContaining({
+          title: 'Organization keys',
+          url: '/org/keys',
+        }),
       ])
     }
+  })
+
+  it('offers each page by its own permission', async () => {
+    // A key desk sees keys and no people; HR sees people and no keys.
+    const keyDesk = await sidebarGroupsFor(
+      membershipOf('staff', {
+        role: 'Key Desk',
+        role_scope: 'org',
+        permissions: ['key.read', 'key.freeze'],
+      })
+    )
+    expect(keyDesk.map((group) => group.id)).toEqual([
+      'general',
+      'org',
+      'personal',
+      'admin',
+    ])
+    expect(keyDesk[1].items.map((item) => item.title)).toEqual([
+      'Organization keys',
+    ])
+
+    const hr = await sidebarGroupsFor(
+      membershipOf('staff', {
+        role: 'HR',
+        role_scope: 'org',
+        permissions: ['member.read', 'member.invite'],
+      })
+    )
+    expect(hr[1].items.map((item) => item.title)).toEqual([
+      'Members & departments',
+      'Roles & permissions',
+    ])
   })
 
   it('is absent for staff, and for a role that only sees usage', async () => {

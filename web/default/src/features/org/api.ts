@@ -6,6 +6,12 @@ import type {
   OrgDepartment,
   OrgInvite,
   OrgInvitePreview,
+  OrgKey,
+  OrgKeyGrant,
+  OrgKeyHolder,
+  OrgKeyInput,
+  OrgKeyPatch,
+  OrgKeyTemplate,
   OrgMember,
   OrgMembership,
   OrgPermissionCatalog,
@@ -23,6 +29,11 @@ export const orgQueryKeys = {
   invites: () => [...orgQueryKeys.all, 'invites'] as const,
   invitePreview: (code: string) =>
     [...orgQueryKeys.all, 'invite-preview', code] as const,
+  keys: () => [...orgQueryKeys.all, 'keys'] as const,
+  keyHolders: () => [...orgQueryKeys.all, 'key-holders'] as const,
+  keyTemplates: () => [...orgQueryKeys.all, 'key-templates'] as const,
+  keyModels: (holderId: number) =>
+    [...orgQueryKeys.all, 'key-models', holderId] as const,
 }
 
 /** The caller's organization and role, or null for a personal account. */
@@ -164,6 +175,84 @@ export async function createOrgInvite(payload: {
 /** Makes an invite link stop working at once. */
 export async function revokeOrgInvite(id: number): Promise<OrgApiResponse> {
   const res = await api.delete(`/api/org/invites/${id}`)
+  return res.data
+}
+
+/** The organization's keys the caller may see, newest first, values masked. */
+export async function fetchOrgKeys(): Promise<OrgKey[]> {
+  const res = await api.get('/api/org/keys')
+  return (res.data?.data as OrgKey[]) ?? []
+}
+
+/** The members the caller may create a key for. */
+export async function fetchOrgKeyHolders(): Promise<OrgKeyHolder[]> {
+  const res = await api.get('/api/org/key-holders')
+  return (res.data?.data as OrgKeyHolder[]) ?? []
+}
+
+/** The policy templates a key can be given. */
+export async function fetchOrgKeyTemplates(): Promise<OrgKeyTemplate[]> {
+  const res = await api.get('/api/org/key-templates')
+  return (res.data?.data as OrgKeyTemplate[]) ?? []
+}
+
+/**
+ * The models a key held by the given member can be limited to by hand: what
+ * that member can be served right now, in name order.
+ */
+export async function fetchOrgKeyModels(holderId: number): Promise<string[]> {
+  const res = await api.get('/api/org/key-models', {
+    params: { holder_id: holderId },
+  })
+  return (res.data?.data as string[]) ?? []
+}
+
+/**
+ * Creates a key. The answer carries its value only when the holder is a
+ * service account.
+ */
+export async function createOrgKey(
+  input: OrgKeyInput
+): Promise<OrgApiResponse<OrgKeyGrant>> {
+  const res = await api.post('/api/org/keys', input)
+  return res.data
+}
+
+/** Changes what a key is allowed; fields left out of the patch stay as they are. */
+export async function updateOrgKey(
+  id: number,
+  patch: OrgKeyPatch
+): Promise<OrgApiResponse<OrgKey>> {
+  const res = await api.put(`/api/org/keys/${id}`, patch)
+  return res.data
+}
+
+/**
+ * Replaces a key's value; the old one stops working at once. The answer
+ * carries the new value only for a service account's key.
+ */
+export async function rotateOrgKey(
+  id: number
+): Promise<OrgApiResponse<OrgKeyGrant>> {
+  const res = await api.post(`/api/org/keys/${id}/rotate`)
+  return res.data
+}
+
+/** Stops a key from working until it is unfrozen. */
+export async function freezeOrgKey(id: number): Promise<OrgApiResponse> {
+  const res = await api.post(`/api/org/keys/${id}/freeze`)
+  return res.data
+}
+
+/** Makes a frozen key work again. */
+export async function unfreezeOrgKey(id: number): Promise<OrgApiResponse> {
+  const res = await api.post(`/api/org/keys/${id}/unfreeze`)
+  return res.data
+}
+
+/** Deletes a key for good; its usage history stays. */
+export async function deleteOrgKey(id: number): Promise<OrgApiResponse> {
+  const res = await api.delete(`/api/org/keys/${id}`)
   return res.data
 }
 
