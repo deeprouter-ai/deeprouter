@@ -109,16 +109,18 @@ type Membership struct {
 }
 
 // GetMembership returns the organization and role of userID, or nil for a
-// personal account.
+// personal account — and for an account that no longer exists: a member who
+// was removed may still hold a session, and is nobody's member anymore.
 func GetMembership(db *gorm.DB, userID int) (*Membership, error) {
-	var user platformmodel.User
+	var found []platformmodel.User
 	if err := db.Select("id", "org_id", "role_id", "department_id").
-		Where("id = ?", userID).First(&user).Error; err != nil {
+		Where("id = ?", userID).Limit(1).Find(&found).Error; err != nil {
 		return nil, err
 	}
-	if user.OrgId == 0 {
+	if len(found) == 0 || found[0].OrgId == 0 {
 		return nil, nil
 	}
+	user := found[0]
 	var org orgmodel.Organization
 	if err := db.Where("id = ?", user.OrgId).First(&org).Error; err != nil {
 		return nil, err

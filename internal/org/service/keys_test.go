@@ -1289,6 +1289,16 @@ func TestKeyChanges_TellTheGatewaysTokenCache(t *testing.T) {
 			"freezing":   func(keyID int) error { return FreezeKey(db, f.owner, keyID) },
 			"unfreezing": func(keyID int) error { return UnfreezeKey(db, f.owner, keyID) },
 			"deleting":   func(keyID int) error { return DeleteKey(db, f.owner, keyID) },
+			// A key that changed hands must stop answering to the value its
+			// last holder has — now, not a minute from now (P6).
+			"handing over": func(keyID int) error {
+				_, err := AssignKey(db, f.owner, keyID, f.bob.Id)
+				return err
+			},
+			"taking back": func(keyID int) error {
+				_, err := ReclaimKey(db, f.owner, keyID)
+				return err
+			},
 		} {
 			key := seedKey(t, db, f.org, f.alice.Id, name)
 			if name == "unfreezing" {
@@ -1298,7 +1308,7 @@ func TestKeyChanges_TellTheGatewaysTokenCache(t *testing.T) {
 			require.GreaterOrEqual(t, dropped(key.Key), 1, "%s a key must drop it from the cache before it answers", name)
 			require.Eventually(t, func() bool { return dropped(key.Key) == 2 }, 2*time.Second, 5*time.Millisecond,
 				"%s a key must drop it once more shortly after", name)
-			if name == "rotating" {
+			if name == "rotating" || name == "handing over" || name == "taking back" {
 				require.Zero(t, dropped(reloadKey(t, db, key.Id).Key), "the new value was never cached, and is not dropped")
 			}
 		}
@@ -1348,6 +1358,12 @@ func keyActions(db *gorm.DB) map[string]func(actor *Actor, keyID int) error {
 		},
 		"key.freeze": func(actor *Actor, keyID int) error { return FreezeKey(db, actor, keyID) },
 		"key.delete": func(actor *Actor, keyID int) error { return DeleteKey(db, actor, keyID) },
+		// Taking a key back is the half of key.assign that needs no second
+		// member; handing one over is walked in assign_test.go.
+		"key.assign": func(actor *Actor, keyID int) error {
+			_, err := ReclaimKey(db, actor, keyID)
+			return err
+		},
 	}
 }
 
@@ -1466,8 +1482,23 @@ func TestKeyActions_RefuseBeforeLookingAnythingUp(t *testing.T) {
 		before := orgRowCounts(t, db, f.org.id)
 		for _, actor := range []*Actor{manager, readonly, holder, actorFor(t, db, f.bot.Id)} {
 			for name, act := range actions {
+				// The preset manager does hold key.assign, in Sales: what that
+				// opens and where it stops is walked in assign_test.go.
+				if actor == manager && name == "key.assign" {
+					continue
+				}
 				for target, keyID := range map[string]int{"a key in reach": own.Id, "no key": 424242, "another company's": theirs.Id} {
 					require.ErrorIs(t, act(actor, keyID), ErrForbidden, "%s, %s", name, target)
+				}
+			}
+		}
+		// Handing a key over is refused the same way, whoever it names — the
+		// owner included, which would be taking the key back.
+		for _, actor := range []*Actor{readonly, holder, actorFor(t, db, f.bot.Id)} {
+			for target, keyID := range map[string]int{"a key in reach": own.Id, "no key": 424242, "another company's": theirs.Id} {
+				for whom, holderID := range map[string]int{"a colleague": f.bob.Id, "themselves": actor.UserId, "the owner": f.org.owner.Id, "nobody": 424242, "another company's member": other.alice.Id} {
+					_, err := AssignKey(db, actor, keyID, holderID)
+					require.ErrorIs(t, err, ErrForbidden, "%s to %s", target, whom)
 				}
 			}
 		}

@@ -106,9 +106,12 @@ type KeyView struct {
 	HolderId        int    `json:"holder_id"`
 	Holder          string `json:"holder"` // empty when that account no longer exists
 	HolderIsService bool   `json:"holder_is_service"`
-	DepartmentId    int    `json:"department_id"` // the holder's department
-	Department      string `json:"department"`
-	PolicyTemplate  string `json:"policy_template"`
+	// HolderIsOwner marks a key that has been handed to nobody: it is parked
+	// under the owner, where a new key starts out and a reclaimed one returns.
+	HolderIsOwner  bool   `json:"holder_is_owner"`
+	DepartmentId   int    `json:"department_id"` // the holder's department
+	Department     string `json:"department"`
+	PolicyTemplate string `json:"policy_template"`
 	// ModelLimits is what the key may call; empty means every model.
 	ModelLimits    []string `json:"model_limits"`
 	RemainQuota    int      `json:"remain_quota"`
@@ -124,14 +127,15 @@ type KeyView struct {
 
 // KeyGrant is a key together with its value. The value is set only for a key
 // held by a service account, and only in the answer to the request that made
-// that value — a creation or a rotation (PRD D15). A person's key has none:
-// its holder takes it through one-click setup.
+// that value — a creation, a rotation, or handing the key to the account
+// (PRD D15). A person's key has none: its holder takes it through one-click
+// setup.
 type KeyGrant struct {
 	KeyView
 	Value string `json:"value,omitempty"`
 }
 
-// KeyHolderView is a member a new key can be made out to.
+// KeyHolderView is a member a key can be made out to, or handed to.
 type KeyHolderView struct {
 	Id           int    `json:"id"`
 	Name         string `json:"name"`
@@ -191,6 +195,7 @@ type keyHolder struct {
 	DepartmentId int
 	Department   string
 	IsService    bool
+	IsOwner      bool
 }
 
 // keyRecord is what the audit log keeps of a key: who holds it and what it is
@@ -261,6 +266,10 @@ func keyHolders(db *gorm.DB, orgID int, userIDs []int) (map[int]keyHolder, error
 	if err != nil {
 		return nil, err
 	}
+	ownerID, err := ownerUserID(db, orgID)
+	if err != nil {
+		return nil, err
+	}
 	for i := range users {
 		holders[users[i].Id] = keyHolder{
 			Id:           users[i].Id,
@@ -268,6 +277,7 @@ func keyHolders(db *gorm.DB, orgID int, userIDs []int) (map[int]keyHolder, error
 			DepartmentId: users[i].DepartmentId,
 			Department:   departments[users[i].DepartmentId],
 			IsService:    users[i].IsService,
+			IsOwner:      users[i].Id == ownerID,
 		}
 	}
 	return holders, nil
@@ -346,6 +356,7 @@ func viewKey(key *platformmodel.Token, holder keyHolder) KeyView {
 		HolderId:        key.UserId,
 		Holder:          holder.Name,
 		HolderIsService: holder.IsService,
+		HolderIsOwner:   holder.IsOwner,
 		DepartmentId:    holder.DepartmentId,
 		Department:      holder.Department,
 		PolicyTemplate:  key.PolicyTemplate,
@@ -609,6 +620,14 @@ func ListKeyHolders(db *gorm.DB, actor *Actor) ([]KeyHolderView, error) {
 	if !actor.Holds("key.create") {
 		return nil, ErrForbidden
 	}
+	return listKeyHolders(db, actor, actor.mayCreateKeyFor)
+}
+
+// listKeyHolders returns the members of the organization who pass may, the way
+// a key form lists them. A member's role is added only for an actor who may
+// read that member (PRD D34): who holds which role is the member list's to
+// tell.
+func listKeyHolders(db *gorm.DB, actor *Actor, may func(target orgmodel.Target, ownerID int) bool) ([]KeyHolderView, error) {
 	ownerID, err := ownerUserID(db, actor.OrgId)
 	if err != nil {
 		return nil, err
@@ -633,7 +652,7 @@ func ListKeyHolders(db *gorm.DB, actor *Actor) ([]KeyHolderView, error) {
 	views := make([]KeyHolderView, 0, len(users))
 	for i := range users {
 		target := orgmodel.Target{DepartmentId: users[i].DepartmentId, UserId: users[i].Id}
-		if !actor.mayCreateKeyFor(target, ownerID) {
+		if !may(target, ownerID) {
 			continue
 		}
 		view := KeyHolderView{
@@ -915,13 +934,22 @@ func UnfreezeKey(db *gorm.DB, actor *Actor, keyID int) error {
 	if key.Status == common.TokenStatusEnabled {
 		return nil
 	}
+	if err := spent(key); err != nil {
+		return err
+	}
+	return setKeyStatus(db, actor, permit, key, common.TokenStatusEnabled, orgmodel.AuditKeyUnfreeze)
+}
+
+// spent says why a key cannot work whatever its status: it is past its expiry
+// or has no quota left. Nil means nothing of the kind stands in its way.
+func spent(key *platformmodel.Token) error {
 	if key.ExpiredTime != -1 && key.ExpiredTime <= common.GetTimestamp() {
 		return ErrKeyExpired
 	}
 	if !key.UnlimitedQuota && key.RemainQuota <= 0 {
 		return ErrKeyExhausted
 	}
-	return setKeyStatus(db, actor, permit, key, common.TokenStatusEnabled, orgmodel.AuditKeyUnfreeze)
+	return nil
 }
 
 // setKeyStatus writes a key's new status with its audit record, then makes the

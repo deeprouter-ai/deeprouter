@@ -13,14 +13,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Enterprise Org P5 (meta-repo docs/enterprise-org-prd.md §3): the keys of an
-// organization. They are created, changed, rotated, frozen and deleted here,
-// under /api/org/keys, by whoever the permission engine lets through — and
-// nowhere else: the personal key endpoints in token.go turn them away.
+// Enterprise Org P5 and P6 (meta-repo docs/enterprise-org-prd.md §3): the keys
+// of an organization. They are created, changed, rotated, frozen, handed out,
+// taken back and deleted here, under /api/org/keys, by whoever the permission
+// engine lets through — and nowhere else: the personal key endpoints in
+// token.go turn them away, and turn away a member who asks for a key of their
+// own.
 
 // errOrgKeyManagedByOrg is what a personal key endpoint answers when it is
 // asked to change, delete or reveal an organization key.
 var errOrgKeyManagedByOrg = errors.New("organization keys are managed through the organization endpoints")
+
+// errOrgMemberPersonalKey is what the personal key endpoint answers a member of
+// an organization who asks it to create a key.
+var errOrgMemberPersonalKey = errors.New("members of an organization hold organization keys only")
 
 // refuseOrgKeys closes a personal key endpoint to organization keys (PRD §7.3,
 // red line 2). A key handed to a member is theirs as far as those endpoints can
@@ -43,6 +49,31 @@ func refuseOrgKeys(c *gin.Context, ids ...int) bool {
 		return false
 	}
 	orgError(c, errOrgKeyManagedByOrg)
+	return true
+}
+
+// refuseOrgMember closes the personal key-creating endpoint to members of an
+// organization (PRD D16). An organization account holds organization keys
+// only: otherwise "only whoever may create keys creates keys" could be walked
+// around, and what the member spent would never reach the company's reports.
+// It answers the request and reports true when the caller belongs to an
+// organization; a personal account passes untouched.
+//
+// It asks about the caller, not about a key — which is what sets it apart from
+// refuseOrgKeys — and it reads a deleted account's row too: a member who was
+// removed may still hold a session.
+func refuseOrgMember(c *gin.Context) bool {
+	var orgIDs []int
+	err := model.DB.Unscoped().Model(&model.User{}).
+		Where("id = ?", c.GetInt("id")).Limit(1).Pluck("org_id", &orgIDs).Error
+	if err != nil {
+		common.ApiError(c, err)
+		return true
+	}
+	if len(orgIDs) == 0 || orgIDs[0] == 0 {
+		return false
+	}
+	orgError(c, errOrgMemberPersonalKey)
 	return true
 }
 
@@ -105,6 +136,36 @@ func ListOrgKeyHolders(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, holders)
+}
+
+// ListOrgKeyAssignees returns the members the caller may hand a key to.
+func ListOrgKeyAssignees(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	assignees, err := orgservice.ListKeyAssignees(model.DB, actor)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, assignees)
+}
+
+// ListOrgSelfKeys returns the caller's own keys that can serve the purpose
+// named in ?purpose= — what the console sets a tool up with for a member, who
+// makes no key of their own.
+func ListOrgSelfKeys(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	keys, err := orgservice.ListOwnKeysFor(model.DB, actor, c.Query("purpose"), orgModelCatalogue{})
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, keys)
 }
 
 // ListOrgKeyTemplates returns the policy templates a key can be given.
@@ -197,6 +258,53 @@ func RotateOrgKey(c *gin.Context) {
 		return
 	}
 	common.ApiSuccess(c, grant)
+}
+
+// orgKeyAssignRequest is the body of a key assignment.
+type orgKeyAssignRequest struct {
+	HolderId int `json:"holder_id"`
+}
+
+// AssignOrgKey hands a key to another member; it gets a new value on the way.
+// The answer carries that value only when the new holder is a service account.
+func AssignOrgKey(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	id, ok := orgPathID(c)
+	if !ok {
+		return
+	}
+	var req orgKeyAssignRequest
+	if !orgBody(c, &req) {
+		return
+	}
+	grant, err := orgservice.AssignKey(model.DB, actor, id, req.HolderId)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, grant)
+}
+
+// ReclaimOrgKey takes a key back from its holder: frozen, with a new value,
+// parked under the owner.
+func ReclaimOrgKey(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	id, ok := orgPathID(c)
+	if !ok {
+		return
+	}
+	key, err := orgservice.ReclaimKey(model.DB, actor, id)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, key)
 }
 
 // FreezeOrgKey stops a key from working until it is unfrozen.

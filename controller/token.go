@@ -169,6 +169,10 @@ func GetTokenUsage(c *gin.Context) {
 }
 
 func AddToken(c *gin.Context) {
+	// Enterprise Org: closed to members of an organization (controller/org_keys.go).
+	if refuseOrgMember(c) {
+		return
+	}
 	token := model.Token{}
 	err := c.ShouldBindJSON(&token)
 	if err != nil {

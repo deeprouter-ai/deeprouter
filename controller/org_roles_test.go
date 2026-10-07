@@ -194,7 +194,7 @@ func TestOrgAuditLogs_AreReadByPageWithTheAddressOfEachRequest(t *testing.T) {
 // an organization endpoint can answer with has to exist in every language the
 // gateway speaks.
 func TestOrgMessages_AreTranslatedInEveryLocale(t *testing.T) {
-	keys := []string{msgOrgOwnerCannotDeleteAccount, msgOrgServiceAccountLogin}
+	keys := []string{msgOrgOwnerCannotDeleteAccount, msgOrgMemberCannotDeleteAccount, msgOrgServiceAccountLogin}
 	for _, refusal := range orgRefusals {
 		if strings.HasPrefix(refusal.key, "org.") {
 			keys = append(keys, refusal.key)

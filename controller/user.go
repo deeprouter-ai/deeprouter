@@ -964,6 +964,12 @@ func DeleteSelf(c *gin.Context) {
 		common.ApiErrorI18n(c, msgOrgOwnerCannotDeleteAccount)
 		return
 	}
+	// Nor does any other member leave by deleting their account: whoever may
+	// remove members does that, and their keys are taken back with it.
+	if isOrgMember(user) {
+		common.ApiErrorI18n(c, msgOrgMemberCannotDeleteAccount)
+		return
+	}
 
 	err := model.DeleteUserById(id)
 	if err != nil {

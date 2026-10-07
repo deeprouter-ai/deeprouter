@@ -23,6 +23,10 @@ const (
 	msgOrgOwnerOnly                 = "org.owner_only"
 	msgOrgOwnerImmutable            = "org.owner_immutable"
 	msgOrgOwnerCannotDeleteAccount  = "org.owner_cannot_delete_account"
+	msgOrgOwnerNotRemovable         = "org.owner_not_removable"
+	msgOrgMemberCannotDeleteAccount = "org.member_cannot_delete_account"
+	msgOrgMemberRemoveSelf          = "org.member_remove_self"
+	msgOrgMemberPersonalKey         = "org.member_personal_key"
 	msgOrgMemberNotFound            = "org.member_not_found"
 	msgOrgMemberNotDepartmentScoped = "org.member_not_department_scoped"
 	msgOrgRoleNotFound              = "org.role_not_found"
@@ -74,6 +78,8 @@ var orgRefusals = []struct {
 	{orgservice.ErrForbidden, msgOrgForbidden, http.StatusForbidden},
 	{orgservice.ErrOwnerOnly, msgOrgOwnerOnly, http.StatusForbidden},
 	{orgservice.ErrOwnerImmutable, msgOrgOwnerImmutable, http.StatusOK},
+	{orgservice.ErrOwnerNotRemovable, msgOrgOwnerNotRemovable, http.StatusOK},
+	{orgservice.ErrRemoveSelf, msgOrgMemberRemoveSelf, http.StatusOK},
 	{orgservice.ErrInvalidName, msgOrgNameInvalid, http.StatusOK},
 	{orgservice.ErrMemberNotFound, msgOrgMemberNotFound, http.StatusOK},
 	{orgservice.ErrNotDepartmentScoped, msgOrgMemberNotDepartmentScoped, http.StatusOK},
@@ -106,6 +112,7 @@ var orgRefusals = []struct {
 	{orgservice.ErrKeyExpired, msgOrgKeyExpired, http.StatusOK},
 	{orgservice.ErrKeyExhausted, msgOrgKeyExhausted, http.StatusOK},
 	{errOrgKeyManagedByOrg, msgOrgKeyManagedByOrg, http.StatusForbidden},
+	{errOrgMemberPersonalKey, msgOrgMemberPersonalKey, http.StatusForbidden},
 	{errOrgSignUpAmbiguous, i18n.MsgInvalidParams, http.StatusOK},
 }
 
@@ -418,6 +425,26 @@ func UpdateOrgMember(c *gin.Context) {
 	common.ApiSuccess(c, nil)
 }
 
+// RemoveOrgMember takes a member out of the organization for good: their keys
+// are taken back and their account is deleted. The answer says how many keys
+// that was.
+func RemoveOrgMember(c *gin.Context) {
+	actor, ok := orgActor(c)
+	if !ok {
+		return
+	}
+	id, ok := orgPathID(c)
+	if !ok {
+		return
+	}
+	reclaimed, err := orgservice.RemoveMember(model.DB, actor, id)
+	if err != nil {
+		orgError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{"reclaimed_keys": reclaimed})
+}
+
 // orgServiceAccountRequest is the body of a service account creation.
 type orgServiceAccountRequest struct {
 	Name         string `json:"name"`
@@ -556,6 +583,14 @@ func insertRegisteredUser(c *gin.Context, user *model.User, inviterId int, req *
 	// config, the sign-up log line and the inviter rewards run after the commit.
 	user.FinalizeOAuthUserCreation(inviterId)
 	return orgId, nil
+}
+
+// isOrgMember reports whether a user belongs to an organization. Such an
+// account is not its holder's to delete: leaving is done by whoever may remove
+// members, which takes the member's keys back and leaves a record of who did
+// it (Enterprise Org P6).
+func isOrgMember(user *model.User) bool {
+	return user != nil && user.OrgId != 0
 }
 
 // isOrgOwner reports whether a user owns an organization. The owner's account

@@ -386,34 +386,9 @@ func TestOrgLogin_AServiceAccountCannotSignIn(t *testing.T) {
 	})
 }
 
-// Acceptance: owner 不可被移除 — their own hand included. The owner's account is
-// the company wallet (PRD §7.3), so the self-service "delete my account" is
-// closed to them; everyone else keeps it.
-func TestOrgDeleteSelf_TheOwnerCannotDeleteTheirAccount(t *testing.T) {
-	forEachOrgDialect(t, func(t *testing.T, env orgTestEnv) {
-		owner := env.seedOwner(t, "founder", "Acme")
-		member := env.seedMember(t, owner, "member", orgmodel.RoleAdmin)
-		solo := env.seedUser(t, "solo")
-
-		ctx, recorder := newAuthenticatedContext(t, http.MethodDelete, "/api/user/self", nil, owner.Id)
-		DeleteSelf(ctx)
-		refused := decodeAPIResponse(t, recorder)
-		require.False(t, refused.Success)
-		require.Equal(t, msgOrgOwnerCannotDeleteAccount, refused.Message)
-		require.EqualValues(t, 1, env.count(t, &model.User{}, "id = ?", owner.Id), "the owner is still there")
-		var org orgmodel.Organization
-		require.NoError(t, env.db.First(&org, owner.OrgId).Error)
-		require.Equal(t, owner.Id, org.OwnerUserId)
-
-		for _, user := range []model.User{member, solo} {
-			ctx, recorder := newAuthenticatedContext(t, http.MethodDelete, "/api/user/self", nil, user.Id)
-			DeleteSelf(ctx)
-			deleted := decodeAPIResponse(t, recorder)
-			require.True(t, deleted.Success, "%s: %s", user.Username, deleted.Message)
-			require.Zero(t, env.count(t, &model.User{}, "id = ?", user.Id), user.Username)
-		}
-	})
-}
+// Acceptance: owner 不可被移除 — their own hand included. Who may and may not
+// delete their own account is pinned in org_assign_test.go
+// (TestOrgDeleteSelf_NoMemberDeletesTheirOwnAccount): since P6 no member does.
 
 // PRD §2: being refused for lack of permission is a 403. Everything else an
 // organization endpoint refuses is the ordinary 200 + success=false.

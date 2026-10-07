@@ -82,8 +82,8 @@ func TestOrgKeys_PersonalEndpointsAreClosedToOrganizationKeys(t *testing.T) {
 		}).Error)
 		teamKey = env.key(t, teamKey.Id)
 		ownersKey := env.seedKey(t, owner, owner.OrgId, "the owner's key")
-		// Until members stop having personal keys at all (P6), one may sit
-		// next to the organization's.
+		// A member makes no personal key anymore (P6), but one made before
+		// then may still sit next to the organization's.
 		alicesOwn := env.seedKey(t, alice, 0, "alice's own")
 		ownersOwn := env.seedKey(t, owner, 0, "the owner's own")
 

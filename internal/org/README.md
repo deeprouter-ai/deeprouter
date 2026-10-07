@@ -74,11 +74,13 @@ What each endpoint asks for:
 
 | Endpoint | Needs |
 |---|---|
+| `GET /self/keys?purpose=` | being a member; answers the caller's own keys that can serve a purpose of the console (D16) |
 | `GET /departments`, `GET /members` | `member.read`; a `dept`-scoped role is sent its departments only |
 | `GET /roles`, `GET /permissions` | `member.read` anywhere — roles belong to no department |
 | `POST/PUT/DELETE /departments`, moving a member | power `department.manage` |
 | `POST/PUT/DELETE /roles`, `POST /role-packs/:key/adopt`, giving a member a role or departments to manage | power `role.manage`; plus `admin.appoint` when the admin role is involved |
 | `POST /service-accounts` | power `service_account.manage` (PRD D27) |
+| `DELETE /members/:id` | `member.remove` over the member — never the owner, never oneself, an admin only by the owner |
 | `POST /invites`, `GET /invites`, `DELETE /invites/:id` | `member.invite` reaching the invite's department — see below |
 | `GET /audit-logs` | `audit.read` across the whole organization |
 | `GET /keys` | `key.read`; a `dept`-scoped role is sent the keys held in its departments only |
@@ -90,6 +92,9 @@ What each endpoint asks for:
 | `POST /keys/:id/rotate` | `key.rotate` over the holder |
 | `POST /keys/:id/freeze`, `…/unfreeze` | `key.freeze` over the holder |
 | `DELETE /keys/:id` | `key.delete` over the holder |
+| `GET /key-assignees` | `key.assign` anywhere; answers the members a key can be handed to — the owner is not one — each with their role only where the caller may read that member |
+| `POST /keys/:id/assign` | `key.assign` over the holder **and** over the member the key goes to |
+| `POST /keys/:id/reclaim` | `key.assign` over the holder |
 
 `service/gate_test.go` tries every one of these as every kind of member, against
 a table that says by hand who gets through. A new management function belongs
@@ -111,6 +116,11 @@ in that table; the test counts them.
   links a member **sees** and may **revoke**: a link is a way in, so showing one
   to somebody who could not have made it would hand them that way in. An admin
   therefore does not see the owner's admin links.
+- **Nobody removes the owner, nobody removes themselves, and only the owner
+  removes an admin** (`RemoveMember`). The last of the three is what keeps a
+  `dept`-scoped `member.remove` that manages the default department — where
+  the owner and the admins sit (D26) — from reaching them: removing an admin
+  dismisses one, and that is the owner's alone (D10).
 - **"Is an admin" always means the platform preset** (`org_roles.org_id = 0`),
   see `isPreset`. A custom role cannot take a preset's name (`checkRoleName`),
   and one written into the table by hand under that name still grants nothing
@@ -157,9 +167,9 @@ serves it like any other key; what is different is who may touch it.
   403. A batch that names one is refused whole. A new personal endpoint that
   writes a key or returns its value needs the same first line.
 - 🔴 **A key's value leaves the server in exactly two ways** (PRD D15):
-  1. in the answer to the request that *made* it — `CreateKey` or `RotateKey` —
-     and only when the holder is a service account, which has no other way to
-     receive it (`KeyGrant.Value`);
+  1. in the answer to the request that *made* it — `CreateKey`, `RotateKey`, or
+     `AssignKey` handing the key to the account — and only when the holder is a
+     service account, which has no other way to receive it (`KeyGrant.Value`);
   2. through one-click setup, to the holder's own machine
      (`internal/connect.RedeemScript`), which writes a `key.deliver` record
      first and hands out nothing when that fails.
@@ -180,6 +190,45 @@ serves it like any other key; what is different is who may touch it.
   role. The list is not searched or paged on the server — the page is sent all
   of it, already cut to whom the actor may make a key out to, and searches and
   filters it there (measured locally at 10,000 members: 28 ms and 1.4 MB).
+- 🔴 **A key's value never outlives a change of holder** (`service/assign.go`).
+  Whoever held a key has its value in their tools; a value that went on working
+  under the next holder would be spent by one person and billed to another. So
+  the one function that moves a key, `handOver`, gives it a new value in the
+  same transaction — when a key is assigned, when it is taken back, and when its
+  holder is removed. Taking back rotates too, although the key is frozen then:
+  otherwise the next person to unfreeze a parked key would wake the copy of
+  somebody who has left.
+- **Handing a key over takes `key.assign` on both ends** (`AssignKey`): over
+  whoever holds it now, and over whoever is to hold it. A manager therefore
+  moves keys between the people of their departments and nowhere else, and
+  does not reach a key parked under the owner, who sits in the default
+  department (decided 2026-10-07, D35). Getting a key into a department is done
+  by a role that reaches the whole organization — creating it for someone
+  there, or assigning a parked one. `GET /key-assignees` answers the second end
+  for the form; the first needs no list of its own — it is the keys
+  `GET /keys` already shows the actor.
+- **Taking a key back is: frozen, a new value, under the owner** (`ReclaimKey`).
+  There is no "unassigned" state: a key under the owner *is* the key nobody has
+  been handed, which is why `KeyView.HolderIsOwner` exists and why "assigning"
+  a key to the owner takes it back instead. It asks for reach over the holder
+  only, and never how many keys the owner holds — a key must be able to come
+  back whatever the place it returns to looks like. The owner's own key count
+  can exceed `MaxUserTokens` this way; creating a new parked key is then
+  refused until some are assigned or deleted.
+- **A frozen key that is handed over stays frozen unless the actor may unfreeze
+  keys.** `AssignKey` switches a frozen key on for its new holder only when the
+  actor holds `key.freeze` there and nothing else stops the key from working
+  (`spent`). A manager, who holds `key.assign` alone, hands a frozen key over
+  frozen: moving a key is not a way around a freeze.
+- **A member makes no key of their own** (D16). The personal `AddToken` starts
+  with `controller.refuseOrgMember`, which asks about the *caller* — not about
+  a key, which is what sets it apart from `refuseOrgKeys` — and reads a deleted
+  account's row too, because a removed member may still hold a session. Where
+  the console used to make a key for a purpose, it asks `GET /self/keys?purpose=`
+  instead (`ListOwnKeysFor`): the caller's own working keys whose whitelist has
+  a model in common with what the purpose is made of (`allowancesMeet` — both
+  are lists of names and `prefix*` rules), each with the purpose's named models
+  it may call. An empty answer is where the page says "ask an administrator".
 - **What a key may call is one of three things** (PRD §5): every model, the
   models of a policy template, or a list picked by hand. All three end up in
   the same place — `tokens.model_limits`, which is what the gateway enforces —
@@ -210,7 +259,8 @@ serves it like any other key; what is different is who may touch it.
   ever refused for what it adds.
 - **A change takes effect on the next request.** The gateway caches a key for
   `SYNC_FREQUENCY` seconds and answers from that cache without looking at the
-  database, so every function that changes a key ends with `forgetKeyValue`:
+  database, so every function that changes a key — the three that move one
+  included — ends with `forgetKeyValue` on the value the key *had*:
   drop the entry now and once more two seconds later, for a request that read
   the old row just before the change and writes it back just after the first
   drop. A new function that writes an organization key must end the same way,
@@ -223,6 +273,39 @@ serves it like any other key; what is different is who may touch it.
   soft delete for the same reason: the usage log still points at the id.
 - **Unfreezing is `key.freeze` too**, recorded as `key.unfreeze`. It refuses a
   key that is past its expiry or has no quota left: change that first.
+
+## Leaving the organization
+
+There is one way out: `RemoveMember`, for a person and for a service account
+alike. In one transaction it
+
+1. takes back every organization key the member holds — frozen, a new value,
+   under the owner, a `key.reclaim` record each (see above);
+2. clears the departments that were added for them to manage;
+3. deletes the account, and writes the `member.remove` record, which carries
+   their name, role and department and the ids of the keys.
+
+- **The account is deleted, not detached** (decided 2026-10-07, D37). It is a
+  soft delete, like every deleted account on the platform: the row stays —
+  with its `org_id`, so `keyHolders` and the audit log can go on naming them —
+  and so do its **username and email, which nobody can sign up with again**
+  (`model.CheckUserExistOrDeleted` looks at deleted rows; that is the
+  platform's rule, not ours). Whoever is removed by mistake needs a new
+  username.
+- **What they spent stays.** The usage log is never touched, and
+  `tokens.used_quota` stays on the keys.
+- **Their session may live on, and opens nothing.** The session cookie is not
+  re-checked against the database (`middleware.authHelper`), so a removed
+  member can still send requests for as long as it lasts. `GetMembership`
+  answers nil for an account that no longer exists, which makes every
+  `/api/org/*` call a 403; `refuseOrgMember` closes key creation; and their
+  keys, the only thing that reaches the gateway, are already dead.
+- **No member deletes their own account** (D36): `controller.DeleteSelf`
+  refuses anyone with an `org_id`. Leaving has somebody else's name on it in
+  the audit log, and takes the keys back on the way — deleting the account
+  alone used to leave them under a holder who no longer existed.
+- `MemberView.KeyCount` is what the page shows before it asks for
+  confirmation: how many keys removing this member would take back.
 
 ## The audit log
 
@@ -274,7 +357,7 @@ target, the values before and after, the request's address, when.
   invite links to the default one, in one transaction.
 - Members: list, change role, department and managed departments
   (`service.UpdateMember`, all of a request or none of it), create service
-  accounts.
+  accounts, remove a member or a service account.
 - Invite links (`/sign-up?org_invite=<code>`): create, list, revoke, a public
   preview, and `service.JoinByInviteTx`, which sign-up calls the same way it
   calls `CreateForOwnerTx`.
@@ -283,8 +366,11 @@ target, the values before and after, the request's address, when.
 - Organization keys: list, create (for a person, a service account, or
   parked under the owner), change, rotate, freeze, unfreeze, delete; the two
   policy templates, and a list of models picked by hand; the members a key
-  can be made out to, for the form to search and filter. Handing a key to
-  someone else and taking it back are P6.
+  can be made out to, for the form to search and filter; handing a key to
+  another member and taking it back; a member's own keys by purpose, for the
+  console.
+- The personal endpoints closed to members: creating a key, deleting one's own
+  account.
 - The audit log: written by every management write, read by page.
 
 ### How a refusal travels
@@ -320,26 +406,25 @@ is missing from a locale file.
   until start-up decides otherwise, so a test that reaches the token cache
   with it left on dereferences a nil client. `forEachDialect` switches it off;
   `dropCachedKey` is the seam the key tests watch instead. The cache path
-  itself is only exercised against a real Redis.
+  itself is only exercised against a real Redis. The controller tests'
+  `forEachOrgDialect` switches the flag off too and — unlike the other
+  globals it sets — does not put it back: a handler can leave a goroutine
+  behind that reads it after the test is over (a sign-up rewarding its inviter
+  does), and writing it then is a data race for the detector CI runs with.
+- **A soft-deleted member row keeps its `org_id`, role and department.** Any
+  query on `users` that is meant to see members has to go through GORM's
+  default scope (which hides deleted rows) — `Unscoped()` belongs only where a
+  name is looked up for something that outlived the account.
 - **Someone who joins by invite gets no starter key** (PRD D16), and their
   console mode is not decided for them. The founder's is: sign-up stores them
   as a `team` persona so they land in the Advanced console (PRD D24).
 
 ## Not here yet, and where it will hook in
 
-- **Removing a member** — with key reclaim, in one transaction (P6). Until
-  then a member, a service account included, cannot be taken out. It must
-  also clear the member's `department_managers` rows, and must not let a
-  `dept`-scoped `member.remove` reach the owner or an admin who happens to sit
-  in a department it manages.
-- **Assigning and reclaiming keys** (P6): moving a key between holders under
-  `key.assign`. Reclaiming freezes the key and parks it under the owner;
-  assigning a key that was reclaimed gives it a new value first (PRD §3). Each
-  of them writes the key, so each must end with `forgetKeyValue`. Until P6 a
-  member of an organization
-  can still create personal keys of their own (`controller.AddToken`), and the
-  Simple console does not find organization keys, which carry no
-  `simple_purpose`.
+- **Coming back.** An invite link works at sign-up only, and a removed
+  member's username and email stay taken — so there is no way to bring the
+  same account back, and none to move an existing personal account into an
+  organization. Not in v1.
 - **The billing branch and log stamp** (P7) — until then an organization key
   spends its holder's own balance — and **alerts** (P8) — the powers
   `org.settings` and `alert.handle` are defined and have no endpoint yet —

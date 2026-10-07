@@ -55,6 +55,9 @@ type MemberView struct {
 	// reaches: their own department first, then the ones added for them.
 	// Empty for everyone else.
 	ManagedDepartmentIds []int `json:"managed_department_ids"`
+	// KeyCount is how many of the organization's keys they hold — what removing
+	// them would take back.
+	KeyCount int `json:"key_count"`
 }
 
 // MemberPatch is a change to one member; a nil field is left as it is.
@@ -85,10 +88,11 @@ type memberManages struct {
 	DepartmentIds []int `json:"department_ids"`
 }
 
-// findMember loads the membership columns of one member of an organization.
+// findMember loads one member of an organization: what they are called and
+// the membership columns, nothing else.
 func findMember(db *gorm.DB, orgID int, userID int) (*platformmodel.User, error) {
 	var found []platformmodel.User
-	if err := db.Select("id", "org_id", "role_id", "department_id", "is_service").
+	if err := db.Select("id", "username", "display_name", "org_id", "role_id", "department_id", "is_service").
 		Where("id = ? AND org_id = ?", userID, orgID).Limit(1).Find(&found).Error; err != nil {
 		return nil, err
 	}
@@ -148,6 +152,10 @@ func ListMembers(db *gorm.DB, actor *Actor) ([]MemberView, error) {
 	if err != nil {
 		return nil, err
 	}
+	held, err := heldKeyCounts(db, actor.OrgId)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]MemberView, 0, len(users))
 	for _, user := range users {
 		role := roleByID[user.OrgRoleId]
@@ -166,9 +174,27 @@ func ListMembers(db *gorm.DB, actor *Actor) ([]MemberView, error) {
 			IsOwner:              user.Id == ownerID,
 			IsService:            user.IsService,
 			ManagedDepartmentIds: managed,
+			KeyCount:             held[user.Id],
 		})
 	}
 	return views, nil
+}
+
+// heldKeyCounts returns how many of an organization's keys each member holds.
+func heldKeyCounts(db *gorm.DB, orgID int) (map[int]int, error) {
+	var rows []struct {
+		UserId int
+		Held   int
+	}
+	if err := db.Model(&platformmodel.Token{}).Select("user_id, COUNT(*) AS held").
+		Where("org_id = ?", orgID).Group("user_id").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	counts := make(map[int]int, len(rows))
+	for _, row := range rows {
+		counts[row.UserId] = row.Held
+	}
+	return counts, nil
 }
 
 // UpdateMember gives a member another role, moves them to another department,

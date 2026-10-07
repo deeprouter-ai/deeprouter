@@ -57,7 +57,14 @@ func forEachOrgDialect(t *testing.T, fn func(t *testing.T, env orgTestEnv)) {
 		setForTest(t, &common.UsingSQLite, dialect == "sqlite")
 		setForTest(t, &common.UsingPostgreSQL, dialect == "postgres")
 		setForTest(t, &common.UsingMySQL, dialect == "mysql")
-		setForTest(t, &common.RedisEnabled, false)
+		// Switched off and, unlike the settings around it, not put back: a
+		// sign-up that rewards its inviter leaves a goroutine behind which
+		// reads this flag after the test that started it is over, and writing
+		// it then is a data race for the detector CI runs with. Off is what
+		// every test of this package runs with anyway.
+		if common.RedisEnabled {
+			common.RedisEnabled = false
+		}
 		setForTest(t, &common.RegisterEnabled, true)
 		setForTest(t, &common.PasswordRegisterEnabled, true)
 		setForTest(t, &common.PasswordLoginEnabled, true)

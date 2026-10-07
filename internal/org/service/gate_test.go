@@ -54,6 +54,12 @@ const (
 	// keyStoppers may freeze and delete keys across the whole organization:
 	// the key makers, and HR Ops for cleaning up after a leaver.
 	keyStoppers = keyMakers + " " + kindHROps
+	// salesKeyMovers may hand out and take back the keys held in Sales: the
+	// key makers, the manager of Sales and the key desk sitting there.
+	salesKeyMovers = keyMakers + " " + kindManager + " " + kindKeyDesk
+	// removers may take a member out of the organization: member.remove,
+	// which HR Ops holds across all of it.
+	removers = runners + " " + kindHROps
 )
 
 // cast is one organization with a member of every kind.
@@ -133,6 +139,10 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	// on any number of times.
 	inSales := seedMemberIn(t, db, org, fmt.Sprintf("holder-in-sales-of-%d", org.id), staffRole, c.sales.Id)
 	inProduct := seedMemberIn(t, db, org, fmt.Sprintf("holder-in-product-of-%d", org.id), staffRole, c.product.Id)
+	// A second member of Sales, and a key that goes back and forth between
+	// the two of them.
+	alsoInSales := seedMemberIn(t, db, org, fmt.Sprintf("second-holder-in-sales-of-%d", org.id), staffRole, c.sales.Id)
+	passedAround := seedKey(t, db, org, inSales.Id, "passed around Sales")
 	salesKey := seedKey(t, db, org, inSales.Id, "held in Sales")
 	productKey := seedKey(t, db, org, inProduct.Id, "held in Product")
 	models := fixedModels(testCatalogue)
@@ -157,6 +167,21 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	}
 	spareKey := func(holderID int) int {
 		return seedKey(t, db, org, holderID, fmt.Sprintf("Spare %d", next())).Id
+	}
+	spareMember := func(departmentID int) int {
+		return seedMemberIn(t, db, org, fmt.Sprintf("spare-%d-of-%d", next(), org.id), staffRole, departmentID).Id
+	}
+	assignKey := func(actor *Actor, keyID int, holderID int) error {
+		_, err := AssignKey(db, actor, keyID, holderID)
+		return err
+	}
+	reclaimKey := func(actor *Actor, keyID int) error {
+		_, err := ReclaimKey(db, actor, keyID)
+		return err
+	}
+	removeMember := func(actor *Actor, memberID int) error {
+		_, err := RemoveMember(db, actor, memberID)
+		return err
 	}
 	// Freezing takes a key that is not frozen and unfreezing one that is, so
 	// each sets the stage first — straight in the table, like the victims.
@@ -346,6 +371,46 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			return DeleteKey(db, actor, spareKey(inProduct.Id))
 		}},
 
+		// --- key.assign: reaching whoever holds the key, and — to hand it on —
+		// whoever is to hold it ------------------------------------------------
+		{name: "list who a key can be handed to", openTo: salesKeyMovers, run: func(actor *Actor) error {
+			_, err := ListKeyAssignees(db, actor)
+			return err
+		}},
+		{name: "hand a key held in Sales to another member of Sales", openTo: salesKeyMovers, audited: orgmodel.AuditKeyAssign, run: func(actor *Actor) error {
+			current := reloadKey(t, db, passedAround.Id).UserId
+			return assignKey(actor, passedAround.Id, other(current, inSales.Id, alsoInSales.Id))
+		}},
+		{name: "hand a key held in Sales to a member of Product", openTo: keyMakers, audited: orgmodel.AuditKeyAssign, spawns: "keys", run: func(actor *Actor) error {
+			return assignKey(actor, spareKey(inSales.Id), inProduct.Id)
+		}},
+		{name: "hand a key held in Product to a member of Sales", openTo: keyMakers, audited: orgmodel.AuditKeyAssign, spawns: "keys", run: func(actor *Actor) error {
+			return assignKey(actor, spareKey(inProduct.Id), inSales.Id)
+		}},
+		{name: "hand a key parked under the owner to a member of Sales", openTo: keyMakers, audited: orgmodel.AuditKeyAssign, spawns: "keys", run: func(actor *Actor) error {
+			return assignKey(actor, spareKey(org.owner.Id), inSales.Id)
+		}},
+		{name: "take back a key held in Sales", openTo: salesKeyMovers, audited: orgmodel.AuditKeyReclaim, spawns: "keys", run: func(actor *Actor) error {
+			return reclaimKey(actor, spareKey(inSales.Id))
+		}},
+		{name: "take back a key held in Product", openTo: keyMakers, audited: orgmodel.AuditKeyReclaim, spawns: "keys", run: func(actor *Actor) error {
+			return reclaimKey(actor, spareKey(inProduct.Id))
+		}},
+
+		// --- member.remove, wherever it reaches -----------------------------------
+		{name: "remove a member of Sales", openTo: removers, audited: orgmodel.AuditMemberRemove, spawns: "members", run: func(actor *Actor) error {
+			return removeMember(actor, spareMember(c.sales.Id))
+		}},
+		{name: "remove a member of Product", openTo: removers, audited: orgmodel.AuditMemberRemove, spawns: "members", run: func(actor *Actor) error {
+			return removeMember(actor, spareMember(c.product.Id))
+		}},
+
+		// --- what is the member's own: open to every member ------------------------
+		{name: "list their own keys for a purpose", openTo: strings.Join(allKinds, " "), run: func(actor *Actor) error {
+			_, err := ListOwnKeysFor(db, actor, "video", models)
+			return err
+		}},
+
 		// --- audit.read, across the whole organization ---------------------------
 		{name: "read the audit log", openTo: runners + " " + kindReadonly, run: func(actor *Actor) error {
 			_, _, err := ListAuditLogs(db, actor, 0, 10)
@@ -379,7 +444,7 @@ func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
 		actions := managementActions(t, db, c)
-		require.Len(t, actions, 41, "a new management action belongs in managementActions")
+		require.Len(t, actions, 51, "a new management action belongs in managementActions")
 		require.Len(t, c.actors, len(allKinds))
 
 		for _, action := range actions {

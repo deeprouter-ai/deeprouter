@@ -437,6 +437,7 @@ func SetApiRouter(router *gin.Engine) {
 		orgRoute.Use(middleware.UserAuth())
 		{
 			orgRoute.GET("/self", controller.GetOrgSelf)
+			orgRoute.GET("/self/keys", controller.ListOrgSelfKeys)
 
 			orgRoute.GET("/departments", controller.ListOrgDepartments)
 			orgRoute.POST("/departments", controller.CreateOrgDepartment)
@@ -452,6 +453,7 @@ func SetApiRouter(router *gin.Engine) {
 
 			orgRoute.GET("/members", controller.ListOrgMembers)
 			orgRoute.PUT("/members/:id", controller.UpdateOrgMember)
+			orgRoute.DELETE("/members/:id", controller.RemoveOrgMember)
 			orgRoute.POST("/service-accounts", controller.CreateOrgServiceAccount)
 
 			orgRoute.GET("/invites", controller.ListOrgInvites)
@@ -467,7 +469,10 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.POST("/keys/:id/rotate", middleware.DisableCache(), controller.RotateOrgKey)
 			orgRoute.POST("/keys/:id/freeze", controller.FreezeOrgKey)
 			orgRoute.POST("/keys/:id/unfreeze", controller.UnfreezeOrgKey)
+			orgRoute.POST("/keys/:id/assign", middleware.DisableCache(), controller.AssignOrgKey)
+			orgRoute.POST("/keys/:id/reclaim", controller.ReclaimOrgKey)
 			orgRoute.GET("/key-holders", controller.ListOrgKeyHolders)
+			orgRoute.GET("/key-assignees", controller.ListOrgKeyAssignees)
 			orgRoute.GET("/key-templates", controller.ListOrgKeyTemplates)
 			orgRoute.GET("/key-models", controller.ListOrgKeyModels)
 

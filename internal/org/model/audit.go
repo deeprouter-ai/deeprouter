@@ -18,6 +18,7 @@ const (
 	AuditMemberInvite         = "member.invite"  // an invite link was issued
 	AuditInviteRevoke         = "invite.revoke"
 	AuditMemberJoin           = "member.join" // someone signed up through an invite link
+	AuditMemberRemove         = "member.remove"
 	AuditServiceAccountCreate = "service_account.create"
 	AuditKeyCreate            = "key.create"
 	AuditKeyUpdate            = "key.update"
@@ -25,6 +26,8 @@ const (
 	AuditKeyFreeze            = "key.freeze"
 	AuditKeyUnfreeze          = "key.unfreeze"
 	AuditKeyDelete            = "key.delete"
+	AuditKeyAssign            = "key.assign"
+	AuditKeyReclaim           = "key.reclaim" // a key was taken back from its holder, under key.assign
 	AuditKeyDeliver           = "key.deliver" // the holder took the key's value through one-click setup
 )
 
