@@ -281,6 +281,11 @@ custom_oauth.provider_id_field_invalid: "无法从提供商响应中提取用户
 # Quick media key creation
 token.media_models_unavailable: "账号暂无此用途的可用模型，请选择其他用途或联系支持。"
 
+# Simple-mode key binding
+token.purpose_unknown: "不认识的密钥用途，请从创建密钥时提供的用途里选一个。"
+token.brand_unknown: "不认识的模型品牌，请从该用途提供的品牌里选一个，或留空。"
+token.price_tier_unknown: "不认识的价格档，请从该用途提供的价格档里选一个。"
+
 # Enterprise Org
 org.name_invalid: "企业名称需为 1 到 64 个字符。"
 org.not_member: "该账号不属于任何企业组织。"

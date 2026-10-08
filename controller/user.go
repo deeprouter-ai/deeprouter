@@ -18,6 +18,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/alias_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
@@ -298,16 +299,12 @@ func Register(c *gin.Context) {
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
 		}
-		// Bind the default token to the wizard-captured brand so a casual
-		// user who picked Claude can immediately call model: "deeprouter"
-		// in Cherry Studio without configuring anything else. See
-		// setting/alias_setting/seed/aliases.yaml + middleware/distributor
-		// for the resolution path.
-		if req.Persona != "" && req.Persona != "unset" &&
-			req.Persona != "all" {
-			token.SimplePurpose = req.Persona
-		}
-		if req.BrandPreference != "" {
+		// The starter key records the brand the wizard captured, when it is
+		// one the registry knows (setting/alias_setting/seed/aliases.yaml).
+		// It is bound to no purpose: a persona — casual, dev, team — is not
+		// one, and copying it into simple_purpose left keys with a purpose
+		// nothing recognises.
+		if alias_setting.KnownBrand(req.BrandPreference) {
 			token.SimpleBrand = req.BrandPreference
 		}
 		if setting.DefaultUseAutoGroup {

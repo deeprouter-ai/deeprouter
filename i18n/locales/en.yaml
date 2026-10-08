@@ -280,6 +280,11 @@ custom_oauth.provider_id_field_invalid: "Could not extract user ID from provider
 # Quick media key creation
 token.media_models_unavailable: "No models are available for this purpose in your account. Choose another purpose or contact support."
 
+# Simple-mode key binding
+token.purpose_unknown: "Unknown key purpose. Choose one of the purposes offered when creating a key."
+token.brand_unknown: "Unknown model brand. Choose one of the brands offered for this purpose, or leave it empty."
+token.price_tier_unknown: "Unknown price tier. Choose one of the tiers offered for this purpose."
+
 # Enterprise Org
 org.name_invalid: "The organization name must be between 1 and 64 characters."
 org.not_member: "This account does not belong to an organization."

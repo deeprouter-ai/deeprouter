@@ -35,6 +35,8 @@ on:
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
+      # setting/alias_setting's tests hold its rule lists against this file.
+      - 'scripts/seed-models/channels.yaml'
       - 'relay/channel/task/doubao/**'
       - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
@@ -78,6 +80,8 @@ on:
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
+      # setting/alias_setting's tests hold its rule lists against this file.
+      - 'scripts/seed-models/channels.yaml'
       - 'relay/channel/task/doubao/**'
       - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
@@ -145,7 +149,7 @@ jobs:
           # 180s, not 60s: the TestOrg sign-up tests hash real passwords, and
           # each bcrypt hash costs about 0.6s under the race detector. The
           # line took 18s on a developer machine when this was raised.
-          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestOrg' -count=1 -race -timeout 180s
+          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestOrg' -count=1 -race -timeout 180s
           # kids_mode middleware layer: policy resolution + defensive pass-through (DR-12).
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models

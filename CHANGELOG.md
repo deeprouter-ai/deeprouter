@@ -2,6 +2,18 @@
 
 ## 2026-10-08
 
+- **修复：按用途建 key 时，写错的用途会建出一把不受限的 key**（任务卡：meta-repo `docs/adlc/tasks/fix-key-purpose-validation-and-whitelists-task.md`）：
+  - **原来**：`POST /api/token/` 和 `PUT /api/token/` 不检查 `simple_purpose`、`simple_brand`、`simple_price_tier` 填的是什么。用途写成表里没有的词（比如 `codng`），查不到它的模型清单，代码就把"查不到清单"当成"不限制"——建出来的 key 什么模型都能调；「全部」用途配一个写错的价格档同样如此；把一把已有的「对话」key 改成写错的用途，它也被放开。
+  - **现在**：三个字段各自可以留空，填了就必须是登记过的值，否则拒绝并说明是哪一个不认识（`token.purpose_unknown`、`token.brand_unknown`、`token.price_tier_unknown`，中英繁三种语言）；被拒的请求不建 key，也不改已有的 key。「全部 + 顶配档」仍然是合法的不限制。控制台的建 key 表单本来就只能选登记过的值，受影响的是直接调接口的人。
+  - 注册时自动发的起步 key（`GENERATE_DEFAULT_TOKEN`，默认关）不再把注册向导里的身份（`casual` / `dev` / `team`）抄进 key 的用途字段——身份不是用途，抄进去的值没有任何地方认得；品牌只在是登记过的品牌时才记。
+  - 经济档里的规则 `gemini-2*-flash*` 改成了 `gemini-2.5-flash*`：通配符只有放在规则末尾才算数，中间带 `*` 的那条从来没有匹配过任何模型。新加的测试钉住两件事：规则表里的 `*` 只能在末尾；除了「全部」用途和顶配档，任何一张清单都不能是空的（空清单就是不限制）。
+  - **「对话」「编程」两种 key 能调的模型，按在售的型号更新了**（改动经本人 10-08 确认）。原来的清单落后了一代：线上公开价目里的 77 个模型，对话 key 只调得动 28 个，其中 26 个是 Claude——GPT-4.1、GPT-5 全系、DeepSeek v4 一个都调不了；8 个名字里写明是编程用的在售模型（`gpt-5.1-codex`、`codestral-latest`、`kimi-k2.7-code`、`qwen3-coder-plus` 等），编程 key 一个都调不了。现在：
+    - 对话：`claude-*`、`gpt-4o*`、`gpt-4.1*`、`gpt-5*`、`gpt-6*`、`chatgpt-4o-latest`、`gemini-2*`、`gemini-3*`、`deepseek-*`（删掉了匹配不到任何在售模型的 `gpt-4-turbo*`、`deepseek-chat*`）。线上可调 53 个。
+    - 编程：`claude-sonnet-*`、`claude-opus-*`、`claude-fable-*`、`gpt-4o*`、`gpt-4.1*`、`gpt-5*`、`gpt-6*`、`deepseek-*`，加上专门的编程模型 `codestral-*`、`kimi-k2.7-code*`、`qwen3-coder-*`（删掉了 `gpt-4-turbo*`、`o1*`、`deepseek-coder*`）。线上可调 50 个。
+  - **模型名填 `deeprouter`（或 `deeprouter-chat`、`deeprouter-coding`、`deeprouter-image`）时实际调到的型号，换成了在售的**：原来 13 个默认型号里有 9 个哪里都不卖了（`claude-sonnet-4-7`、`gemini-2.0-pro`、`deepseek-v3`、`deepseek-coder-v3`、`flux-pro`、`dall-e-3`），用这些名字发请求会因为没有渠道而失败。现在：对话 / 编程的默认和 Claude → `claude-sonnet-5`，OpenAI → `gpt-5.4`，DeepSeek → `deepseek-v4-pro`，对话的 Gemini → `gemini-2.5-pro`，图像 → `gpt-image-1`。视频（`MiniMax-H3`）和语音（`whisper-1`）没有动。
+  - 新加的测试让这两张清单以后不会悄悄过时：每条规则都要匹配得上种子文件（`scripts/seed-models/channels.yaml`）里至少一个在售模型；名字里写明是编程用的在售模型，编程 key 都要调得动；每个默认型号都要在售。价格档（经济 / 标准 / 高级）和图像、语音两张清单这次没有核对。
+  - **已经存在的 key 不受影响**：key 的模型清单是建 key（或改 key）那一刻写进去的，规则文件改了也不会自己变——老的对话 / 编程 key 要重新保存一次才拿到新清单。
+
 - **企业的用量报表，和「报表与告警」页**（PRD：meta-repo `docs/enterprise-org-prd.md` P9；没有新的表或列）：
   - 新接口 `GET /api/org/usage?group_by=`：把企业密钥的用量按**部门 / 成员 / 密钥 / 模型**四种方式之一汇总，给出花费和请求数。**不给 token 数**（PRD D44，本人验收时定的：用户只会看到一个天文数字，用量统一用花费表示）。`start_timestamp`、`end_timestamp` 限定时间段（Unix 秒，两端都含，可以只给一端）；`department_id` 只看一个部门。直接读用量日志（按 `(org_id, created_at)` 索引），没有另建汇总表。
   - **谁能看到多少由角色决定，而且是写进查询条件里的**：能看全公司用量的角色（所有者、管理员、只读、财务对账……）拿到全部；部门级角色（经理）拿到所管部门的；其余成员（员工）拿到的只有本人的。返回里的 `scope`（`org` / `dept` / `self`）说明这一份是哪一种。指名查一个够不着的部门返回 **403**，不是空报表——员工指名查自己所在的部门也是 403。

@@ -169,8 +169,9 @@ func TestOrgRegister_FounderIsATeamPersonaFromTheStart(t *testing.T) {
 	})
 }
 
-// The founder's persona must not leak into the starter key: Register copies a
-// client-sent persona into the key's purpose, and "team" is not a purpose.
+// The founder's persona must not leak into the starter key: "team" is not a
+// purpose. No persona is, and Register copies none into a key anymore
+// (TestKeyPurpose_StarterKeyIsBoundToNoPersona).
 func TestOrgRegister_FounderPersonaDoesNotBecomeAKeyPurpose(t *testing.T) {
 	forEachOrgDialect(t, func(t *testing.T, env orgTestEnv) {
 		setForTest(t, &constant.GenerateDefaultToken, true)
