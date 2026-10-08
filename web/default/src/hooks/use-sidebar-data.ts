@@ -74,9 +74,9 @@ export function useSidebarData(): SidebarData {
 
   // Enterprise Org: the "Organization" group holds the pages a member's role
   // lets them see — the two about people take member.read, the keys page
-  // key.read, the reports page any of usage.read, alert.read and audit.read —
-  // and is not there at all when that is none of them, as for Staff. A
-  // personal account's probe answers null and the group never appears.
+  // key.read — and the reports page, which every member has: Staff find the
+  // alerts on their own keys there and nothing else. A personal account's
+  // probe answers null and the group never appears.
   const { data: orgMembership } = useOrgMembership()
   const walletView = useWalletView()
   const orgItems = [

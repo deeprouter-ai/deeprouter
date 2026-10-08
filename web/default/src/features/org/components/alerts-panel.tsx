@@ -32,6 +32,7 @@ import {
 } from '../api'
 import { canManageOrg } from '../hooks/use-org-membership'
 import { alertStateLabel, alertSummary, alertTitle } from '../lib/alerts'
+import { seesOwnAlertsOnly } from '../lib/reports'
 import type { OrgAlert, OrgAlertState, OrgMembership } from '../types'
 import { AlertSettingsDialog } from './alert-settings-dialog'
 import { Pager } from './pager'
@@ -156,15 +157,17 @@ function AlertsTable({ alerts, onMark, busyId }: AlertsTableProps) {
 
 /**
  * The alerts of the organization (Enterprise Org PRD §4): warnings that a key
- * is running out of what it was given, and reports of unusual use. Anyone who
- * may read alerts sees the list — a manager the ones raised in their
- * departments, which the backend has already cut. Marking an alert and
- * changing the settings behind them is the owner's and the admins'.
+ * is running out of what it was given, and reports of unusual use. Every
+ * member has a list, which the backend has already cut: a role that reads
+ * alerts sees all of them, or the ones raised in its departments; everyone
+ * else the warnings on the keys they hold themselves (D47). Marking an alert
+ * and changing the settings behind them is the owner's and the admins'.
  */
 export function AlertsPanel({ membership }: { membership: OrgMembership }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const runs = canManageOrg(membership)
+  const ownOnly = seesOwnAlertsOnly(membership)
   const [openOnly, setOpenOnly] = useState(true)
   const [page, setPage] = useState(1)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -232,11 +235,15 @@ export function AlertsPanel({ membership }: { membership: OrgMembership }) {
       </div>
 
       <p className='text-muted-foreground text-sm'>
-        {t(
-          'A warning shows up within about a minute of the request that crossed the line; unusual usage is looked for every 10 minutes. An alert never blocks a key — freezing it or giving it a new value is done on the organization keys page.'
-        )}
+        {ownOnly
+          ? t(
+              'These are the warnings about the keys you hold: a key that has used most or all of what it was given, or was refused a request it could not pay for. An administrator of your organization can give a key more.'
+            )
+          : t(
+              'A warning shows up within about a minute of the request that crossed the line; unusual usage is looked for every 10 minutes. An alert never blocks a key — freezing it or giving it a new value is done on the organization keys page.'
+            )}
       </p>
-      {membership.role_scope === 'dept' && (
+      {!ownOnly && membership.role_scope === 'dept' && (
         <p className='text-muted-foreground text-sm'>
           {t(
             'You see the alerts raised on keys held in the departments you manage.'
@@ -262,9 +269,13 @@ export function AlertsPanel({ membership }: { membership: OrgMembership }) {
           description={
             openOnly
               ? t('Nothing is waiting to be looked at.')
-              : t(
-                  'An alert is raised when a key runs low on what it was given, or is used in a way that is unusual for it.'
-                )
+              : ownOnly
+                ? t(
+                    'A warning shows up here when one of your keys runs low on what it was given.'
+                  )
+                : t(
+                    'An alert is raised when a key runs low on what it was given, or is used in a way that is unusual for it.'
+                  )
           }
           bordered
         />

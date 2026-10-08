@@ -1318,6 +1318,8 @@
     "Marked as a false alarm": "已标记为误报",
     "A warning shows up within about a minute of the request that crossed the line; unusual usage is looked for every 10 minutes. An alert never blocks a key — freezing it or giving it a new value is done on the organization keys page.": "额度提醒在请求之后一分钟左右出现，异常用量每 10 分钟检查一次。告警不会拦截任何请求——要冻结密钥或更换密钥值，请到「企业密钥」页操作。",
     "You see the alerts raised on keys held in the departments you manage.": "你看到的是所管部门成员名下密钥的告警。",
+    "These are the warnings about the keys you hold: a key that has used most or all of what it was given, or was refused a request it could not pay for. An administrator of your organization can give a key more.": "这里列出的是你自己持有的密钥的额度提醒：额度或月请求数快用完、已经用完，或者因为额度不够被拒绝。需要更多额度请联系企业管理员。",
+    "A warning shows up here when one of your keys runs low on what it was given.": "你持有的密钥额度快用完时，这里会出现提醒。",
     "Could not load the alerts.": "告警加载失败。",
     "No unresolved alerts": "没有未处理的告警",
     "No alerts yet": "还没有告警",

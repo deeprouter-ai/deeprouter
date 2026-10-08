@@ -42,9 +42,9 @@ export function canManageOrg(
 }
 
 /**
- * Whether this member has a place in the organization area at all: its pages
- * list members, departments and roles, which takes `member.read`. A manager
- * and a read-only member have it; Staff do not.
+ * Whether this member may open the pages about people — members, departments
+ * and roles — which takes `member.read`. A manager and a read-only member
+ * may; Staff may not.
  */
 export function canSeeOrg(
   membership: OrgMembership | null | undefined
@@ -53,18 +53,15 @@ export function canSeeOrg(
 }
 
 /**
- * The `beforeLoad` gate of the organization pages. Organization roles are not
- * the platform role, so it asks the backend who this user is in their
- * organization and sends anyone whose role does not grant the page's primitive
- * to the 403 page: `member.read` for the pages about people, `key.read` for
- * the keys page. A page made of sections that each take their own primitive
- * passes all of them, and whoever holds one gets in. It is a courtesy — every
- * /api/org call checks again — that keeps people off pages which could only
- * show them errors.
+ * Asks the backend who this user is in their organization — organization
+ * roles are not the platform role — and sends them to the 403 page unless
+ * `allowed` says the page is theirs to open. It is a courtesy: every /api/org
+ * call checks again. It keeps people off pages which could only show them
+ * errors.
  */
-export async function requireOrgAccess(
+async function gateOrgPage(
   queryClient: QueryClient,
-  primitive: string | string[] = 'member.read'
+  allowed: (membership: OrgMembership | null) => boolean
 ) {
   const userId = useAuthStore.getState().auth.user?.id
   let membership: OrgMembership | null
@@ -79,7 +76,28 @@ export async function requireOrgAccess(
     // failure itself and offers a retry, where a 403 would be a wrong answer.
     return
   }
-  if (![primitive].flat().some((one) => holds(membership, one))) {
+  if (!allowed(membership)) {
     throw redirect({ to: '/403' })
   }
+}
+
+/**
+ * The `beforeLoad` gate of an organization page that takes a primitive:
+ * `member.read` for the pages about people, `key.read` for the keys page.
+ * Anyone whose role does not grant it is sent to the 403 page.
+ */
+export async function requireOrgAccess(
+  queryClient: QueryClient,
+  primitive: string = 'member.read'
+) {
+  return gateOrgPage(queryClient, (membership) => holds(membership, primitive))
+}
+
+/**
+ * The `beforeLoad` gate of a page every member of an organization may open:
+ * "Reports & alerts", where each member finds at least the alerts on their
+ * own keys. Only a personal account is sent to the 403 page.
+ */
+export async function requireOrgMember(queryClient: QueryClient) {
+  return gateOrgPage(queryClient, (membership) => membership !== null)
 }

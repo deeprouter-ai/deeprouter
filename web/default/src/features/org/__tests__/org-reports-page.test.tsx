@@ -372,20 +372,30 @@ describe('the sections each kind of member is offered', () => {
     expect(sectionTabs()).toEqual(['Usage', 'Alerts'])
   })
 
-  it('are the one a role reads when it reads only one', async () => {
-    for (const [permission, section] of [
-      ['usage.read', 'Usage'],
-      ['alert.read', 'Alerts'],
-      ['audit.read', 'Audit log'],
-    ]) {
+  it('give a role that reads usage or the audit log that tab, beside the alerts every member has', async () => {
+    for (const [permission, tabs] of [
+      ['usage.read', ['Usage', 'Alerts']],
+      ['alert.read', ['Alerts']],
+      ['audit.read', ['Alerts', 'Audit log']],
+    ] as const) {
       const view = await renderPage(customRole('One thing', [permission]))
-      expect(sectionTabs(), permission).toEqual([section])
+      expect(sectionTabs(), permission).toEqual(tabs)
       view.unmount()
     }
-    // Nothing was asked for that the role could not read.
+    // Only the section on show was asked for: usage once, the alerts by the
+    // two roles that open on them, the audit log by nobody.
     expect(api.fetchOrgUsage).toHaveBeenCalledTimes(1)
-    expect(api.fetchOrgAlerts).toHaveBeenCalledTimes(1)
-    expect(api.fetchOrgAuditLogs).toHaveBeenCalledTimes(1)
+    expect(api.fetchOrgAlerts).toHaveBeenCalledTimes(2)
+    expect(api.fetchOrgAuditLogs).not.toHaveBeenCalled()
+  })
+
+  it('are the alerts alone for staff', async () => {
+    api.fetchOrgAlerts.mockResolvedValue(alertPage([quotaWarning]))
+    await renderPage(membershipOf('staff'))
+    expect(sectionTabs()).toEqual(['Alerts'])
+    await screen.findByText('80% of quota used')
+    expect(api.fetchOrgUsage).not.toHaveBeenCalled()
+    expect(api.fetchOrgAuditLogs).not.toHaveBeenCalled()
   })
 
   it('open on the section the address names, and only fetch that one', async () => {
@@ -792,6 +802,60 @@ describe('the alert list', () => {
     await renderPage(membershipOf('owner'), 'alerts')
     await screen.findByText('Sudden rise in spending')
     expect(screen.queryByText(hint)).toBeNull()
+  })
+
+  it('tells whoever does not read alerts that the list is the warnings on their own keys', async () => {
+    const own =
+      'These are the warnings about the keys you hold: a key that has used most or all of what it was given, or was refused a request it could not pay for. An administrator of your organization can give a key more.'
+    const everyones = /^A warning shows up within about a minute/
+    api.fetchOrgAlerts.mockResolvedValue(alertPage([quotaWarning]))
+    for (const viewer of [
+      membershipOf('staff'),
+      customRole('Finance Ops', ['usage.read']),
+      // A role limited to departments that does not read alerts either.
+      membershipOf('staff', {
+        role: 'Key Desk',
+        role_scope: 'dept',
+        permissions: ['key.read', 'key.assign'],
+      }),
+    ]) {
+      const view = await renderPage(viewer, 'alerts')
+      await screen.findByText('80% of quota used')
+      expect(screen.getByText(own), viewer.role).toBeInTheDocument()
+      expect(screen.queryByText(everyones), viewer.role).toBeNull()
+      expect(
+        screen.queryByText(/departments you manage/),
+        viewer.role
+      ).toBeNull()
+      // They read the list; marking and the settings are not theirs.
+      expect(
+        screen.queryByRole('button', { name: /^Mark “/ }),
+        viewer.role
+      ).toBeNull()
+      expect(
+        screen.queryByRole('button', { name: 'Alert settings' }),
+        viewer.role
+      ).toBeNull()
+      view.unmount()
+    }
+    // Whoever reads alerts is told how the list comes about instead.
+    await renderPage(membershipOf('readonly'), 'alerts')
+    await screen.findByText('80% of quota used')
+    expect(screen.getByText(everyones)).toBeInTheDocument()
+    expect(screen.queryByText(own)).toBeNull()
+  })
+
+  it('tells a member with no warning of their own when one would show up', async () => {
+    api.fetchOrgAlerts.mockResolvedValue(alertPage([]))
+    await renderPage(membershipOf('staff'), 'alerts')
+    await screen.findByText('No unresolved alerts')
+    await userEvent.click(screen.getByRole('tab', { name: 'All alerts' }))
+    await screen.findByText('No alerts yet')
+    expect(
+      screen.getByText(
+        'A warning shows up here when one of your keys runs low on what it was given.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('says there is nothing to look at, in the words of the list on show', async () => {

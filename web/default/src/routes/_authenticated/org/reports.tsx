@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { z } from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
-import { requireOrgAccess } from '@/features/org/hooks/use-org-membership'
-import { REPORT_PRIMITIVES } from '@/features/org/lib/reports'
+import { requireOrgMember } from '@/features/org/hooks/use-org-membership'
 import { OrgReportsPage } from '@/features/org/reports'
 
 // The section is in the address, so a notification can link straight to the
@@ -14,8 +13,8 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute('/_authenticated/org/reports')({
   validateSearch: searchSchema,
-  beforeLoad: ({ context }) =>
-    requireOrgAccess(context.queryClient, REPORT_PRIMITIVES),
+  // Every member has something here: at least the alerts on their own keys.
+  beforeLoad: ({ context }) => requireOrgMember(context.queryClient),
   component: OrgReportsRoute,
 })
 

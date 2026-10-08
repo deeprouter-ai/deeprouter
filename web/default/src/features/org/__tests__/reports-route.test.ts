@@ -4,15 +4,17 @@ import { QueryClient } from '@tanstack/react-query'
 import { isRedirect } from '@tanstack/react-router'
 import { Route as ReportsRoute } from '@/routes/_authenticated/org/reports'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { REPORT_PRIMITIVES, reportSections } from '../lib/reports'
+import { reportSections, seesOwnAlertsOnly } from '../lib/reports'
 import type { OrgMembership } from '../types'
 import { membershipOf } from './fixtures'
 
 // Enterprise Org P9: who may open "Reports & alerts", and which of its three
-// sections each of them gets. The sections take three separate permissions —
-// usage.read, alert.read, audit.read — so the page is open to whoever holds
-// any one of them and shows them only their part. The backend checks every
-// call again; this only keeps people off a page with nothing on it for them.
+// sections each of them gets. Usage and the audit log take a permission —
+// usage.read, audit.read. Alerts are every member's (PRD D47): a role that
+// holds alert.read sees what it reaches, everyone else the warnings on their
+// own keys. So the page is open to every member of an organization and shows
+// each their part. The backend checks every call again; this only keeps a
+// personal account off a page with nothing on it.
 
 const mockFetchOrgMembership = vi.hoisted(() => vi.fn())
 
@@ -55,12 +57,7 @@ beforeEach(() => {
 })
 
 describe('the sections of the page a member may read', () => {
-  it('follow the three read permissions, in tab order', () => {
-    expect(REPORT_PRIMITIVES).toEqual([
-      'usage.read',
-      'alert.read',
-      'audit.read',
-    ])
+  it('follow the read permissions, in tab order', () => {
     expect(reportSections(membershipOf('owner'))).toEqual([
       'usage',
       'alerts',
@@ -81,57 +78,75 @@ describe('the sections of the page a member may read', () => {
     expect(reportSections(membershipOf('manager'))).toEqual(['usage', 'alerts'])
   })
 
-  it('are one each for a role that holds one of the three', () => {
+  it('give a role that reads usage or the audit log that section, beside the alerts every member has', () => {
     expect(reportSections(customRole('Finance Ops', ['usage.read']))).toEqual([
       'usage',
+      'alerts',
     ])
     expect(reportSections(customRole('On call', ['alert.read']))).toEqual([
       'alerts',
     ])
     expect(reportSections(customRole('Auditor', ['audit.read']))).toEqual([
+      'alerts',
       'audit',
     ])
   })
 
-  it('are none for staff, for a role about keys and people, and for a personal account', () => {
-    expect(reportSections(membershipOf('staff'))).toEqual([])
+  it('are the alerts alone for staff and for a role about keys and people, and none for a personal account', () => {
+    expect(reportSections(membershipOf('staff'))).toEqual(['alerts'])
     expect(
       reportSections(
         customRole('HR Ops', ['member.read', 'member.invite', 'key.read'])
       )
-    ).toEqual([])
+    ).toEqual(['alerts'])
     expect(reportSections(null)).toEqual([])
     expect(reportSections(undefined)).toEqual([])
   })
-})
 
-describe('/org/reports gate', () => {
-  it('lets in whoever reads usage, alerts or the audit log', async () => {
-    const allowed: OrgMembership[] = [
+  it('show the alerts of their own keys alone to whoever does not read alerts', () => {
+    for (const reader of [
       membershipOf('owner'),
       membershipOf('admin'),
       membershipOf('manager'),
       membershipOf('readonly'),
+      customRole('On call', ['alert.read']),
+    ]) {
+      expect(seesOwnAlertsOnly(reader), reader.role).toBe(false)
+    }
+    for (const member of [
+      membershipOf('staff'),
+      customRole('Finance Ops', ['usage.read']),
+      customRole('Auditor', ['audit.read']),
+      customRole('Key Desk', ['key.read', 'key.freeze']),
+    ]) {
+      expect(seesOwnAlertsOnly(member), member.role).toBe(true)
+    }
+  })
+})
+
+describe('/org/reports gate', () => {
+  it('lets in every member of an organization, whatever their role reads', async () => {
+    const members: OrgMembership[] = [
+      membershipOf('owner'),
+      membershipOf('admin'),
+      membershipOf('manager'),
+      membershipOf('readonly'),
+      membershipOf('staff'),
       customRole('Finance Ops', ['usage.read']),
       customRole('On call', ['alert.read']),
       customRole('Auditor', ['audit.read']),
+      customRole('HR Ops', ['member.read', 'member.invite', 'key.read']),
+      customRole('Key Desk', ['key.read', 'key.freeze']),
     ]
-    for (const answer of allowed) {
+    for (const answer of members) {
       mockFetchOrgMembership.mockResolvedValue(answer)
       expect(await gate(), answer.role).toBeNull()
     }
   })
 
-  it('sends staff, roles that read none of the three and personal accounts to the 403 page', async () => {
-    for (const answer of [
-      membershipOf('staff'),
-      customRole('HR Ops', ['member.read', 'member.invite', 'key.read']),
-      customRole('Key Desk', ['key.read', 'key.freeze']),
-      null,
-    ]) {
-      mockFetchOrgMembership.mockResolvedValue(answer)
-      expect(await gate(), answer?.role ?? 'personal').toBe('/403')
-    }
+  it('sends a personal account to the 403 page', async () => {
+    mockFetchOrgMembership.mockResolvedValue(null)
+    expect(await gate()).toBe('/403')
   })
 
   it('does not call a failed lookup a refusal', async () => {

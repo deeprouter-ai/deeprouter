@@ -88,7 +88,8 @@ describe('sidebar: the Organization group', () => {
   })
 
   it('offers each page by its own permission', async () => {
-    // A key desk sees keys and no people; HR sees people and no keys.
+    // A key desk sees keys and no people; HR sees people and no keys. Both
+    // have the reports page, like every member.
     const keyDesk = await sidebarGroupsFor(
       membershipOf('staff', {
         role: 'Key Desk',
@@ -104,6 +105,7 @@ describe('sidebar: the Organization group', () => {
     ])
     expect(keyDesk[1].items.map((item) => item.title)).toEqual([
       'Organization keys',
+      'Reports & alerts',
     ])
 
     const hr = await sidebarGroupsFor(
@@ -116,21 +118,24 @@ describe('sidebar: the Organization group', () => {
     expect(hr[1].items.map((item) => item.title)).toEqual([
       'Members & departments',
       'Roles & permissions',
+      'Reports & alerts',
     ])
   })
 
-  it('offers the reports page to whoever reads usage, alerts or the audit log', async () => {
-    // Any one of the three opens it: the page shows each reader their part.
-    for (const [role, permission] of [
-      ['Finance Ops', 'usage.read'],
-      ['On call', 'alert.read'],
-      ['Auditor', 'audit.read'],
-    ]) {
+  it('offers the reports page to every member, whatever their role reads', async () => {
+    // The page shows each reader their part — and every member has one: the
+    // alerts on their own keys (PRD D47).
+    for (const [role, permissions] of [
+      ['Finance Ops', ['usage.read']],
+      ['On call', ['alert.read']],
+      ['Auditor', ['audit.read']],
+      ['Staff', []],
+    ] as const) {
       const groups = await sidebarGroupsFor(
         membershipOf('staff', {
           role,
           role_scope: 'org',
-          permissions: [permission],
+          permissions: [...permissions],
         })
       )
       expect(
@@ -146,12 +151,16 @@ describe('sidebar: the Organization group', () => {
     }
   })
 
-  it('is absent for staff', async () => {
+  it('holds the reports page alone for staff', async () => {
     const groups = await sidebarGroupsFor(membershipOf('staff'))
     expect(groups.map((group) => group.id)).toEqual([
       'general',
+      'org',
       'personal',
       'admin',
+    ])
+    expect(groups[1].items.map((item) => item.title)).toEqual([
+      'Reports & alerts',
     ])
   })
 

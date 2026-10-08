@@ -25,10 +25,12 @@ type OrgReportsPageProps = {
  * Org PRD §6): what the company's keys spent, the alerts raised about them,
  * and the audit log of everything that was changed.
  *
- * Its three sections take three different permissions, so each viewer gets the
- * tabs their role reads: a finance role the usage alone, a manager usage and
- * alerts for their departments, a read-only member all three. The backend
- * sends each of them only what they may see and checks every request again.
+ * Usage and the audit log each take a permission, so a viewer gets the tabs
+ * their role reads: a finance role the usage, a manager usage for their
+ * departments, a read-only member both. Alerts are every member's tab — a role
+ * that reads alerts sees what it reaches, everyone else the warnings on their
+ * own keys, which is all a staff member finds here. The backend sends each of
+ * them only what they may see and checks every request again.
  */
 export function OrgReportsPage({
   section,
