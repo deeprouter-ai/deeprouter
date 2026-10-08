@@ -1313,6 +1313,8 @@
     "By year": "按年",
     "Could not load the trend.": "趋势图加载失败。",
     "Spend over time, a line per {{group}}": "花费趋势，每个{{group}}一条线",
+    "What this member spent over the period the report shows.": "这位成员在报表所选时间段里的花费。",
+    "What was spent with this key over the period the report shows.": "这把密钥在报表所选时间段里的花费。",
     "Spend is what left the company wallet: refunds for failed tasks are taken off. Usage counts in the department a member was in when they spent it, so moving someone does not move their past usage.": "花费是公司钱包实际扣掉的金额，任务失败的退款已经减去。用量算在成员消费当时所在的部门，调部门不会改变以前的用量归属。",
     "No department": "未归属部门",
     "Unknown model": "未知模型",

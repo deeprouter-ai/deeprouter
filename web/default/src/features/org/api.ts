@@ -26,7 +26,6 @@ import type {
   OrgUsageReport,
   OrgUsageTrend,
   OrgUsageTrendBucket,
-  OrgUsageTrendGroupBy,
 } from './types'
 
 export const orgQueryKeys = {
@@ -351,7 +350,7 @@ export async function fetchOrgInvitePreview(
 /**
  * What a usage report is asked for. A bound that is left out leaves that side
  * of the period open; without a department the report covers every department
- * the caller may see.
+ * the caller may see; a member or a key narrows it to what that one spent.
  */
 export type OrgUsageParams = {
   group_by: OrgUsageGroupBy
@@ -360,6 +359,8 @@ export type OrgUsageParams = {
   /** Unix seconds, included. */
   end_timestamp?: number
   department_id?: number
+  user_id?: number
+  token_id?: number
 }
 
 /**
@@ -375,20 +376,19 @@ export async function fetchOrgUsage(
 }
 
 /**
- * What a usage trend is asked for: a usage report's period and department,
- * the lines to draw, the stretch of time each point stands for, and the IANA
- * name of the zone whose days those are — the viewer's.
+ * What a usage trend is asked for: a usage report's period and filters, the
+ * lines to draw, the stretch of time each point stands for, and the IANA name
+ * of the zone whose days those are — the viewer's.
  */
-export type OrgUsageTrendParams = Omit<OrgUsageParams, 'group_by'> & {
-  group_by: OrgUsageTrendGroupBy
+export type OrgUsageTrendParams = OrgUsageParams & {
   bucket: OrgUsageTrendBucket
   timezone: string
 }
 
 /**
  * What the organization spent over a period, bucket by bucket, with a series
- * per department or per model — as much of it as the usage report shows the
- * caller. Naming a department out of their reach is a 403.
+ * per department, model, member or key — as much of it as the usage report
+ * shows the caller. Naming a department out of their reach is a 403.
  */
 export async function fetchOrgUsageTrend(
   params: OrgUsageTrendParams

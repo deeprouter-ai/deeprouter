@@ -12,9 +12,10 @@ import (
 
 // Enterprise Org P10 (meta-repo docs/enterprise-org-prd.md §6, D46): the usage
 // trend — the usage report's spending drawn over time, one line per department
-// or per model. It is the same log lines, read through the same reach
-// (usageWithin) and measured the same way (usageSpentSQL), cut once more by
-// time; so what a trend adds up to is what the report says for that period.
+// or per model; or, narrowed to one member or one key, that one's line (D49).
+// It is the same log lines, read through the same reach (usageWithin) and
+// measured the same way (usageSpentSQL), cut once more by time; so what a
+// trend adds up to is what the report says for that period.
 //
 // A day is the viewer's day. The log keeps Unix seconds, so the database sums
 // by day with nothing but arithmetic every dialect has — the seconds moved by
@@ -35,13 +36,6 @@ const trendSeriesShown = 8
 
 // secondsPerDay is the length of the days the database sums by.
 const secondsPerDay = 24 * 60 * 60
-
-// trendColumns names the usage log column each grouping of a trend draws its
-// lines by. A trend is not drawn by member or by key (PRD D46).
-var trendColumns = map[string]string{
-	UsageByDepartment: usageColumns[UsageByDepartment],
-	UsageByModel:      usageColumns[UsageByModel],
-}
 
 // trendBuckets maps each way of cutting time to the first day of the bucket a
 // day falls in. Days are dates at midnight UTC: calendar dates, not moments.
@@ -72,11 +66,11 @@ type UsageTrendQuery struct {
 	Timezone string
 }
 
-// UsageTrendSeries is one line of a trend: what a department or a model spent,
-// bucket by bucket.
+// UsageTrendSeries is one line of a trend: what a department, a model, a member
+// or a key spent, bucket by bucket.
 type UsageTrendSeries struct {
-	// Id is the department. A model has only a name. A department is named
-	// as it is called today, a dissolved one too.
+	// Id is the department, the member or the key. A model has only a name.
+	// Each is named as it is called today, a dissolved or deleted one too.
 	Id   int    `json:"id"`
 	Name string `json:"name"`
 	// Other marks the line that stands for everything beyond the ones drawn.
@@ -134,8 +128,8 @@ func zoneStretches(zone *time.Location, from int64, until int64) []zoneStretch {
 	return stretches
 }
 
-// trendGroup is what a line of a trend stands for: a department by its id, or
-// a model by its name.
+// trendGroup is what a line of a trend stands for: a department, a member or a
+// key by its id, or a model by its name.
 type trendGroup struct {
 	id   int
 	name string
@@ -143,12 +137,12 @@ type trendGroup struct {
 
 // TrendUsage cuts what the organization spent over a period into buckets of
 // time — days, weeks, months or years on the viewer's calendar — with one
-// series per department or per model. The caller is shown exactly the usage a
-// report would show them, and naming a department outside their reach is
-// refused with ErrForbidden. The biggest spenders get a series each and the
-// rest share one, so the series always add up to Total.
+// series per department, model, member or key. The caller is shown exactly
+// the usage a report would show them, and naming a department outside their
+// reach is refused with ErrForbidden. The biggest spenders get a series each
+// and the rest share one, so the series always add up to Total.
 func TrendUsage(db *gorm.DB, logDB *gorm.DB, actor *Actor, query UsageTrendQuery, now time.Time) (*UsageTrend, error) {
-	column, drawn := trendColumns[query.GroupBy]
+	column, drawn := usageColumns[query.GroupBy]
 	bucketOf, cut := trendBuckets[query.Bucket]
 	// "Local" and the empty name are refused: they would mean wherever the
 	// server happens to run, which is nobody's calendar.

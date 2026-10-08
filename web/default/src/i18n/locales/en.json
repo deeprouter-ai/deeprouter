@@ -1313,6 +1313,8 @@
     "By year": "By year",
     "Could not load the trend.": "Could not load the trend.",
     "Spend over time, a line per {{group}}": "Spend over time, a line per {{group}}",
+    "What this member spent over the period the report shows.": "What this member spent over the period the report shows.",
+    "What was spent with this key over the period the report shows.": "What was spent with this key over the period the report shows.",
     "Spend is what left the company wallet: refunds for failed tasks are taken off. Usage counts in the department a member was in when they spent it, so moving someone does not move their past usage.": "Spend is what left the company wallet: refunds for failed tasks are taken off. Usage counts in the department a member was in when they spent it, so moving someone does not move their past usage.",
     "No department": "No department",
     "Unknown model": "Unknown model",
