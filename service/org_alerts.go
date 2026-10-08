@@ -150,11 +150,9 @@ func (w *orgAlertWatch) send(now time.Time) {
 		}
 		for _, digest := range digests {
 			setting := digest.Recipient.GetSetting()
-			list := ""
-			if digest.SeesList {
-				list = orgAlertListLink()
-			}
-			if err := sendOrgAlertNotice(digest.Recipient.Id, digest.Recipient.Email, setting, orgAlertNotice(setting, digest.Alerts, list)); err != nil {
+			// Everyone who is told can open the list: the owner and the
+			// admins all of it, a holder the warnings on their own keys.
+			if err := sendOrgAlertNotice(digest.Recipient.Id, digest.Recipient.Email, setting, orgAlertNotice(setting, digest.Alerts, orgAlertListLink())); err != nil {
 				common.SysError(fmt.Sprintf("failed to send organization alerts to user %d: %s", digest.Recipient.Id, err.Error()))
 			}
 		}
@@ -208,7 +206,8 @@ func orgMonthlyUsage(keyID int) (int, error) {
 }
 
 // orgAlertListLink is where the organization's alert list is: the alerts
-// section of the console's "Reports & alerts" page.
+// section of the console's "Reports & alerts" page, which shows each member
+// as much of the list as is theirs to see.
 func orgAlertListLink() string {
 	return fmt.Sprintf("%s/org/reports?section=alerts", system_setting.ServerAddress)
 }
@@ -216,8 +215,8 @@ func orgAlertListLink() string {
 // orgAlertNotice words one notification for one member: a title that says how
 // many alerts there are and a line for each, in the language they saved — as
 // plain text for the channels that cannot show HTML. A notification that
-// reports an anomaly closes by saying that nothing was blocked, and one for a
-// member who can open the alert list ends with list, the link to it.
+// reports an anomaly closes by saying that nothing was blocked, and the last
+// line is list, the link to the alert list, when one is given.
 func orgAlertNotice(setting dto.UserSetting, alerts []orgservice.AlertNotice, list string) dto.Notify {
 	plain := setting.NotifyType == dto.NotifyTypeBark || setting.NotifyType == dto.NotifyTypeGotify
 	separator := "<br/>"

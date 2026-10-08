@@ -438,8 +438,10 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			return err
 		}},
 
-		// --- alert.read, wherever it reaches ---------------------------------------
-		{name: "list alerts", openTo: runners + " " + kindManager + " " + kindReadonly + " " + kindITOps, run: func(actor *Actor) error {
+		// --- alert.read: every member is answered as far as the alerts are theirs
+		// to see — a role that reads alerts where it reaches, everyone else the
+		// warnings on their own keys (PRD D47) -------------------------------------
+		{name: "list alerts", openTo: strings.Join(allKinds, " "), run: func(actor *Actor) error {
 			_, _, err := ListAlerts(db, actor, false, 0, 10)
 			return err
 		}},

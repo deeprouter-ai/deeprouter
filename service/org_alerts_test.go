@@ -52,9 +52,9 @@ func seedAlertWatch(t *testing.T) (adminID int, watch *orgAlertWatch) {
 	return adminID, &orgAlertWatch{lastDigest: map[int]time.Time{}}
 }
 
-// listLinkHTML and listLinkPlain are the line a notification ends with for a
-// member who can open the organization's alert list, as mail and as plain
-// text in Chinese — the two ways the owner and the admin of these tests read.
+// listLinkHTML and listLinkPlain are the line a notification ends with — the
+// link to the organization's alert list — as mail and as plain text in
+// Chinese, the two ways the members of these tests read.
 func listLinkHTML() string {
 	return "<a href='" + orgAlertListLink() + "'>See all alerts</a>"
 }
@@ -158,8 +158,8 @@ func TestOrgAlerts_AKeyRunningLowIsReportedOnceToTheAdminsAndItsHolder(t *testin
 	holder := byUser[walletMemberID][0]
 	assert.Equal(t, "member@acme.test", holder.email)
 	assert.Equal(t, owner.notice.Title, holder.notice.Title)
-	assert.Equal(t, warning, holder.notice.Content,
-		"the holder is told the same thing, without a link to a list that may not be theirs to open")
+	assert.Equal(t, warning+"<br/>"+listLinkHTML(), holder.notice.Content,
+		"the holder is told the same thing, with the same link: the list shows them the warnings on their own keys")
 
 	// The alert is in the organization's list, marked as sent.
 	var alerts []orgmodel.OrgAlert
@@ -228,7 +228,7 @@ func TestOrgAlerts_AKeyRefusedForLackOfQuotaIsWarnedAboutThenAndThere(t *testing
 	assert.Equal(t, warning+"<br/>"+listLinkHTML(), byUser[walletOwnerID][0].notice.Content)
 	assert.Equal(t, "密钥「test_token」（member）的额度只剩 "+left+"，不够完成一次请求（这次需要预留 "+needed+"），请求已被拒绝。企业管理员可以给它增加额度。\n"+listLinkPlain(),
 		byUser[adminID][0].notice.Content)
-	assert.Equal(t, warning, byUser[walletMemberID][0].notice.Content)
+	assert.Equal(t, warning+"<br/>"+listLinkHTML(), byUser[walletMemberID][0].notice.Content)
 	// The scan that follows has nothing to add: the key heard its last warning.
 	useKey(t, walletMemberKeyID, 5000, 0, now.Add(time.Minute))
 	watch.pass(now.Add(time.Minute))
@@ -273,11 +273,7 @@ func TestOrgAlerts_AlertsRaisedCloseTogetherLeaveAsOneNotification(t *testing.T)
 		if userID == adminID {
 			lines = strings.Split(second.notice.Content, "\n")
 		}
-		if userID != walletMemberID {
-			require.Len(t, lines, 3, "user %d: two alerts and the link to the list", userID)
-			lines = lines[:2]
-		}
-		require.Len(t, lines, 2, "user %d: two alerts in one notification", userID)
+		require.Len(t, lines, 3, "user %d: two alerts in one notification, and the link to the list", userID)
 		if userID != adminID {
 			assert.Equal(t, "2 new alert(s) about your organization's keys", second.notice.Title)
 			assert.Equal(t, "Key “test_token” (member) has used up its quota of "+limit+" and no longer works. An administrator of your organization can give it more.", lines[0])
@@ -600,9 +596,10 @@ func TestOrgAlertNotice_ClosingLineCapAndEscaping(t *testing.T) {
 }
 
 // Enterprise Org P9: now that there is a page to read alerts on, a
-// notification to someone who can open it ends with a link to it — the last
-// line, after the one that says nothing was blocked — in the form their
-// channel shows and in every language.
+// notification ends with a link to it — the last line, after the one that
+// says nothing was blocked — in the form the recipient's channel shows and in
+// every language. Everyone who is told gets it: since D47 a key's holder can
+// open the list too, and finds the warnings on their own keys there.
 func TestOrgAlertNotice_EndsWithALinkToTheAlertList(t *testing.T) {
 	require.NoError(t, i18n.Init())
 	address := system_setting.ServerAddress
@@ -625,7 +622,7 @@ func TestOrgAlertNotice_EndsWithALinkToTheAlertList(t *testing.T) {
 			assert.NotContains(t, plain[1], "<a", "%s over %s", language, channel)
 		}
 	}
-	// Whoever cannot open the list is sent no link to it.
+	// Given no link, the notification is the lines alone.
 	without := orgAlertNotice(dto.UserSetting{Language: "en"}, []orgservice.AlertNotice{warning, spike}, "").Content
 	assert.Len(t, strings.Split(without, "<br/>"), 3)
 	assert.NotContains(t, without, "/org/reports")

@@ -92,13 +92,8 @@ func TestDigestsFor_TheAdminsHearEverythingAndAHolderTheirOwnWarnings(t *testing
 		require.Len(t, digests, 4, "one digest each, and none that says nothing")
 
 		// Each digest carries what a notification needs, and names the holder.
-		// It also says whether its recipient can open the alert list — the
-		// owner and the admin can, a holder told about their own key may not
-		// — which decides whether the notification links to it (P9).
 		for _, digest := range digests {
 			assert.NotEmpty(t, digest.Recipient.Email)
-			runs := digest.Recipient.Id == org.owner.Id || digest.Recipient.Id == c.actors[kindAdmin].UserId
-			assert.Equal(t, runs, digest.SeesList, "user %d", digest.Recipient.Id)
 		}
 		assert.Equal(t, 80, digests[0].Alerts[0].Level)
 		assert.Equal(t, "staff-of-Acme", digests[0].Alerts[0].Holder)
@@ -177,7 +172,9 @@ func TestUnsentAlerts_WaitUntilTheyAreMarkedSent(t *testing.T) {
 // --- reading the list -------------------------------------------------------
 
 // alert.read reaches as far as the role does: a role limited to departments is
-// sent the alerts raised on keys held there, cut on the server.
+// sent the alerts raised on keys held there, cut on the server. A member whose
+// role does not read alerts is not refused — they are sent their own, which
+// here is nothing.
 func TestListAlerts_IsCutToTheActorsReach(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
@@ -207,14 +204,74 @@ func TestListAlerts_IsCutToTheActorsReach(t *testing.T) {
 		}
 		assert.Equal(t, []int{salesAlert.Id}, idsFor(kindManager), "the manager of Sales sees what was raised in Sales")
 		for _, kind := range []string{kindStaff, kindBot, kindHROps, kindFinance, kindKeyDesk} {
-			_, _, err := ListAlerts(db, c.actors[kind], false, 0, 50)
-			assert.ErrorIs(t, err, ErrForbidden, kind)
+			assert.Empty(t, idsFor(kind), "%s holds none of these keys", kind)
 		}
 
 		// An alert stays with the department it was raised in: moving the
 		// holder afterwards does not hand it to another manager.
 		require.NoError(t, UpdateMember(db, c.actors[kindOwner], inProduct.Id, MemberPatch{DepartmentId: intPtr(c.sales.Id)}))
 		assert.Equal(t, []int{salesAlert.Id}, idsFor(kindManager))
+	})
+}
+
+// PRD D47: a member whose role does not read alerts sees the warnings raised
+// on the keys they held — what they are notified of — and nothing else: not
+// the anomalies on those keys, not a colleague's warnings, not another
+// company's.
+func TestListAlerts_AMemberSeesTheWarningsOnTheirOwnKeys(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		c := newCast(t, db, "Acme")
+		org := c.org
+		staff := c.actors[kindStaff]
+		colleague := seedMemberIn(t, db, org, "colleague", presetRoleID(t, db, orgmodel.RoleStaff), c.sales.Id)
+		staffKey := seedKey(t, db, org, staff.UserId, "Staff key")
+		colleagueKey := seedKey(t, db, org, colleague.Id, "Colleague key")
+		low := seedAlert(t, db, staffKey, orgmodel.AlertRuleQuota, 80)
+		seedAlert(t, db, staffKey, orgmodel.AlertRuleSpike, 0)
+		seedAlert(t, db, staffKey, orgmodel.AlertRuleOffHours, 0)
+		seedAlert(t, db, staffKey, orgmodel.AlertRuleNewIP, 0)
+		month := seedAlert(t, db, staffKey, orgmodel.AlertRuleMonthly, 100)
+		theirs := seedAlert(t, db, colleagueKey, orgmodel.AlertRuleQuota, 100)
+		seedAlert(t, db, seedKey(t, db, org, org.owner.Id, "Parked key"), orgmodel.AlertRuleQuota, 80)
+		other := seedOrg(t, db, "Other")
+		seedAlert(t, db, seedKey(t, db, other, other.owner.Id, "Their key"), orgmodel.AlertRuleQuota, 80)
+
+		listed := func(actor *Actor, openOnly bool) []int {
+			alerts, total, err := ListAlerts(db, actor, openOnly, 0, 50)
+			require.NoError(t, err)
+			require.Len(t, alerts, int(total))
+			ids := make([]int, 0, len(alerts))
+			for _, alert := range alerts {
+				ids = append(ids, alert.Id)
+			}
+			return ids
+		}
+		assert.Equal(t, []int{month.Id, low.Id}, listed(staff, false), "the two warnings on their key, newest first")
+		assert.Equal(t, []int{theirs.Id}, listed(actorFor(t, db, colleague.Id), false), "and the colleague theirs")
+		for _, kind := range []string{kindFinance, kindHROps, kindKeyDesk, kindBot} {
+			assert.Empty(t, listed(c.actors[kind], false), "%s has no warning of their own", kind)
+		}
+		require.Len(t, listed(c.actors[kindOwner], false), 7, "the owner still sees every alert of the company")
+
+		// They read what became of a warning, and cannot mark it themselves.
+		require.ErrorIs(t, HandleAlert(db, staff, low.Id, orgmodel.AlertStateHandled), ErrForbidden)
+		require.NoError(t, HandleAlert(db, c.actors[kindAdmin], low.Id, orgmodel.AlertStateHandled))
+		assert.Equal(t, []int{month.Id}, listed(staff, true), "the one that was dealt with is left out of the open ones")
+		alerts, _, err := ListAlerts(db, staff, false, 0, 50)
+		require.NoError(t, err)
+		assert.Equal(t, orgmodel.AlertStateHandled, alerts[1].State)
+		assert.Equal(t, "admin-of-Acme", alerts[1].AckedByName)
+		assert.JSONEq(t, `{"key":"Staff key","used":800,"limit":1000}`, string(alerts[1].Detail))
+
+		// A warning stays with whoever held the key when it was raised: handing
+		// the key to the colleague does not hand them its history.
+		require.NoError(t, db.Model(&platformmodel.Token{}).Where("id = ?", staffKey.Id).Update("user_id", colleague.Id).Error)
+		assert.Equal(t, []int{month.Id, low.Id}, listed(staff, false))
+		assert.Equal(t, []int{theirs.Id}, listed(actorFor(t, db, colleague.Id), false))
+
+		// A role that reads alerts sees what it reaches, anomalies included:
+		// the manager of Sales, where both of them sit.
+		assert.Len(t, listed(c.actors[kindManager], false), 6)
 	})
 }
 

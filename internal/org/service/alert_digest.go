@@ -37,9 +37,6 @@ type AlertDigest struct {
 	// Recipient carries what a notification needs: id, email and settings.
 	Recipient platformmodel.User
 	Alerts    []AlertNotice
-	// SeesList says the recipient can open the organization's alert list: the
-	// owner and the admins. A holder told about their own key may well not.
-	SeesList bool
 }
 
 // UnsentAlerts returns the alerts that have not gone out as a notification
@@ -131,7 +128,7 @@ func DigestsFor(db *gorm.DB, orgID int, alerts []orgmodel.OrgAlert) ([]AlertDige
 
 	digests := make([]AlertDigest, 0, len(watchers)+len(holders))
 	for _, watcher := range watchers {
-		digests = append(digests, AlertDigest{Recipient: watcher, Alerts: everything, SeesList: true})
+		digests = append(digests, AlertDigest{Recipient: watcher, Alerts: everything})
 	}
 	for _, holder := range holders {
 		digests = append(digests, AlertDigest{Recipient: holder, Alerts: warnings[holder.Id]})

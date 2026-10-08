@@ -257,8 +257,19 @@ func TestOrgAlerts_ThroughTheRealGateway(t *testing.T) {
 			assert.Equal(t, sellersKey.Id, item.KeyId)
 			assert.Equal(t, "Sales", item.Department)
 		}
-		seller.refused(t, http.MethodGet, "/api/org/alerts", nil)
-		maker.refused(t, http.MethodGet, "/api/org/alerts", nil)
+		// A member whose role reads no alerts is sent the warnings on their own
+		// keys (PRD D47): the seller the one about "Sales tools" — not the three
+		// anomalies on the same key — and the maker, whose key has only ever set
+		// off anomalies, nothing.
+		var sellers, makers alertPage
+		seller.ok(t, http.MethodGet, "/api/org/alerts?page_size=100", nil, &sellers)
+		require.Equal(t, []string{"quota@80"}, sellers.rules())
+		assert.Equal(t, 1, sellers.Total)
+		assert.Equal(t, sellersKey.Id, sellers.Items[0].KeyId)
+		maker.ok(t, http.MethodGet, "/api/org/alerts?page_size=100", nil, &makers)
+		assert.Zero(t, makers.Total)
+		assert.Empty(t, makers.Items)
+		seller.refused(t, http.MethodGet, "/api/org/alert-settings", nil)
 		status, _, message, _ = personal.call(t, http.MethodGet, "/api/org/alerts", nil)
 		assert.Equal(t, http.StatusForbidden, status)
 		assert.Equal(t, "org.not_member", message)

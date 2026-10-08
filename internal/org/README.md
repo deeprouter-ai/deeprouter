@@ -55,8 +55,10 @@ preset role inside and outside its scope, written out by hand from the PRD.
 - **An inherent power** — roles, departments, service accounts, appointing
   admins — comes with being the owner or an admin. No role lists one, no custom
   role can hold one, and the three marked `OwnerOnly` are the owner's alone.
-- **Every member reads what is their own**: the keys assigned to them and their
-  own usage, whatever their role.
+- **Every member reads what is their own**: the keys assigned to them, their
+  own usage and the alerts raised on those keys, whatever their role
+  (`ownReads` in `can.go`). Which of those alerts — the warnings, not the
+  anomalies — is a rule of the alert list, on top of the engine.
 - **`target`** is the department and the member the thing belongs to. The zero
   target is the organization as a whole, which only an `org`-scoped role — or
   an inherent power — acts on.
@@ -98,7 +100,7 @@ What each endpoint asks for:
 | `GET /key-assignees` | `key.assign` anywhere; answers the members a key can be handed to — the owner is not one — each with their role only where the caller may read that member |
 | `POST /keys/:id/assign` | `key.assign` over the holder **and** over the member the key goes to |
 | `POST /keys/:id/reclaim` | `key.assign` over the holder |
-| `GET /alerts` | `alert.read`; a `dept`-scoped role is sent the alerts raised on keys held in its departments only |
+| `GET /alerts` | being a member; `alert.read` decides how much: all alerts, those raised on keys held in a `dept`-scoped role's departments, or — without it — the warnings on the caller's own keys (D47) |
 | `POST /alerts/:id/handle` | power `alert.handle` |
 | `GET /alert-settings`, `PUT /alert-settings` | power `org.settings` |
 
@@ -524,16 +526,23 @@ What to know before changing any of it:
   notification type is the task's own (`org_alert`), so these never compete
   with the low-balance reminder. An alert that could not go out within a day
   stays in the list and is not sent.
-- **A notification links to the alert list only for whoever can open it.**
-  The owner's and an admin's ends with a link to the alerts section of the
-  reports page (`AlertDigest.SeesList`, `orgAlertListLink`). A holder who is
-  told about their own key gets no link: as a staff member they have no such
-  page, and a link that ends on a 403 is worse than none.
-- **The alert list** (`ListAlerts`) is cut by the department stamped on the
-  alert — the holder's when it was raised — so, like a usage line, an alert
-  stays with that department when its holder moves. Marking an alert handled
-  or a false alarm (`HandleAlert`) is audited; it changes nothing about the
-  key and nothing about the sending.
+- **A notification ends with a link to the alert list** (`orgAlertListLink`:
+  the alerts section of the reports page), whoever it goes to. The list shows
+  each member what is theirs to see, so a holder told about their own key
+  lands on the warnings about their keys.
+- **The alert list** (`ListAlerts`) answers every member, and how much is
+  part of the query. A role that reads alerts gets all of them, or — limited
+  to departments — the ones stamped with its departments: the holder's
+  department when the alert was raised, so, like a usage line, an alert stays
+  with that department when its holder moves. Everyone else gets **the
+  warnings on the keys they held** (D47): `user_id` on the alert is them and
+  `rule` is one of `WarningRules`. That is what they are notified of, and no
+  more — an anomaly on their key is not theirs to read, for the reason it is
+  not sent to them. The alert stays with whoever held the key when it was
+  raised; handing the key on does not hand on its history. Marking an alert
+  handled or a false alarm (`HandleAlert`) is the owner's and the admins',
+  and is audited; it changes nothing about the key and nothing about the
+  sending.
 - **The settings** (`organizations.alert_settings`, JSON; `AlertSettings`)
   are the warning levels, the two multiples, the floor and the working hours.
   Empty means `DefaultAlertSettings`. A change is audited with both versions.
@@ -632,17 +641,19 @@ department of that moment (see "The company wallet").
 ### The page
 
 "Reports & alerts" (`/org/reports`, `web/default/src/features/org/reports.tsx`)
-is one page with three sections — usage, alerts, the audit log — and each
-takes its own primitive: `usage.read`, `alert.read`, `audit.read`
-(`lib/reports.ts`). Whoever holds one of them gets the page and the tabs they
-may read; the sidebar entry and the route's gate
-(`requireOrgAccess(queryClient, REPORT_PRIMITIVES)`) follow the same list. The
-section is in the address (`?section=alerts`), which is what a notification
-links to.
+is one page with three sections — usage, alerts, the audit log
+(`lib/reports.ts`). Usage and the audit log take their primitive,
+`usage.read` and `audit.read`. Alerts are every member's section (D47): what
+`alert.read` decides is how much of the list they are sent. So every member
+of an organization has the page — the sidebar entry, and the route's gate
+`requireOrgMember` — with the tabs that are theirs. The section is in the
+address (`?section=alerts`), which is what a notification links to.
 
-- **Staff have no such page.** Their own calls are on the usage logs page, as
-  before. The endpoint still answers them — with their own usage — which is
-  what "staff see only their own" rests on.
+- **Staff get the alerts tab alone**, with the warnings on their own keys and
+  a sentence that says so (`seesOwnAlertsOnly`). Their own calls are on the
+  usage logs page, as before: the usage endpoint still answers them — with
+  their own usage, which is what "staff see only their own" rests on — but
+  the page gives them no usage tab.
 - **Marking an alert and the settings form are the owner's and the admins'**
   (`canManageOrg`), like everything else an inherent power covers. The form
   checks every field itself, because the backend refuses a bad request with
@@ -696,8 +707,9 @@ links to.
 - The audit log: written by every management write; read by page, narrowed
   by who did it, by what kind of thing and by when.
 - Warnings and alerts: raised and sent by a background task, and raised on
-  the spot for a key refused for lack of quota; the alert list, marking an
-  alert, and the settings, over four endpoints.
+  the spot for a key refused for lack of quota; the alert list — every
+  member's, as far as it is theirs — marking an alert, and the settings, over
+  four endpoints.
 - Usage reports: one endpoint, four groupings, a period, and a department to
   narrow to; money and requests, no token counts (PRD D44).
 - The console's "Reports & alerts" page: the usage report, the alert list

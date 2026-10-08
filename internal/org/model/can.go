@@ -24,6 +24,10 @@ type Target struct {
 	UserId       int
 }
 
+// ownReads are the reads every member has over what is their own, whatever
+// their role grants.
+var ownReads = []string{"key.read", "usage.read", "alert.read"}
+
 // Can is the permission engine (PRD §7.5): the one place that decides whether
 // a member may do something in their organization. It asks the two questions
 // of PRD §2 — does the role grant the action, and is the target within the
@@ -37,8 +41,9 @@ func Can(subject Subject, action string, target Target) bool {
 		return subject.IsOwner || (subject.IsAdmin && !power.OwnerOnly)
 	}
 	// Whatever their role, a member sees what is their own: the keys assigned
-	// to them and their own usage (PRD §2, the staff row).
-	if target.UserId != 0 && target.UserId == subject.UserId && (action == "key.read" || action == "usage.read") {
+	// to them, their own usage, and the alerts raised on those keys (PRD §2,
+	// the staff row; D47).
+	if target.UserId != 0 && target.UserId == subject.UserId && slices.Contains(ownReads, action) {
 		return true
 	}
 	everywhere, departments := Reach(subject, action)

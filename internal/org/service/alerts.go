@@ -71,17 +71,28 @@ func alertDetail(alert *orgmodel.OrgAlert) orgmodel.AlertDetail {
 }
 
 // ListAlerts returns one page of the organization's alerts, newest first, and
-// how many there are. A role limited to departments is sent the alerts raised
-// on keys held in its departments only; openOnly leaves out the ones somebody
-// has dealt with.
+// how many there are. How much of the list the caller is sent follows their
+// role and is part of the query: every alert for a role that reads alerts
+// across the organization, and the ones raised on keys held in its departments
+// for a department-scoped one. Everyone else is sent the warnings raised on
+// the keys they held themselves (PRD D47) — what they are notified of, and not
+// the anomalies, which stay with whoever looks into them. openOnly leaves out
+// the alerts somebody has dealt with.
 func ListAlerts(db *gorm.DB, actor *Actor, openOnly bool, offset int, limit int) ([]AlertView, int64, error) {
-	everywhere, departments, err := actor.reach("alert.read")
-	if err != nil {
-		return nil, 0, err
+	everywhere, departments := orgmodel.Reach(actor.Subject, "alert.read")
+	ownOnly := !everywhere && len(departments) == 0
+	if ownOnly {
+		if err := actor.allow("alert.read", orgmodel.Target{UserId: actor.UserId}); err != nil {
+			return nil, 0, err
+		}
 	}
 	within := func() *gorm.DB {
 		query := db.Model(&orgmodel.OrgAlert{}).Where("org_id = ?", actor.OrgId)
-		if !everywhere {
+		switch {
+		case everywhere:
+		case ownOnly:
+			query = query.Where("user_id = ? AND rule IN ?", actor.UserId, orgmodel.WarningRules)
+		default:
 			query = query.Where("department_id IN ?", departments)
 		}
 		if openOnly {

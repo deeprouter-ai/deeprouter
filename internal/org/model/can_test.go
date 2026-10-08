@@ -82,7 +82,7 @@ var truthTable = []struct {
 	{"member.invite", true, true, true, false, false, false, false},
 	{"member.remove", true, true, false, false, false, false, false},
 	{"usage.read", true, true, true, false, true, false, true},
-	{"alert.read", true, true, true, false, false, false, true},
+	{"alert.read", true, true, true, false, true, false, true},
 	{"audit.read", true, true, false, false, false, false, true},
 }
 
@@ -299,14 +299,15 @@ func TestCan_ADepartmentScopeReachesExactlyTheManagedDepartments(t *testing.T) {
 	require.False(t, Can(narrow, "key.freeze", Target{DepartmentId: sales}))
 }
 
-// PRD §2, the staff row: 使用并查看分配给自己的 key，看自己的用量 — and that is
-// true of every member, not of staff alone.
-func TestCan_EveryMemberReadsTheirOwnKeysAndUsage(t *testing.T) {
+// PRD §2, the staff row: 使用并查看分配给自己的 key，看自己的用量 — and, since D47,
+// the alerts raised on those keys. That is true of every member, not of staff
+// alone.
+func TestCan_EveryMemberReadsTheirOwnKeysUsageAndAlerts(t *testing.T) {
 	// A manager's own key sits in a department they do not manage.
 	own := Target{DepartmentId: product, UserId: self}
 	subjects := map[string]Subject{
 		"finance": customSubject(ScopeOrg, nil, "usage.read"),
-		"nothing": customSubject(ScopeDept, []int{sales}, "alert.read"),
+		"alerts":  customSubject(ScopeDept, []int{sales}, "alert.read"),
 	}
 	for _, name := range []string{RoleOwner, RoleAdmin, RoleManager, RoleStaff, RoleReadonly} {
 		subjects[name] = presetSubject(t, name)
@@ -314,12 +315,13 @@ func TestCan_EveryMemberReadsTheirOwnKeysAndUsage(t *testing.T) {
 	for name, subject := range subjects {
 		require.True(t, Can(subject, "key.read", own), "%s reads their own keys", name)
 		require.True(t, Can(subject, "usage.read", own), "%s reads their own usage", name)
+		require.True(t, Can(subject, "alert.read", own), "%s reads the alerts on their own keys", name)
 	}
 
 	// Owning something is leave to look at it, never to change it.
 	staff := presetSubject(t, RoleStaff)
 	for _, primitive := range Primitives {
-		if primitive == "key.read" || primitive == "usage.read" {
+		if primitive == "key.read" || primitive == "usage.read" || primitive == "alert.read" {
 			continue
 		}
 		require.False(t, Can(staff, primitive, own), "%s on their own", primitive)
