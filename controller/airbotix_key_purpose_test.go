@@ -106,3 +106,33 @@ func TestMediaKeyEmptyCatalogFailsClosed(t *testing.T) {
 	require.NoError(t, db.Model(&model.Token{}).Count(&count).Error)
 	require.Zero(t, count)
 }
+
+// The cards are rendered in the page's UI language, which the saved user
+// setting lags after a language switch — so an explicit ?lang= must beat
+// whatever the request context resolves to (here an Accept-Language of zh-CN).
+func TestListModelsPurposeCardsFollowExplicitLang(t *testing.T) {
+	db := setupModelListControllerTestDB(t)
+	seedListModelsUser(t, db, 7103, "default", false)
+	require.NoError(t, alias_setting.InitAliasSettings())
+
+	chatLabel := func(target string) string {
+		ctx, recorder := newAuthenticatedContext(t, http.MethodGet, target, nil, 7103)
+		ctx.Request.Header.Set("Accept-Language", "zh-CN")
+		GetApiKeyPurposes(ctx)
+		var metadata struct {
+			Purposes []alias_setting.PurposeSummary `json:"purposes"`
+		}
+		require.NoError(t, common.Unmarshal(decodeAPIResponse(t, recorder).Data, &metadata))
+		for _, card := range metadata.Purposes {
+			if card.ID == "chat" {
+				return card.Label
+			}
+		}
+		t.Fatalf("chat card missing from %s", target)
+		return ""
+	}
+
+	require.Equal(t, "聊天 / 写作", chatLabel("/api/user/self/api-key-purposes"))
+	require.Equal(t, "Chat / Writing", chatLabel("/api/user/self/api-key-purposes?lang=en"))
+	require.Equal(t, "聊天 / 写作", chatLabel("/api/user/self/api-key-purposes?lang=zh"))
+}

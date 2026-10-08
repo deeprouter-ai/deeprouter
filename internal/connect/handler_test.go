@@ -278,10 +278,15 @@ func TestConnectHandler_RedeemRecordsTheDeliveryOfAnOrganizationKey(t *testing.T
 	require.Len(t, records, 2)
 	require.Equal(t, "203.0.113.40", records[1].Ip)
 
+	// The env lines an AI agent reads are a delivery like any other.
+	env := redeemEnv(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolClaudeCode})), "curl/8.21.0")
+	require.Contains(t, env.Body.String(), "DR_API_KEY='carol-org-secret-key'")
+	require.Len(t, orgAuditLog(t), 3)
+
 	// A personal key is nobody's business but its owner's.
 	personal := redeem(t, tokenFrom(t, issueAs(t, 100, 1, []string{ToolCodex})))
 	require.Contains(t, personal.Body.String(), "alice-secret-key")
-	require.Len(t, orgAuditLog(t), 2)
+	require.Len(t, orgAuditLog(t), 3)
 }
 
 // No record, no key. If the delivery cannot be written down, the script that
@@ -300,6 +305,11 @@ func TestConnectHandler_RedeemWithholdsAnOrganizationKeyItCannotRecord(t *testin
 	require.NotContains(t, body, "carol-org-secret-key")
 	require.Contains(t, body, `echo 'Setup could not be completed just now.'`)
 	require.Contains(t, body, "exit 1")
+
+	// In env mode the refusal is the one machine-readable line, never the key.
+	env := redeemEnv(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolCodex})), "curl/8.21.0")
+	require.Contains(t, env.Body.String(), "DR_ERROR='")
+	require.NotContains(t, env.Body.String(), "carol-org-secret-key")
 
 	// A personal key never needed the audit log, and still does not.
 	personal := redeem(t, tokenFrom(t, issueAs(t, 100, 1, []string{ToolCodex})))
@@ -432,4 +442,78 @@ func TestConnectScript_QuotesInjectedValuesForPowerShell(t *testing.T) {
 
 	require.Contains(t, script, "''")
 	require.NotContains(t, script, "'"+`+"`+"\\"+`"+`+"''")
+}
+
+// redeemEnv calls the script endpoint with ?format=env under the given User-Agent.
+func redeemEnv(t *testing.T, token, ua string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/i/"+token+"?format=env", nil)
+	c.Request.Header.Set("User-Agent", ua)
+	c.Params = gin.Params{{Key: "token", Value: token}}
+	RedeemScript(c)
+	return w
+}
+
+// 🔴 The video page's paste-prompt tells an AI agent to read DR_BASE_URL /
+// DR_API_KEY out of this response. The script variants spell those per shell
+// ($DrApiKey on PowerShell) — which is exactly how a Windows agent fetching
+// with irm ended up holding the key under a name it was never told (measured
+// 2026-10-04: 38,422 chars, zero matches). format=env must therefore be
+// byte-identical in shape for every User-Agent.
+func TestConnectScript_FormatEnvIgnoresUserAgent(t *testing.T) {
+	useMemoryStore(t)
+	withKeysDB(t)
+	system_setting.ServerAddress = "https://example.test"
+
+	for _, ua := range []string{
+		"Mozilla/5.0 (Windows NT; Windows NT 10.0; zh-CN) WindowsPowerShell/5.1.26100.9168",
+		"curl/8.21.0",
+	} {
+		token := tokenFrom(t, issueAs(t, 100, 1, []string{ToolClaudeCode}))
+
+		got := redeemEnv(t, token, ua)
+		require.Equal(t, http.StatusOK, got.Code, "ua %q", ua)
+		body := got.Body.String()
+
+		require.Contains(t, body, "DR_BASE_URL='https://example.test'", "ua %q", ua)
+		require.Contains(t, body, "DR_API_KEY='alice-secret-key'", "ua %q", ua)
+		require.NotContains(t, body, "$DrApiKey", "ua %q", ua)
+		require.NotContains(t, body, "#!/bin/sh", "ua %q", ua)
+		// The whole point: a handful of lines, not a 38KB installer.
+		require.Less(t, len(body), 500, "ua %q", ua)
+		require.Equal(t, "no-store", got.Header().Get("Cache-Control"), "ua %q", ua)
+	}
+}
+
+// A dead token in env mode answers with one machine-readable line — never the
+// Write-Host / echo stub, which an agent cannot tell apart from data.
+func TestConnectScript_FormatEnvDeadToken(t *testing.T) {
+	useMemoryStore(t)
+
+	got := redeemEnv(t, "NOSUCHTOKEN", "Mozilla/5.0 PowerShell/7.4.6")
+	require.Equal(t, http.StatusOK, got.Code)
+	body := got.Body.String()
+
+	require.Contains(t, body, "DR_ERROR='")
+	require.NotContains(t, body, "DR_API_KEY=")
+	require.NotContains(t, body, "Write-Host")
+	require.NotContains(t, body, "echo ")
+}
+
+// env mode is still a one-time redeem: the second fetch gets the error line.
+func TestConnectScript_FormatEnvConsumesTheToken(t *testing.T) {
+	useMemoryStore(t)
+	withKeysDB(t)
+	system_setting.ServerAddress = "https://example.test"
+
+	token := tokenFrom(t, issueAs(t, 100, 1, []string{ToolClaudeCode}))
+
+	first := redeemEnv(t, token, "curl/8.21.0")
+	require.Contains(t, first.Body.String(), "DR_API_KEY='")
+
+	second := redeemEnv(t, token, "curl/8.21.0")
+	require.Contains(t, second.Body.String(), "DR_ERROR='")
+	require.NotContains(t, second.Body.String(), "DR_API_KEY=")
 }

@@ -314,9 +314,23 @@ func TestOrgUsage_ThroughTheRealGateway(t *testing.T) {
 		status, _, message, _ = personal.call(t, http.MethodGet, "/api/org/usage/trend?group_by=model&bucket=day"+inShanghai, nil)
 		assert.Equal(t, http.StatusForbidden, status)
 		assert.Equal(t, "org.not_member", message)
-		for _, query := range []string{"", "group_by=model&bucket=day", "group_by=model&timezone=UTC", "group_by=member&bucket=day&timezone=UTC",
+
+		// --- PRD D49: one member's or one key's row of the report, drawn over time ------
+		assert.Equal(t, map[string]int{"seller": 3 * cost}, spentBy(trend(owner, "group_by=member&bucket=day&user_id="+id(seller.userID))),
+			"the seller's row, wherever they sat")
+		assert.Equal(t, map[string]int{"Sales tools": 3 * cost}, spentBy(trend(owner, "group_by=key&bucket=day&token_id="+id(sellersKey.Id))))
+		// The manager of Sales is drawn the part spent in Sales, and nothing of
+		// a member who was never there.
+		assert.Equal(t, map[string]int{"seller": 2 * cost}, spentBy(trend(manager, "group_by=member&bucket=day&user_id="+id(seller.userID))))
+		assert.Empty(t, trend(manager, "group_by=member&bucket=day&user_id="+id(maker.userID)).Series)
+		// The report takes the same narrowing.
+		assert.Equal(t, map[string]int{"gpt-4o-mini": 3}, report(owner, "group_by=model&user_id="+id(seller.userID)).requestsBy())
+		assert.Equal(t, map[string]int{"seller": 2}, report(manager, "group_by=member&token_id="+id(sellersKey.Id)).requestsBy())
+
+		for _, query := range []string{"", "group_by=model&bucket=day", "group_by=model&timezone=UTC", "group_by=team&bucket=day&timezone=UTC",
 			"group_by=model&bucket=hour&timezone=UTC", "group_by=model&bucket=day&timezone=Nowhere%2FAt_All",
-			"group_by=model&bucket=day&timezone=UTC&department_id=sales", "group_by=model&bucket=day&timezone=UTC&start_timestamp=200&end_timestamp=100"} {
+			"group_by=model&bucket=day&timezone=UTC&department_id=sales", "group_by=member&bucket=day&timezone=UTC&user_id=me",
+			"group_by=key&bucket=day&timezone=UTC&token_id=-1", "group_by=model&bucket=day&timezone=UTC&start_timestamp=200&end_timestamp=100"} {
 			status, success, message, _ := owner.call(t, http.MethodGet, "/api/org/usage/trend?"+query, nil)
 			assert.Equal(t, http.StatusOK, status, query)
 			assert.False(t, success, query)

@@ -49,6 +49,10 @@ type UsageQuery struct {
 	// DepartmentId narrows the report to what was spent in one department.
 	// Zero is every department the caller may see.
 	DepartmentId int
+	// UserId and TokenId narrow it to what one member, or one key, spent — of
+	// the lines the caller may see (PRD D49). Zero is everyone, every key.
+	UserId  int
+	TokenId int
 }
 
 // UsageFigures are what a report measures usage in: money, and the number of
@@ -209,8 +213,11 @@ type usageReach struct {
 // read: everything for a role that reads usage across the organization, what
 // was spent in the departments they manage for a department-scoped one, and
 // what they used themselves for everyone else. Naming a department outside
-// that is refused with ErrForbidden. The report and the trend both read
-// through here, so a rule about who sees what is written once.
+// that is refused with ErrForbidden. Naming a member or a key only narrows
+// those lines further: the row it comes from was summed from them, so a
+// member the caller may not see has no lines here and is answered with none.
+// The report and the trend both read through here, so a rule about who sees
+// what is written once.
 func usageWithin(logDB *gorm.DB, actor *Actor, query UsageQuery) (*usageReach, error) {
 	if query.Start < 0 || (query.End != 0 && query.End < query.Start) {
 		return nil, ErrInvalidUsageQuery
@@ -228,6 +235,12 @@ func usageWithin(logDB *gorm.DB, actor *Actor, query UsageQuery) (*usageReach, e
 			return nil, err
 		}
 		usage = usage.Where("department_id = ?", query.DepartmentId)
+	}
+	if query.UserId != 0 {
+		usage = usage.Where("user_id = ?", query.UserId)
+	}
+	if query.TokenId != 0 {
+		usage = usage.Where("token_id = ?", query.TokenId)
 	}
 
 	reach := &usageReach{scope: orgmodel.ScopeOrg}

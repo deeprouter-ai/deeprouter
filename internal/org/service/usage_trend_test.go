@@ -310,6 +310,114 @@ func TestTrendUsage_RefusesADepartmentOutOfReach(t *testing.T) {
 	})
 }
 
+// PRD D49: a row of the report by member or by key opens as a trend of its own
+// — the lines that row was summed from, drawn over time, so it adds up to the
+// row. With no member or key named, every row is a line, as by department.
+func TestTrendUsage_DrawsOneMemberOrOneKeyFromItsRow(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		c := newCompany(t, db, "Acme")
+
+		byMember := trendOf(t, db, c.owner, weekBy(UsageByMember), afterTheWeek)
+		require.Equal(t, []UsageTrendSeries{
+			line(c.sam.Id, "sam-of-Acme", 600, 300, 100, 200, 0, 0, 0),
+			line(c.pat.Id, "pat-of-Acme", 500, 500, 0, 0, 0, 0, 0),
+			line(c.bot.Id, "CI Pipeline", 50, 0, 0, 0, 50, 0, 0),
+		}, byMember.Series, "every member a line, the biggest spender first")
+		byKey := trendOf(t, db, c.owner, weekBy(UsageByKey), afterTheWeek)
+		require.Equal(t, []UsageTrendSeries{
+			line(c.samKey.Id, "sam's key", 600, 300, 100, 200, 0, 0, 0),
+			line(c.patKey.Id, "pat's key", 500, 500, 0, 0, 0, 0, 0),
+			line(c.botKey.Id, "pipeline key", 50, 0, 0, 0, 50, 0, 0),
+		}, byKey.Series)
+		require.EqualValues(t, 1150, byMember.Total)
+		require.Equal(t, byMember.Total, byKey.Total)
+
+		// One member: their line alone, from their first usage on, and it is
+		// their row of the report.
+		sam := weekBy(UsageByMember)
+		sam.UserId = c.sam.Id
+		samsLine := trendOf(t, db, c.owner, sam, afterTheWeek)
+		require.Equal(t, &UsageTrend{
+			GroupBy: UsageByMember, Bucket: TrendByDay, Scope: orgmodel.ScopeOrg, Total: 600,
+			Buckets: []string{"2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"},
+			Series:  []UsageTrendSeries{line(c.sam.Id, "sam-of-Acme", 600, 300, 100, 200, 0, 0, 0)},
+		}, samsLine)
+		require.Equal(t, usageOver(t, db, c.owner, UsageByMember).Rows[0].Quota, samsLine.Total)
+		// One key.
+		pipeline := weekBy(UsageByKey)
+		pipeline.TokenId = c.botKey.Id
+		require.Equal(t, &UsageTrend{
+			GroupBy: UsageByKey, Bucket: TrendByDay, Scope: orgmodel.ScopeOrg, Total: 50,
+			Buckets: []string{"2026-10-05", "2026-10-06", "2026-10-07"},
+			Series:  []UsageTrendSeries{line(c.botKey.Id, "pipeline key", 50, 50, 0, 0)},
+		}, trendOf(t, db, c.owner, pipeline, afterTheWeek))
+
+		// The report takes the same narrowing: one member's usage by model is
+		// what their line is made of.
+		samByModel, err := ReportUsage(db, db, c.owner, UsageQuery{
+			GroupBy: UsageByModel, Start: reportStart.Unix(), End: reportEnd.Unix(), UserId: c.sam.Id,
+		})
+		require.NoError(t, err)
+		require.Equal(t, []UsageRow{
+			usageRow(0, "gpt-4o", 1, 300), usageRow(0, "MiniMax-H3", 1, 200), usageRow(0, "gpt-4o-mini", 1, 100),
+		}, samByModel.Rows)
+		require.EqualValues(t, 600, samByModel.Total.Quota)
+
+		// Someone who spent nothing in the period has nothing to draw.
+		nobody := weekBy(UsageByMember)
+		nobody.UserId = c.org.owner.Id
+		require.Equal(t, &UsageTrend{GroupBy: UsageByMember, Bucket: TrendByDay, Scope: orgmodel.ScopeOrg,
+			Buckets: []string{}, Series: []UsageTrendSeries{}}, trendOf(t, db, c.owner, nobody, afterTheWeek))
+	})
+}
+
+// The line of one member is made of the lines of theirs the caller may see: a
+// manager asking about someone who spent in two departments is drawn the part
+// in theirs, and about someone outside them nothing at all — not a 403, since
+// no row of theirs ever named that member.
+func TestTrendUsage_DrawsOneMemberWithinTheCallersReach(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		withUsageLog(t, db)
+		c := newCast(t, db, "Acme")
+		staff := reloadUser(t, db, c.actors[kindStaff].UserId)
+		key := seedKey(t, db, c.org, staff.Id, "staff key")
+		logSpending(t, db, key, staff, spending{at: day(2), model: "gpt-4o", quota: 1})
+		// Moved to Product, they go on spending — there.
+		staff.DepartmentId = c.product.Id
+		logSpending(t, db, key, staff, spending{at: day(3), model: "gpt-4o", quota: 2})
+		inProduct := seedMemberIn(t, db, c.org, "in-product", presetRoleID(t, db, orgmodel.RoleStaff), c.product.Id)
+		logSpending(t, db, seedKey(t, db, c.org, inProduct.Id, "product key"), inProduct, spending{at: day(2), model: "gpt-4o", quota: 4})
+
+		of := func(kind string, userID int) *UsageTrend {
+			query := weekBy(UsageByMember)
+			query.UserId = userID
+			return trendOf(t, db, c.actors[kind], query, afterTheWeek)
+		}
+		bothDays := []UsageTrendSeries{line(staff.Id, staff.Username, 3, 1, 2, 0, 0, 0, 0)}
+		require.Equal(t, bothDays, of(kindOwner, staff.Id).Series)
+		// The manager of Sales is drawn the day spent in Sales, and nothing of
+		// a member who was never there.
+		manager := of(kindManager, staff.Id)
+		require.Equal(t, orgmodel.ScopeDept, manager.Scope)
+		require.Equal(t, []UsageTrendSeries{line(staff.Id, staff.Username, 1, 1, 0, 0, 0, 0, 0)}, manager.Series)
+		require.Empty(t, of(kindManager, inProduct.Id).Series)
+		// Whoever reads no report is drawn their own line, and nobody else's.
+		require.Equal(t, bothDays, of(kindStaff, staff.Id).Series)
+		require.Empty(t, of(kindStaff, inProduct.Id).Series)
+
+		// The same by key.
+		byKey := weekBy(UsageByKey)
+		byKey.TokenId = key.Id
+		require.EqualValues(t, 3, trendOf(t, db, c.actors[kindOwner], byKey, afterTheWeek).Total)
+		require.EqualValues(t, 1, trendOf(t, db, c.actors[kindManager], byKey, afterTheWeek).Total)
+		require.EqualValues(t, 3, trendOf(t, db, c.actors[kindStaff], byKey, afterTheWeek).Total)
+		require.EqualValues(t, 2, trendOf(t, db, c.actors[kindReadonly], UsageTrendQuery{
+			UsageQuery: UsageQuery{GroupBy: UsageByKey, Start: reportStart.Unix(), End: reportEnd.Unix(), TokenId: key.Id, DepartmentId: c.product.Id},
+			Bucket:     TrendByDay, Timezone: "UTC",
+		}, afterTheWeek).Total, "narrowed to a department as well: what the key spent there")
+	})
+}
+
 // A chart of forty lines reads as none. The eight that spent the most get a
 // line each and the rest share one, so the lines still add up to the total.
 func TestTrendUsage_DrawsTheBiggestAndSumsTheRest(t *testing.T) {
@@ -389,8 +497,6 @@ func TestTrendUsage_RefusesAQuestionThatMakesNoSense(t *testing.T) {
 		}
 		for name, query := range map[string]UsageTrendQuery{
 			"no grouping":            asked(func(q *UsageTrendQuery) { q.GroupBy = "" }),
-			"by member":              asked(func(q *UsageTrendQuery) { q.GroupBy = UsageByMember }),
-			"by key":                 asked(func(q *UsageTrendQuery) { q.GroupBy = UsageByKey }),
 			"a column of the log":    asked(func(q *UsageTrendQuery) { q.GroupBy = "model_name" }),
 			"no bucket":              asked(func(q *UsageTrendQuery) { q.Bucket = "" }),
 			"by the hour":            asked(func(q *UsageTrendQuery) { q.Bucket = "hour" }),

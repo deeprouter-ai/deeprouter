@@ -30,8 +30,14 @@ import {
 const SCRIPT_URL = 'https://deeprouter.example/i/tok_abc123'
 const LANGUAGES: PromptLanguage[] = ['zh', 'en']
 
-function build(language: PromptLanguage, model = DEFAULT_VIDEO_MODEL) {
-  return buildVideoPrompt({ scriptUrl: SCRIPT_URL, model, language })
+// Mirrors the video page: the cheapest permitted model is the default.
+function build(language: PromptLanguage, models = VIDEO_MODELS) {
+  return buildVideoPrompt({
+    scriptUrl: SCRIPT_URL,
+    model: models[0],
+    models,
+    language,
+  })
 }
 
 describe('buildVideoPrompt (both languages)', () => {
@@ -53,6 +59,32 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
+  it('credential fetch: uses the UA-independent env form with a failure branch', () => {
+    // ?format=env is the fix for the Windows wall of 2026-10-04: the script
+    // form renames the variables per shell ($DrApiKey under PowerShell), so
+    // an agent fetching with irm held the key under a name it was never told.
+    // The env form is identical for every client.
+    for (const language of LANGUAGES) {
+      const prompt = build(language)
+      expect(prompt).toContain(`${SCRIPT_URL}?format=env`)
+      // Dead link = DR_ERROR line; the agent must stop and send the user
+      // back for a fresh copy, never retry the burned URL.
+      expect(prompt).toContain('DR_ERROR')
+    }
+    expect(build('zh')).toContain('重新复制')
+    expect(build('en')).toContain('copy a fresh prompt')
+  })
+
+  it('environment guard: refuses to run off the user’s machine', () => {
+    // Pasted into a web AI with no terminal (measured on claude.ai threads,
+    // 2026-10-04), the old prompt half-executed and died mid-flow; it must
+    // bail out with guidance instead.
+    expect(build('zh')).toContain('用户的电脑上')
+    expect(build('zh')).toContain('网页版 AI')
+    expect(build('en')).toContain("user's computer")
+    expect(build('en')).toContain('web-based AI')
+  })
+
   it('method layer: teaches submit → poll → download → open/print-path', () => {
     for (const language of LANGUAGES) {
       const prompt = build(language)
@@ -62,9 +94,14 @@ describe('buildVideoPrompt (both languages)', () => {
       expect(prompt).toContain('supported_endpoint_types')
       expect(prompt).toContain('https://deeprouter.co/llms.txt')
       expect(prompt).toContain('/v1/videos/')
-      // Poll terminal states must match dto.VideoStatus* on the gateway.
+      // Poll terminal states must match dto.VideoStatus* on the gateway, and
+      // only GET /v1/videos/{id} reports those. /v1/video/generations/{id}
+      // answers data.status "SUCCESS"/"FAILURE", so an agent told to wait for
+      // "completed" there polls forever (measured locally 2026-10-05).
+      expect(prompt).not.toContain('/v1/video/generations/{')
       expect(prompt).toContain('"completed"')
       expect(prompt).toContain('"failed"')
+      expect(prompt).toContain('error.message')
       // Player fallback: open on each OS, and always print the absolute path.
       expect(prompt).toContain('start')
       expect(prompt).toContain('xdg-open')
@@ -87,10 +124,32 @@ describe('buildVideoPrompt (both languages)', () => {
     expect(build('en')).toContain('asks to remove the video setup')
   })
 
-  it('uses the chosen model for the default and the test run', () => {
+  it('memory layer: points at the full reference for what the rules skip', () => {
+    // Relative to the stored base URL, not a hardcoded host: llms.txt is
+    // served on every host the gateway answers on.
+    for (const language of LANGUAGES) {
+      expect(build(language)).toContain('{DEEPROUTER_BASE_URL}/llms.txt')
+    }
+  })
+
+  it('test run is opt-in (it costs money) and the prompt says it runs once', () => {
+    // The verification clip spends the user's balance, so the agent must ask
+    // with the price on the table instead of just generating — and the user
+    // must leave knowing this text is pasted once, not before every video.
+    const zh = build('zh')
+    expect(zh).toContain('可选')
+    expect(zh).toContain('先问用户')
+    expect(zh).toContain('只需要在最开始粘贴这一次')
+    const en = build('en')
+    expect(en).toContain('optional')
+    expect(en).toContain('ask the user')
+    expect(en).toContain('pasted once')
+  })
+
+  it('the first permitted model is the default and the test run', () => {
     for (const language of LANGUAGES) {
       for (const model of VIDEO_MODELS) {
-        const p = buildVideoPrompt({ scriptUrl: SCRIPT_URL, model, language })
+        const p = build(language, [model])
         if (language === 'zh') {
           expect(p).toContain(`默认用 ${model.id}`)
         } else {
@@ -101,7 +160,31 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
-  it('lists every menu model inside the prompt with a price', () => {
+  it('the menu lists only the models the key may call', () => {
+    // A key is granted exactly the video models its account has enabled
+    // (internal/keypurpose). Teaching the AI about a model this key cannot
+    // call produces a 403 the moment the user switches to it by voice.
+    const [cheapest, mid] = VIDEO_MODELS
+    for (const language of LANGUAGES) {
+      const limited = build(language, [mid])
+      expect(limited).toContain(mid.id)
+      expect(limited).not.toContain(cheapest.id)
+      expect(limited).toContain(mid.promptLine[language])
+    }
+  })
+
+  it('defaults to the cheapest permitted model, not a hardcoded one', () => {
+    // VIDEO_MODELS is ordered cheapest-first and the caller passes the
+    // permitted subset, so models[0] is the cheapest this key can run.
+    expect(DEFAULT_VIDEO_MODEL.id).toBe('MiniMax-H3')
+    const withoutH3 = VIDEO_MODELS.filter((m) => m.id !== 'MiniMax-H3')
+    expect(withoutH3[0].id).toBe('doubao-seedance-2-0-260128')
+    const p = build('zh', withoutH3)
+    expect(p).toContain(`默认用 ${withoutH3[0].id}`)
+    expect(p).not.toContain('MiniMax-H3')
+  })
+
+  it('lists every model inside the prompt when all are permitted', () => {
     // The in-prompt alternatives table and the page's model menu must not
     // drift apart: an agent asked to switch models should only pick ones the
     // page also prices.
@@ -113,10 +196,17 @@ describe('buildVideoPrompt (both languages)', () => {
     }
   })
 
-  it('every model option carries a test-run line in both languages', () => {
+  it('every model option carries a test-run and prompt line in both languages', () => {
     for (const model of VIDEO_MODELS) {
       expect(model.testRun.zh.length).toBeGreaterThan(0)
       expect(model.testRun.en.length).toBeGreaterThan(0)
+      expect(model.promptLine.zh.length).toBeGreaterThan(0)
+      expect(model.promptLine.en.length).toBeGreaterThan(0)
+    }
+    // The in-prompt menu names each model by id, so the AI can switch to it.
+    for (const model of VIDEO_MODELS) {
+      expect(build('zh')).toContain(`- ${model.id}：${model.promptLine.zh}`)
+      expect(build('en')).toContain(`- ${model.id}: ${model.promptLine.en}`)
     }
   })
 

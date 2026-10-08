@@ -151,7 +151,7 @@ jobs:
           # line took 18s on a developer machine when this was raised.
           go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestUpdateSelf|TestOrg' -count=1 -race -timeout 180s
           # kids_mode middleware layer: policy resolution + defensive pass-through (DR-12).
-          go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
+          go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel|TestDistributeTaskFetch' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance + MiniMax/Hailuo video ModelLists (价格未配置
           # regression guards; hailuo also covers the v2/H3 request conversion).
