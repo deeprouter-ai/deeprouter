@@ -15,15 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/internal/skill-marketplace/packageassets"
 )
 
-var (
-	ErrProviderKeyDetected      = errors.New("package contains a provider API key pattern")
-	ErrRuntimeDependencyMissing = errors.New("package runner does not call the DeepRouter routing endpoint")
-)
-
-// Hardcoded to match the address deeprouter_skill_runner.py itself calls
-// (see packageassets/deeprouter_skill_runner.py) — kept in sync manually
-// since the runner is Python and this check is Go.
-const deepRouterRoutingEndpoint = "deeprouter.co/v1/routing/chat/completions"
+var ErrProviderKeyDetected = errors.New("package contains a provider API key pattern")
 
 type providerKeyPattern struct {
 	name string
@@ -40,9 +32,9 @@ var providerKeyPatterns = []providerKeyPattern{
 }
 
 // validateSkillPackageSecurity scans the plain-text pieces that are about to
-// be packaged (SKILL.md, manifest.json, the bundled runner/README) for a
-// vendor API key pattern, before any ZIP bytes are produced — a match stops
-// packaging entirely, so a failing package is never assembled or persisted.
+// be packaged (SKILL.md, manifest.json, README) for a vendor API key
+// pattern, before any ZIP bytes are produced — a match stops packaging
+// entirely, so a failing package is never assembled or persisted.
 func validateSkillPackageSecurity(contents ...string) error {
 	for _, content := range contents {
 		for _, p := range providerKeyPatterns {
@@ -54,24 +46,22 @@ func validateSkillPackageSecurity(contents ...string) error {
 	return nil
 }
 
-// validateSkillPackageRuntimeDependency confirms the runner script actually
-// calls DeepRouter's own routing endpoint, so a package can never silently
-// redirect execution to bypass platform billing.
-func validateSkillPackageRuntimeDependency(runnerContent string) error {
-	if !strings.Contains(runnerContent, deepRouterRoutingEndpoint) {
-		return ErrRuntimeDependencyMissing
-	}
-	return nil
-}
+// legacyDRKeyManifestFields were required while hosted skills ran through a
+// DR-key runner (removed, PRD §15). Versions uploaded back then still store
+// them, so they are dropped at packaging time rather than shipped to users.
+var legacyDRKeyManifestFields = []string{"requires_deeprouter_key", "deeprouter_routing_endpoint"}
 
 // buildFinalManifest takes the Admin-uploaded manifest_json (which already
-// has slug/version/requires_deeprouter_key/deeprouter_routing_endpoint) and
-// injects the two fields only the server knows: skill_id and
-// skill_version_id (PRD §4.1 — these are DB-assigned and never set by Admin).
+// has slug/version) and injects the two fields only the server knows:
+// skill_id and skill_version_id (these are DB-assigned and never set by
+// Admin).
 func buildFinalManifest(skill *model.Skill, version *model.SkillVersion) ([]byte, error) {
 	var manifest map[string]interface{}
 	if err := common.Unmarshal(version.ManifestJSON, &manifest); err != nil {
 		return nil, fmt.Errorf("invalid manifest_json for version %d: %w", version.ID, err)
+	}
+	for _, field := range legacyDRKeyManifestFields {
+		delete(manifest, field)
 	}
 	manifest["skill_id"] = skill.ID
 	manifest["skill_version_id"] = version.ID
@@ -83,10 +73,10 @@ func renderReadme(slug string) string {
 }
 
 // BuildSkillPackage assembles a skill's ZIP package entirely in memory:
-// Admin's SKILL.md, the injected manifest.json, and the shared
-// runner+README under runtime/. Both security guards run against the plain
-// text pieces before any ZIP bytes are written — on failure, no ZIP is ever
-// produced, matching the "package not persisted" requirement in PRD §9.
+// Admin's SKILL.md, the injected manifest.json, and the shared README. The
+// security guard runs against the plain text pieces before any ZIP bytes
+// are written — on failure, no ZIP is ever produced, matching the "package
+// not persisted" requirement in PRD §9.
 //
 // Pure function: no DB access. The caller (the activation transaction)
 // decides what to do with the returned bytes.
@@ -100,12 +90,8 @@ func BuildSkillPackage(skill *model.Skill, version *model.SkillVersion) (zipByte
 	if err := validateSkillPackageSecurity(
 		version.SkillMDContent,
 		string(finalManifest),
-		packageassets.RunnerScript,
 		readme,
 	); err != nil {
-		return nil, "", err
-	}
-	if err := validateSkillPackageRuntimeDependency(packageassets.RunnerScript); err != nil {
 		return nil, "", err
 	}
 
@@ -116,8 +102,7 @@ func BuildSkillPackage(skill *model.Skill, version *model.SkillVersion) (zipByte
 	}{
 		{root + "manifest.json", string(finalManifest)},
 		{root + "SKILL.md", version.SkillMDContent},
-		{root + "runtime/deeprouter_skill_runner.py", packageassets.RunnerScript},
-		{root + "runtime/README.md", readme},
+		{root + "README.md", readme},
 	}
 
 	var buf bytes.Buffer

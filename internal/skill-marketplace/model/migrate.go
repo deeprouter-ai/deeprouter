@@ -13,7 +13,17 @@ import (
 //
 // 🔴 Never returns an error, by design. See migrateOrReport.
 func Migrate(db *gorm.DB) error {
-	return migrateOrReport(db, migrate)
+	return migrateOrReport(db, func(db *gorm.DB) error {
+		if err := migrate(db); err != nil {
+			return err
+		}
+		// Content, not schema: a seeding failure must not be reported as a
+		// broken migration, and the next start retries it.
+		if err := seedInitialSkills(db); err != nil {
+			common.SysError("skill marketplace: initial skills not seeded, will retry on next start: " + err.Error())
+		}
+		return nil
+	})
 }
 
 // migrateOrReport downgrades a marketplace migration failure from "the gateway
@@ -65,6 +75,10 @@ func migrate(db *gorm.DB) error {
 	// Step 1b: PRD §13 reference-listing columns, added to the now-existing
 	// skills table before anything downstream reads it.
 	if err := addReferenceListingColumns(db); err != nil {
+		return err
+	}
+	// Step 1c: PRD §16 — category is superseded by multi-value tags.
+	if err := dropCategoryColumn(db); err != nil {
 		return err
 	}
 	// Step 2: skill_versions (references skills)
@@ -185,6 +199,17 @@ func addReferenceListingColumns(db *gorm.DB) error {
 		  END IF;
 		END$$`,
 	)
+}
+
+// dropCategoryColumn removes the single-select `category` column now that
+// filtering runs on the multi-value `tags` column instead (Skill Marketplace
+// V2 PRD §16). DROP COLUMN IF EXISTS is idempotent by itself — no separate
+// existence check needed the way ADD COLUMN's sibling constraints require
+// one. Decided as a hard drop, not a soft-deprecate: production had no
+// published skills when this shipped (public list total 0, 2026-10-05), so
+// there was no live category data to carry over.
+func dropCategoryColumn(db *gorm.DB) error {
+	return db.Exec(`ALTER TABLE skills DROP COLUMN IF EXISTS category`).Error
 }
 
 // execEach runs each DDL statement as its own Exec — see the SQLSTATE 42601

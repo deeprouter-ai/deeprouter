@@ -42,12 +42,6 @@ func validateManifestUploadFields(manifest map[string]interface{}) error {
 	if version, _ := manifest["version"].(string); version == "" {
 		return fmt.Errorf("%w: version", ErrManifestInvalid)
 	}
-	if manifest["requires_deeprouter_key"] != true {
-		return fmt.Errorf("%w: requires_deeprouter_key must be true", ErrManifestInvalid)
-	}
-	if endpoint, _ := manifest["deeprouter_routing_endpoint"].(string); endpoint == "" {
-		return fmt.Errorf("%w: deeprouter_routing_endpoint", ErrManifestInvalid)
-	}
 	return nil
 }
 

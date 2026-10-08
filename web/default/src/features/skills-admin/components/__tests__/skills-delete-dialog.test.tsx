@@ -59,7 +59,6 @@ const draftSkill: SkillSummary = {
   slug: 'draft-skill',
   name: 'Draft Skill',
   description: '',
-  category: 'code',
   tags: [],
   status: 'draft',
   monetization_type: 'free',

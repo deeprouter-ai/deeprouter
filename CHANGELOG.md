@@ -266,6 +266,16 @@
 - 修复 Seedream 渠道自动测试端点与请求类型不一致：统一使用图片请求，2048x2048 测试尺寸并关闭图片测试流式校验；覆盖 4 个型号及显式端点选择。
 - 修复 Seedance 视频渠道连接测试：用只读任务列表检查鉴权和连通性，支持渠道代理与启用密钥；标明未验证模型生成，避免批量测试产生付费视频。新增实际测试入口的错误响应回归覆盖。
 
+## 2026-09-30
+
+- **Skill Marketplace: hosted skills no longer require a DeepRouter API Key to run**——移除了整套"用 skill 必须绑 DR key、经 runner 脚本调 DR 计费接口"的机制。实测证明 Claude Code 的原生 skill 机制只读 `SKILL.md` 当文本注入上下文，从不执行打包进 ZIP 的 runner，这套机制对唯一的真实消费方从没生效过；PRD 自身 §4（执行模型）和 §8.6（SKILL.md authoring 模板）也互相矛盾。对应 `skill-marketplace-v2-prd.md` §15 / task card P11+P12，分支 `taeron94/skill-v2-drop-runner`。
+  - **打包**（`internal/skill-marketplace/service/packaging.go`）：ZIP 从 4 个文件（`manifest.json`+`SKILL.md`+`runtime/deeprouter_skill_runner.py`+`runtime/README.md`）减到 3 个（`manifest.json`+`SKILL.md`+`README.md`，挪出 `runtime/` 概念）。`validateSkillPackageSecurity()`（防 provider key 泄露扫描）保留，扫描对象从 4 段文本收窄到 3 段；`validateSkillPackageRuntimeDependency()`（校验 runner 调用了 DR endpoint）连同 `ErrRuntimeDependencyMissing`、`deepRouterRoutingEndpoint` 常量整个删除。
+  - **上传校验**（`internal/skill-marketplace/service/admin_version.go`）：`validateManifestUploadFields()` 只留 `slug`/`version` 两个必填字段，`requires_deeprouter_key`/`deeprouter_routing_endpoint` 不再必填。
+  - **runner 脚本整个删除**：`internal/skill-marketplace/packageassets/deeprouter_skill_runner.py` + 对应的 Go/Python 两个测试文件，`embed.go` 去掉对应的 `//go:embed`。
+  - **前端**：Marketplace 详情页（`skill-detail.tsx`）删掉"Running this skill needs a DeepRouter API Key"提示卡；Admin 上传/编辑页（`skill-md-template.ts` 的 manifest 预填模板、两个 version drawer 组件）同步去掉相关字段和报错文案；`en.json`/`zh.json` 删对应词条（含一条从未被源码引用过的死 i18n key）。
+  - `controller/admin_marketplace.go` 的 `AdminActivateVersion` 错误映射同步去掉对已删除错误类型的引用。
+  - 验证：`go build`/`go vet`/`gofmt`、`go test ./internal/skill-marketplace/...` + 相关 controller 测试全绿；前端 `tsc -b`/`eslint`/`prettier --check`/`bun run i18n:sync`、`vitest run src/features/marketplace src/features/skills-admin`（21 files / 133 tests）全过。⚠️ 已有 published skill 的下载/购买流程回归验证靠的是"`download.go` 未改动 + 既有测试仍全过"，不是真实 Postgres 端到端验证（本地 Docker Desktop 当前暂停）。
+
 ## 2026-09-29
 
 - **可下载的安装器：Windows 双击即可，全程不必打开终端**（One-Click Setup PRD §11，卡 P5；老板 2026-09-12 拍板 D4/D5/D6）：

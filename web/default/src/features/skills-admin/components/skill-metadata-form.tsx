@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ComboboxInput } from '@/components/ui/combobox-input'
 import {
   Form,
   FormControl,
@@ -47,7 +46,6 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Textarea } from '@/components/ui/textarea'
 import { updateSkill } from '../api'
-import { getSkillCategoryOptions } from '../constants'
 import {
   formatTagsInput,
   getUpdateSkillFormSchema,
@@ -61,7 +59,6 @@ function toFormValues(skill: SkillSummary): UpdateSkillFormValues {
     slug: skill.slug,
     name: skill.name,
     description: skill.description,
-    category: skill.category,
     tags: formatTagsInput(skill.tags),
     monetization_type: skill.monetization_type,
     price_usd: skill.price_usd,
@@ -80,7 +77,6 @@ export function SkillMetadataForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingValues, setPendingValues] =
     useState<UpdateSkillFormValues | null>(null)
-  const categoryOptions = getSkillCategoryOptions(t)
 
   const form = useForm<UpdateSkillFormValues>({
     resolver: zodResolver(getUpdateSkillFormSchema(t)),
@@ -107,7 +103,6 @@ export function SkillMetadataForm({
         slug: values.slug,
         name: values.name,
         description: values.description,
-        category: values.category,
         tags: parseTagsInput(values.tags),
         monetization_type: values.monetization_type,
         price_usd: values.monetization_type === 'paid' ? values.price_usd : 0,
@@ -201,25 +196,6 @@ export function SkillMetadataForm({
                   <FormLabel>{t('Description')}</FormLabel>
                   <FormControl>
                     <Textarea {...field} rows={3} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='category'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Category')}</FormLabel>
-                  <FormControl>
-                    <ComboboxInput
-                      options={categoryOptions}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      allowCustomValue
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

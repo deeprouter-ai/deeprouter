@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { getRouteApi } from '@tanstack/react-router'
 import { Package } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -29,9 +30,13 @@ import { SearchBar } from '@/features/pricing/components/search-bar'
 import { fetchMarketplaceSkills, marketplaceQueryKeys } from './api'
 import { SkillCard } from './components/skill-card'
 
-// PRD §5.1 initial category list. `category` is free text server-side, so an
-// admin-invented category still reaches users through search / All.
-const CATEGORIES: { value: string; labelKey: string }[] = [
+const route = getRouteApi('/marketplace/')
+
+// PRD §16.4 fixed label list, carried over unchanged from the old
+// single-select category list (PRD §5.1). Free text server-side, so a tag
+// outside this list still reaches users through search (see api.ts's `q`
+// param, extended server-side to match tags — PRD §16.2).
+const LABELS: { value: string; labelKey: string }[] = [
   { value: 'writing', labelKey: 'Writing' },
   { value: 'translation', labelKey: 'Translation' },
   { value: 'code', labelKey: 'Code' },
@@ -48,18 +53,28 @@ const PAGE_LIMIT = 100
 
 export function MarketplacePage() {
   const { t } = useTranslation()
+  const { tags: initialTags } = route.useSearch()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [category, setCategory] = useState<string>('all')
+  // A skill-detail page's tag badge deep-links here with ?tags=<tag> — that
+  // becomes the initial selection; after that this is plain client state
+  // (clicking a filter chip does not push a new URL).
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialTags ?? [])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300)
     return () => clearTimeout(timer)
   }, [search])
 
+  function toggleTag(tag: string) {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    )
+  }
+
   const params = {
     q: debouncedSearch || undefined,
-    category: category === 'all' ? undefined : category,
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
     limit: PAGE_LIMIT,
   }
   const { data, isLoading, isError, refetch } = useQuery({
@@ -67,7 +82,7 @@ export function MarketplacePage() {
     queryFn: () => fetchMarketplaceSkills(params),
   })
 
-  const filtered = Boolean(debouncedSearch) || category !== 'all'
+  const filtered = Boolean(debouncedSearch) || selectedTags.length > 0
   const skills = data?.skills ?? []
   // PRD §8.1: featured cards on top, rank ascending, at most 4 — only on the
   // unfiltered view. The backend already sorts featured-first, so the first
@@ -86,7 +101,7 @@ export function MarketplacePage() {
           </h1>
           <p className='text-muted-foreground mt-2 max-w-2xl'>
             {t(
-              'Hand-tested skills for Claude Code. Download one, drop it into your setup, and it runs on your DeepRouter key.'
+              "Hand-tested skills for Claude Code. Download one, drop it into your setup, and it's ready to use."
             )}
           </p>
 
@@ -99,19 +114,31 @@ export function MarketplacePage() {
               className='sm:max-w-xs'
             />
             <div className='flex flex-wrap gap-1.5'>
-              {[{ value: 'all', labelKey: 'All' }, ...CATEGORIES].map((c) => (
+              <button
+                type='button'
+                onClick={() => setSelectedTags([])}
+                className={cn(
+                  'rounded-[7px] border px-3 py-1.5 text-sm transition-colors',
+                  selectedTags.length === 0
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {t('All')}
+              </button>
+              {LABELS.map((l) => (
                 <button
-                  key={c.value}
+                  key={l.value}
                   type='button'
-                  onClick={() => setCategory(c.value)}
+                  onClick={() => toggleTag(l.value)}
                   className={cn(
                     'rounded-[7px] border px-3 py-1.5 text-sm transition-colors',
-                    category === c.value
+                    selectedTags.includes(l.value)
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-card text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  {t(c.labelKey)}
+                  {t(l.labelKey)}
                 </button>
               ))}
             </div>
@@ -141,9 +168,7 @@ export function MarketplacePage() {
                     : t('No skills available yet, stay tuned')
                 }
                 description={
-                  filtered
-                    ? t('Try a different keyword or category.')
-                    : undefined
+                  filtered ? t('Try a different keyword or tag.') : undefined
                 }
                 bordered
               />
