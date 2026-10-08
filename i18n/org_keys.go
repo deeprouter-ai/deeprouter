@@ -22,3 +22,27 @@ const (
 	MsgOrgWalletLowBody     = "org.wallet_low_body"
 	MsgOrgWalletLowBodyHTML = "org.wallet_low_body_html"
 )
+
+// What a notification about an organization's alerts is put together from
+// (service/org_alerts.go): a title that takes {{.Count}}, one line per alert,
+// and two closing lines. Every line about a key takes {{.Key}} and
+// {{.Holder}}; the rest is named beside it.
+const (
+	MsgOrgAlertTitle = "org.alert_title"
+	// A warning short of the limit, and one at it: {{.Used}}, {{.Limit}} and,
+	// short of the limit, {{.Percent}}.
+	MsgOrgAlertQuota        = "org.alert_quota"
+	MsgOrgAlertQuotaSpent   = "org.alert_quota_spent"
+	MsgOrgAlertMonthly      = "org.alert_monthly"
+	MsgOrgAlertMonthlySpent = "org.alert_monthly_spent"
+	// The anomaly rules: {{.Spent}} and {{.Average}}, or {{.Ips}}.
+	MsgOrgAlertSpike    = "org.alert_spike"
+	MsgOrgAlertOffHours = "org.alert_offhours"
+	MsgOrgAlertNewIP    = "org.alert_new_ip"
+	// MsgOrgAlertMore stands for the alerts a long notification leaves out;
+	// it takes {{.Count}}.
+	MsgOrgAlertMore = "org.alert_more"
+	// MsgOrgAlertFooter closes a notification that reports an anomaly: nothing
+	// was blocked, and where to stop a key.
+	MsgOrgAlertFooter = "org.alert_footer"
+)

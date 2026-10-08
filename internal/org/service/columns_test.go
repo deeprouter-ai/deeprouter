@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -60,6 +61,37 @@ func migratePlatformTables(t *testing.T, db *gorm.DB) {
 	require.NoError(t, db.AutoMigrate(&platformmodel.Token{}, &platformmodel.User{}, &platformmodel.Log{}))
 }
 
+// indexColumns returns the columns of an index of a table, in the order the
+// index holds them. Each engine is asked in its own words: GORM's migrator
+// cannot list indexes on SQLite, and on PostgreSQL it lists an index's columns
+// in the order of the table rather than of the index.
+func indexColumns(t *testing.T, db *gorm.DB, table string, name string) []string {
+	t.Helper()
+	var columns []string
+	switch db.Dialector.Name() {
+	case "sqlite":
+		var rows []struct{ Name string }
+		require.NoError(t, db.Raw("PRAGMA index_info('"+name+"')").Scan(&rows).Error)
+		for _, row := range rows {
+			columns = append(columns, row.Name)
+		}
+	case "postgres":
+		var definition string
+		require.NoError(t, db.Raw("SELECT indexdef FROM pg_indexes WHERE tablename = ? AND indexname = ?", table, name).Scan(&definition).Error)
+		// "CREATE INDEX … USING btree (org_id, created_at)"
+		open, shut := strings.LastIndex(definition, "("), strings.LastIndex(definition, ")")
+		require.Less(t, open, shut, "index %s: %q", name, definition)
+		for _, column := range strings.Split(definition[open+1:shut], ",") {
+			columns = append(columns, strings.Trim(strings.TrimSpace(column), `"`))
+		}
+	default:
+		require.NoError(t, db.Raw("SELECT column_name FROM information_schema.statistics "+
+			"WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? ORDER BY seq_in_index", table, name).
+			Scan(&columns).Error)
+	}
+	return columns
+}
+
 func TestPlatformTables_CarryTheOrgColumnsAndIndexes(t *testing.T) {
 	orgtest.ForEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		migratePlatformTables(t, db)
@@ -75,8 +107,13 @@ func TestPlatformTables_CarryTheOrgColumnsAndIndexes(t *testing.T) {
 		// PRD §7.2 asks for these four to be indexed: reports filter on them.
 		require.True(t, db.Migrator().HasIndex(&platformmodel.User{}, "OrgId"), "index on users.org_id")
 		require.True(t, db.Migrator().HasIndex(&platformmodel.Token{}, "OrgId"), "index on tokens.org_id")
-		require.True(t, db.Migrator().HasIndex(&platformmodel.Log{}, "OrgId"), "index on logs.org_id")
 		require.True(t, db.Migrator().HasIndex(&platformmodel.Log{}, "DepartmentId"), "index on logs.department_id")
+		// The usage log is indexed by organization and time together: an
+		// organization's usage is read for a stretch of time, by its reports
+		// and by the alert scan.
+		require.True(t, db.Migrator().HasIndex(&platformmodel.Log{}, "idx_logs_org_created"), "index on logs (org_id, created_at)")
+		require.Equal(t, []string{"org_id", "created_at"}, indexColumns(t, db, "logs", "idx_logs_org_created"),
+			"organization first, then time")
 	})
 }
 

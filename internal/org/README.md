@@ -9,12 +9,12 @@ changing the code.
 
 | Package | Holds | May import the platform `model` package? |
 |---|---|---|
-| `model/` | The seven org tables and the migration; the permission vocabulary — primitives, inherent powers, preset roles, role packs, audit actions — and the permission engine `Can` | **No** — `model/main.go` imports it to migrate, so the reverse is a cycle |
-| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log | Yes |
+| `model/` | The seven org tables and the migration; the permission vocabulary — primitives, inherent powers, preset roles, role packs, audit actions — and the permission engine `Can`; the alert rules and the settings they run on | **No** — `model/main.go` imports it to migrate, so the reverse is a cycle |
+| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log, warnings and alerts | Yes |
 | `orgtest/` | Throwaway databases for tests, one per engine | **No** — tests in both packages above use it |
 
-Handlers live in `controller/org.go` and `controller/org_keys.go`, routes under
-`/api/org` in `router/api-router.go`. The web pages are
+Handlers live in `controller/org.go`, `controller/org_keys.go` and
+`controller/org_alerts.go`, routes under `/api/org` in `router/api-router.go`. The web pages are
 `web/default/src/features/org`. What an organization key does on the relay
 path — whose balance pays, how its usage is stamped — is under "The company
 wallet" below.
@@ -97,6 +97,9 @@ What each endpoint asks for:
 | `GET /key-assignees` | `key.assign` anywhere; answers the members a key can be handed to — the owner is not one — each with their role only where the caller may read that member |
 | `POST /keys/:id/assign` | `key.assign` over the holder **and** over the member the key goes to |
 | `POST /keys/:id/reclaim` | `key.assign` over the holder |
+| `GET /alerts` | `alert.read`; a `dept`-scoped role is sent the alerts raised on keys held in its departments only |
+| `POST /alerts/:id/handle` | power `alert.handle` |
+| `GET /alert-settings`, `PUT /alert-settings` | power `org.settings` |
 
 `service/gate_test.go` tries every one of these as every kind of member, against
 a table that says by hand who gets through. A new management function belongs
@@ -414,6 +417,114 @@ tests named beside it are what would notice.
 | `model/log.go` | `stampOrgFromRequest`, `stampOrg` | `service`, `router` |
 | `controller/relay.go` (`RelayMidjourney`), `controller/playground.go` | the two refusals | `router` |
 | `controller/user.go` (`GetSelf`) | `org_id` for a member | `controller` `TestOrgSelf_TheProfile…` |
+| `model/log.go` (the `Log` struct) | the index `idx_logs_org_created` on `org_id` and `created_at`, which the alert scan and the reports read by | `internal/org/service` `TestPlatformTables_CarryTheOrgColumnsAndIndexes` |
+| `main.go` | `service.StartOrgAlertTask()` — without it no warning or alert is ever raised | **nothing** — a test that started the task would have it running under every other test |
+
+## Warnings and alerts
+
+Two kinds of thing an organization is told about its keys (PRD §4). Both are
+rows of `org_alerts`, and both are **only ever told**: nothing here stops a
+request (PRD D13).
+
+- a **warning** — a key has used a share of what it was given: of its quota,
+  or of the requests it may make in a month (`rule` `quota`, `monthly`);
+- an **anomaly** — a key is being used unlike before: it spent far more
+  within a day than it usually does, it spent a lot outside working hours, or
+  it was used from an address it had not been used from (`spike`, `offhours`,
+  `new_ip`).
+
+What to know before changing any of it:
+
+- 🔴 **It is a background task, not a hook on the request.**
+  `service.StartOrgAlertTask` — the platform's `service/org_alerts.go`,
+  started from `main.go`, on the master node only — runs a pass a minute:
+  `ScanAllowances` every time, `ScanAnomalies` every ten minutes, then the
+  sending. Nothing on the relay path knows it exists. The PRD's first sketch
+  hung the warning off the settlement of a request. It was not built that
+  way: a key's spending reaches its row seconds after the request
+  (`BATCH_UPDATE_ENABLED`), so a check made at settlement reads the numbers
+  from before it; and requests are settled in several places — chat, audio,
+  realtime, video tasks, refunds — that a scan of the keys covers without a
+  line in any of them. The price is that a warning is up to a minute late.
+- **A key is warned once per level and cycle** (`ScanAllowances`,
+  `withoutRepeatedWarnings`). The levels are the organization's
+  (`AlertSettings.WarnAt`; 80 and 100 by default). A key is told about the
+  highest level it has reached, and never again about that one or a lower one
+  in the same cycle. The cycle of the monthly limit is the calendar month.
+  The cycle of the quota is **what the key was given in all** — `used_quota +
+  remain_quota`, a sum that spending and refunds leave alone and that changes
+  when someone gives the key more. That sum is also what the share is taken
+  of, the way the personal keys page draws its bar.
+- **The monthly limit counts requests, not money.** It is the gateway's own
+  counter (`internal/quota`, in Redis or in memory), read through
+  `quota.MonthlyUsed`. The scan is handed a function for it (`MonthlyUsage`),
+  so this package needs no Redis.
+- **Which keys a pass looks at**: the ones used since the pass before
+  (`tokens.accessed_time`, which every settlement writes), and every
+  organization key on the first pass after a start — that is what catches up
+  after downtime. A row changed without the key being used is looked at when
+  the key is next used.
+- **A request in flight counts with what it reserved.** The gateway takes a
+  request's estimated cost off the key up front and puts the difference back
+  at settlement, so a pass that falls in between sees a share slightly ahead
+  of the truth, and may warn one request early.
+- ⚠️ **A key can stop short of 100%.** With less than ten dollars left the
+  gateway refuses a request when what is left does not cover its estimated
+  cost (`pre_consume_token_quota_failed`). A client that asks for a large
+  `max_tokens` is therefore turned away with a few percent of the quota
+  unused, and the 100% warning — which means nothing is left — never goes
+  out for that key. The 80% one has by then. Telling people about that
+  refusal is not built (see "Not here yet").
+- **The anomaly rules read the usage log** (`ScanAnomalies`). "A day" is the
+  last 24 hours and "usual" is the 7 days before them, per key **under its
+  current holder** — lines written by whoever held the key before are
+  somebody else's habits. A key says nothing until it has been with its
+  holder for 7 days, counted from when it was made or from its last
+  `key.assign` / `key.reclaim` record in the audit log; rotating it does not
+  start that over. The same key and rule speak once in 24 hours, whatever
+  became of the alert.
+  - `spike`: the day's spending is at least the floor and more than
+    `SpikeMultiple` times the daily average. A key that usually spends
+    nothing is a spike at the floor.
+  - `offhours`: off until the organization sets working hours. Then: spent
+    outside them at least the floor and at least `OffHoursPercent` of the
+    daily average. Usage is summed in 15-minute buckets, and each bucket is
+    read on the organization's own clock (`WorkHours.Covers`).
+  - `new_ip`: an address not among those the key was used from in the 30
+    days before. The first address an idle key is used from counts.
+- **An organization key's usage always records the address it came from**
+  (`model.Log.stampOrgFromRequest`). A personal key records it only when its
+  user switched that on; without it `new_ip` has nothing to read.
+- **The usage log is indexed by `(org_id, created_at)`**, for these scans
+  and for the reports. An anomaly pass reads an active organization's last 8
+  days of lines once, and its last 30 for the keys that have an address to
+  judge. That is the query to replace with a rollup when an organization's
+  log grows into millions of lines a month (PRD §8 leaves pre-aggregation out
+  of v1).
+- **Who is told** (`DigestsFor`): the owner and the admins about everything;
+  a key's holder about the warnings on that key and not about anomalies — if
+  the key leaked, its holder is not who to ask; a service account and a
+  disabled or removed holder nothing. Each through their own channel and in
+  their own language, like the wallet reminder. `service/org_alerts.go` does
+  the wording; names and addresses are escaped where the channel reads HTML.
+- **Alerts leave together.** The platform lets a user have
+  `NOTIFY_LIMIT_COUNT` notifications of one type per
+  `NOTIFICATION_LIMIT_DURATION_MINUTE` and drops the rest without a word, so
+  a notification per alert would lose some exactly when several keys act up.
+  An alert waits in `org_alerts` with `notified_time = 0`, and an
+  organization is sent at most one notification per gap (`orgAlertDigestGap`:
+  six minutes at the defaults) that lists whatever is waiting. The
+  notification type is the task's own (`org_alert`), so these never compete
+  with the low-balance reminder. An alert that could not go out within a day
+  stays in the list and is not sent.
+- **The alert list** (`ListAlerts`) is cut by the department stamped on the
+  alert — the holder's when it was raised — so, like a usage line, an alert
+  stays with that department when its holder moves. Marking an alert handled
+  or a false alarm (`HandleAlert`) is audited; it changes nothing about the
+  key and nothing about the sending.
+- **The settings** (`organizations.alert_settings`, JSON; `AlertSettings`)
+  are the warning levels, the two multiples, the floor and the working hours.
+  Empty means `DefaultAlertSettings`. A change is audited with both versions.
 
 ## The audit log
 
@@ -483,6 +594,8 @@ target, the values before and after, the request's address, when.
 - The personal endpoints closed to members: creating a key, deleting one's own
   account.
 - The audit log: written by every management write, read by page.
+- Warnings and alerts: raised and sent by a background task; the alert list,
+  marking an alert, and the settings, over four endpoints.
 
 ### How a refusal travels
 
@@ -542,9 +655,13 @@ is missing from a locale file.
   member's username and email stay taken — so there is no way to bring the
   same account back, and none to move an existing personal account into an
   organization. Not in v1.
-- **Alerts** (P8) — the powers `org.settings` and `alert.handle` are defined
-  and have no endpoint yet — and **reports and the audit log page** (P9; the
-  endpoint is here). The usage log lines they will read are stamped since P7.
+- **The pages for all of the above** (P9): the alert list, the settings form,
+  the usage reports and the audit log. The endpoints are here, and the usage
+  log lines the reports will read are stamped since P7. A notification about
+  alerts carries no link yet, because there is no page to link to.
+- **Telling people that a key was refused for lack of quota.** A key can be
+  turned away before its quota reads 100% used (see "Warnings and alerts");
+  nobody is told when that happens.
 - **Midjourney for organization keys.** Refused until its task table can say
   who paid for a task.
 - **Stopping a member from topping up their own account.** The console

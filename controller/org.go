@@ -59,6 +59,9 @@ const (
 	msgOrgKeyExpired                = "org.key_expired"
 	msgOrgKeyExhausted              = "org.key_exhausted"
 	msgOrgKeyManagedByOrg           = "org.key_managed_by_org"
+	msgOrgAlertNotFound             = "org.alert_not_found"
+	msgOrgAlertStateInvalid         = "org.alert_state_invalid"
+	msgOrgAlertSettingsInvalid      = "org.alert_settings_invalid"
 )
 
 // errOrgSignUpAmbiguous means a sign-up asked both to found an organization
@@ -111,6 +114,9 @@ var orgRefusals = []struct {
 	{orgservice.ErrKeyLimitReached, msgOrgKeyLimitReached, http.StatusOK},
 	{orgservice.ErrKeyExpired, msgOrgKeyExpired, http.StatusOK},
 	{orgservice.ErrKeyExhausted, msgOrgKeyExhausted, http.StatusOK},
+	{orgservice.ErrAlertNotFound, msgOrgAlertNotFound, http.StatusOK},
+	{orgservice.ErrInvalidAlertState, msgOrgAlertStateInvalid, http.StatusOK},
+	{orgservice.ErrInvalidAlertSettings, msgOrgAlertSettingsInvalid, http.StatusOK},
 	{errOrgKeyManagedByOrg, msgOrgKeyManagedByOrg, http.StatusForbidden},
 	{errOrgMemberPersonalKey, msgOrgMemberPersonalKey, http.StatusForbidden},
 	{errOrgSignUpAmbiguous, i18n.MsgInvalidParams, http.StatusOK},

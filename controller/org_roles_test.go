@@ -198,7 +198,11 @@ func TestOrgMessages_AreTranslatedInEveryLocale(t *testing.T) {
 	keys := []string{msgOrgOwnerCannotDeleteAccount, msgOrgMemberCannotDeleteAccount, msgOrgServiceAccountLogin,
 		// What the relay path and the wallet reminder say (i18n/org_keys.go).
 		i18n.MsgOrgWalletUnavailable, i18n.MsgOrgWalletInsufficient, i18n.MsgOrgPlaygroundClosed,
-		i18n.MsgOrgWalletLowTitle, i18n.MsgOrgWalletLowBody, i18n.MsgOrgWalletLowBodyHTML}
+		i18n.MsgOrgWalletLowTitle, i18n.MsgOrgWalletLowBody, i18n.MsgOrgWalletLowBodyHTML,
+		// What a notification about an organization's alerts is made of.
+		i18n.MsgOrgAlertTitle, i18n.MsgOrgAlertQuota, i18n.MsgOrgAlertQuotaSpent, i18n.MsgOrgAlertMonthly,
+		i18n.MsgOrgAlertMonthlySpent, i18n.MsgOrgAlertSpike, i18n.MsgOrgAlertOffHours, i18n.MsgOrgAlertNewIP,
+		i18n.MsgOrgAlertMore, i18n.MsgOrgAlertFooter}
 	for _, refusal := range orgRefusals {
 		if strings.HasPrefix(refusal.key, "org.") {
 			keys = append(keys, refusal.key)

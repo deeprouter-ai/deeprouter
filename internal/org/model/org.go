@@ -23,6 +23,10 @@ type Organization struct {
 	Name        string `json:"name" gorm:"type:varchar(64);not null"`
 	OwnerUserId int    `json:"owner_user_id" gorm:"not null;uniqueIndex"`
 	CreatedTime int64  `json:"created_time" gorm:"bigint"`
+	// AlertSettings is what the organization changed about its warnings and
+	// alerts, as JSON (see AlertSettings in alerts.go). Empty means every
+	// default.
+	AlertSettings string `json:"-" gorm:"type:text"`
 }
 
 // TableName pins the PRD's table name.
@@ -83,17 +87,36 @@ type OrgInvite struct {
 // TableName pins the PRD's table name.
 func (OrgInvite) TableName() string { return "org_invites" }
 
-// OrgAlert is one anomaly-rule hit on a key. Alerts notify and never block
-// traffic (PRD D13).
+// OrgAlert is one thing an organization is told about a key: a warning that
+// the key is running out of what it was given, or a hit of an anomaly rule.
+// Alerts notify and never block traffic (PRD D13).
 type OrgAlert struct {
-	Id          int    `json:"id"`
-	OrgId       int    `json:"org_id" gorm:"not null;index"`
-	Rule        string `json:"rule" gorm:"type:varchar(16);not null"` // spike | offhours | new_ip
-	TokenId     int    `json:"token_id" gorm:"index"`
-	UserId      int    `json:"user_id"`
-	Detail      string `json:"detail" gorm:"type:text"` // JSON
+	Id      int    `json:"id"`
+	OrgId   int    `json:"org_id" gorm:"not null;index"`
+	Rule    string `json:"rule" gorm:"type:varchar(16);not null"` // one of the AlertRule… names
+	TokenId int    `json:"token_id" gorm:"index"`
+	// UserId and DepartmentId are the key's holder and the department they
+	// were in when the alert was raised. Like the stamp on a usage log line,
+	// they are not rewritten when the key or its holder moves, and the
+	// department is what the alert list is cut to for a department-scoped role.
+	UserId       int `json:"user_id"`
+	DepartmentId int `json:"department_id" gorm:"default:0;index"`
+	// Cycle and Level are set on a warning only. A key is warned about once
+	// per level in each cycle: the calendar month for its monthly limit, and
+	// for its quota, what it was given in all — which changes when someone
+	// gives it more. The columns carry a prefix because "cycle" and "level"
+	// are words of SQL itself on some engines.
+	Cycle       string `json:"cycle" gorm:"column:warn_cycle;type:varchar(32);default:''"`
+	Level       int    `json:"level" gorm:"column:warn_level;default:0"`
+	Detail      string `json:"detail" gorm:"type:text"` // JSON: the numbers behind the alert
 	CreatedTime int64  `json:"created_time" gorm:"bigint"`
-	AckedBy     int    `json:"acked_by" gorm:"default:0"`
+	// NotifiedTime is when the alert went out as a notification; 0 until then.
+	NotifiedTime int64 `json:"notified_time" gorm:"bigint;default:0;index"`
+	// State is what an owner or admin made of the alert: one of the
+	// AlertState… names, AckedBy and AckedTime say who and when.
+	State     string `json:"state" gorm:"type:varchar(16);default:''"`
+	AckedBy   int    `json:"acked_by" gorm:"default:0"`
+	AckedTime int64  `json:"acked_time" gorm:"bigint;default:0"`
 }
 
 // TableName pins the PRD's table name.

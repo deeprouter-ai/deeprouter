@@ -16,9 +16,17 @@ import (
 
 // stampOrgFromRequest labels a log line written while the request is still
 // here, from what TokenAuth resolved for an organization key.
+//
+// An organization key's line also always says where the request came from. A
+// personal key records that only when its user switched it on; an
+// organization's "unfamiliar address" alert (PRD §4) has nothing to go on
+// without it, and the key is the company's to watch.
 func (log *Log) stampOrgFromRequest(c *gin.Context) {
 	log.OrgId = common.GetContextKeyInt(c, constant.ContextKeyOrgId)
 	log.DepartmentId = common.GetContextKeyInt(c, constant.ContextKeyOrgDepartmentId)
+	if log.OrgId != 0 && log.Ip == "" {
+		log.Ip = c.ClientIP()
+	}
 }
 
 // stampOrg labels a log line written after the request is gone — a task's

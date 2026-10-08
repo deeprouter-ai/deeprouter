@@ -171,6 +171,9 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	spareMember := func(departmentID int) int {
 		return seedMemberIn(t, db, org, fmt.Sprintf("spare-%d-of-%d", next(), org.id), staffRole, departmentID).Id
 	}
+	spareAlert := func() int {
+		return seedAlert(t, db, salesKey, orgmodel.AlertRuleSpike, 0).Id
+	}
 	assignKey := func(actor *Actor, keyID int, holderID int) error {
 		_, err := AssignKey(db, actor, keyID, holderID)
 		return err
@@ -416,6 +419,29 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			_, _, err := ListAuditLogs(db, actor, 0, 10)
 			return err
 		}},
+
+		// --- alert.read, wherever it reaches ---------------------------------------
+		{name: "list alerts", openTo: runners + " " + kindManager + " " + kindReadonly + " " + kindITOps, run: func(actor *Actor) error {
+			_, _, err := ListAlerts(db, actor, false, 0, 10)
+			return err
+		}},
+
+		// --- the inherent powers over alerts: the owner and the admins --------------
+		{name: "mark an alert as dealt with", openTo: runners, audited: orgmodel.AuditAlertHandle, spawns: "alerts", run: func(actor *Actor) error {
+			return HandleAlert(db, actor, spareAlert(), orgmodel.AlertStateHandled)
+		}},
+		{name: "read the alert settings", openTo: runners, run: func(actor *Actor) error {
+			_, err := GetAlertSettings(db, actor)
+			return err
+		}},
+		{name: "change the alert settings", openTo: runners, audited: orgmodel.AuditSettingsUpdate, run: func(actor *Actor) error {
+			current, err := alertSettingsOf(db, org.id)
+			require.NoError(t, err)
+			settings := orgmodel.DefaultAlertSettings()
+			settings.SpikeMultiple = other(current.SpikeMultiple, 3, 4)
+			_, err = UpdateAlertSettings(db, actor, settings)
+			return err
+		}},
 	}
 }
 
@@ -429,6 +455,7 @@ func orgRowCounts(t *testing.T, db *gorm.DB, orgID int) map[string]int64 {
 		"invites":     &orgmodel.OrgInvite{},
 		"members":     &platformmodel.User{},
 		"keys":        &platformmodel.Token{},
+		"alerts":      &orgmodel.OrgAlert{},
 		"audit":       &orgmodel.OrgAuditLog{},
 	} {
 		var n int64
@@ -444,7 +471,7 @@ func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
 		actions := managementActions(t, db, c)
-		require.Len(t, actions, 51, "a new management action belongs in managementActions")
+		require.Len(t, actions, 55, "a new management action belongs in managementActions")
 		require.Len(t, c.actors, len(allKinds))
 
 		for _, action := range actions {

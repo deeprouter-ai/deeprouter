@@ -20,7 +20,7 @@ import (
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
 	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type;index:idx_logs_org_created,priority:2"`
 	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
 	Content          string `json:"content"`
 	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
@@ -42,8 +42,11 @@ type Log struct {
 	// an org key is used, with the department the user was in at that moment,
 	// so moving someone between departments never rewrites past bills. Both
 	// stay 0 for personal usage, and omitempty keeps such a log line's JSON
-	// exactly what it was before these columns existed.
-	OrgId        int `json:"org_id,omitempty" gorm:"default:0;index"`
+	// exactly what it was before these columns existed. OrgId is indexed
+	// together with CreatedAt: an organization's usage is always read for a
+	// stretch of time — by its reports, and by the alert scan every few
+	// minutes — and never for all of its history at once.
+	OrgId        int `json:"org_id,omitempty" gorm:"default:0;index:idx_logs_org_created,priority:1"`
 	DepartmentId int `json:"department_id,omitempty" gorm:"default:0;index"`
 }
 

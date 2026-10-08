@@ -477,6 +477,11 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.GET("/key-models", controller.ListOrgKeyModels)
 
 			orgRoute.GET("/audit-logs", controller.ListOrgAuditLogs)
+
+			orgRoute.GET("/alerts", controller.ListOrgAlerts)
+			orgRoute.POST("/alerts/:id/handle", controller.HandleOrgAlert)
+			orgRoute.GET("/alert-settings", controller.GetOrgAlertSettings)
+			orgRoute.PUT("/alert-settings", controller.UpdateOrgAlertSettings)
 		}
 		// The one organization route without a sign-in: the sign-up page asks
 		// it what an invite link leads to, for a visitor who has no account

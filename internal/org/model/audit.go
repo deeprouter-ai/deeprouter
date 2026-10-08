@@ -27,8 +27,10 @@ const (
 	AuditKeyUnfreeze          = "key.unfreeze"
 	AuditKeyDelete            = "key.delete"
 	AuditKeyAssign            = "key.assign"
-	AuditKeyReclaim           = "key.reclaim" // a key was taken back from its holder, under key.assign
-	AuditKeyDeliver           = "key.deliver" // the holder took the key's value through one-click setup
+	AuditKeyReclaim           = "key.reclaim"  // a key was taken back from its holder, under key.assign
+	AuditKeyDeliver           = "key.deliver"  // the holder took the key's value through one-click setup
+	AuditAlertHandle          = "alert.handle" // an alert was marked handled or a false alarm
+	AuditSettingsUpdate       = "org.settings" // the warning levels, the alert rules or the working hours changed
 )
 
 // What an audit record is about (org_audit_logs.target_type).
@@ -38,4 +40,8 @@ const (
 	AuditTargetMember     = "member"
 	AuditTargetInvite     = "invite"
 	AuditTargetKey        = "key"
+	AuditTargetAlert      = "alert"
+	// AuditTargetOrganization is the organization itself: what a change of
+	// its settings is recorded against.
+	AuditTargetOrganization = "organization"
 )

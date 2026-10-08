@@ -12,13 +12,14 @@ import (
 // prdSchema is PRD §7.2 written out by hand, so a renamed or dropped column
 // fails here instead of surfacing in whichever later card first needs it.
 var prdSchema = map[string][]string{
-	"organizations":       {"id", "name", "owner_user_id", "created_time"},
+	"organizations":       {"id", "name", "owner_user_id", "created_time", "alert_settings"},
 	"departments":         {"id", "org_id", "name", "is_default", "parent_id", "preset_key", "deleted_at"},
 	"org_roles":           {"id", "org_id", "name", "scope", "permissions", "is_preset", "deleted_at"},
 	"department_managers": {"department_id", "user_id"},
 	"org_invites":         {"id", "org_id", "code", "role_id", "department_id", "expires_time"},
-	"org_alerts":          {"id", "org_id", "rule", "token_id", "user_id", "detail", "created_time", "acked_by"},
-	"org_audit_logs":      {"id", "org_id", "actor_user_id", "action", "target_type", "target_id", "detail", "ip", "created_time"},
+	"org_alerts": {"id", "org_id", "rule", "token_id", "user_id", "department_id", "warn_cycle", "warn_level", "detail",
+		"created_time", "notified_time", "state", "acked_by", "acked_time"},
+	"org_audit_logs": {"id", "org_id", "actor_user_id", "action", "target_type", "target_id", "detail", "ip", "created_time"},
 }
 
 // prdPresetRoles is the PRD §2 role table written out by hand — deliberately
@@ -71,6 +72,56 @@ func TestMigrate_SeedsTheFivePresetRoles(t *testing.T) {
 			require.Equal(t, want.permissions, row.Permissions, "permissions of %s", name)
 			require.True(t, row.IsPreset, "%s must be flagged as a preset", name)
 		}
+	})
+}
+
+// legacyOrganization and legacyOrgAlert are the two tables as they were before
+// warnings and alerts were built (Enterprise Org P8), for the upgrade test.
+type legacyOrganization struct {
+	Id          int
+	Name        string `gorm:"type:varchar(64);not null"`
+	OwnerUserId int    `gorm:"not null;uniqueIndex"`
+	CreatedTime int64  `gorm:"bigint"`
+}
+
+// TableName points the legacy shape at the real table.
+func (legacyOrganization) TableName() string { return "organizations" }
+
+type legacyOrgAlert struct {
+	Id          int
+	OrgId       int    `gorm:"not null;index"`
+	Rule        string `gorm:"type:varchar(16);not null"`
+	TokenId     int    `gorm:"index"`
+	UserId      int
+	Detail      string `gorm:"type:text"`
+	CreatedTime int64  `gorm:"bigint"`
+	AckedBy     int    `gorm:"default:0"`
+}
+
+// TableName points the legacy shape at the real table.
+func (legacyOrgAlert) TableName() string { return "org_alerts" }
+
+// An installation that already holds organizations gains the alert columns on
+// its next boot. Its rows must read back as "nothing set": an organization on
+// the default settings, an alert that is open and has not been sent.
+func TestMigrate_AddsTheAlertColumnsToTablesThatHoldRows(t *testing.T) {
+	orgtest.ForEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		require.NoError(t, db.AutoMigrate(&legacyOrganization{}, &legacyOrgAlert{}))
+		require.NoError(t, db.Create(&legacyOrganization{Name: "Acme", OwnerUserId: 1, CreatedTime: 1700000000}).Error)
+		require.NoError(t, db.Create(&legacyOrgAlert{OrgId: 1, Rule: AlertRuleSpike, TokenId: 2, UserId: 3, Detail: "{}", CreatedTime: 1700000000}).Error)
+
+		require.NoError(t, migrate(db))
+		require.NoError(t, migrate(db), "a second boot is a no-op")
+
+		var org Organization
+		require.NoError(t, db.First(&org).Error)
+		require.Equal(t, "Acme", org.Name)
+		require.Equal(t, DefaultAlertSettings(), ParseAlertSettings(org.AlertSettings))
+
+		var alert OrgAlert
+		require.NoError(t, db.Where("state = ? AND notified_time = ?", AlertStateOpen, 0).First(&alert).Error,
+			"the row answers to the queries the alert list and the sender make")
+		require.Equal(t, OrgAlert{Id: alert.Id, OrgId: 1, Rule: AlertRuleSpike, TokenId: 2, UserId: 3, Detail: "{}", CreatedTime: 1700000000}, alert)
 	})
 }
 
