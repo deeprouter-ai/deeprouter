@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 
 const NEVER_CALLED_DISMISS_KEY = 'dr_dash_banner_never_called_dismissed'
 const LOW_QUOTA_DISMISS_KEY = 'dr_dash_banner_low_quota_dismissed'
@@ -92,6 +93,11 @@ export function OnboardingStatusBanner() {
     readDismissed(LOW_QUOTA_DISMISS_KEY)
   )
 
+  // DeepRouter Enterprise Org: both banners are about the account's own
+  // credit — sitting unused, or running out. A member's keys spend the
+  // company wallet, so neither has anything to tell them.
+  const spendsOwnBalance = useWalletView() === 'own'
+
   const setting = useMemo(() => parseSettingRaw(user?.setting), [user?.setting])
 
   const requestCount = Number(user?.request_count ?? 0)
@@ -107,12 +113,16 @@ export function OnboardingStatusBanner() {
     setting?.persona === 'team'
 
   const showNeverCalled =
-    hasPersona && requestCount === 0 && !neverCalledDismissed
+    spendsOwnBalance &&
+    hasPersona &&
+    requestCount === 0 &&
+    !neverCalledDismissed
 
   // Low-quota only fires after at least one successful call (used_quota > 0).
   // Without that floor a brand-new account with trial < threshold would
   // see "balance low" before they even try the product.
   const showLowQuota =
+    spendsOwnBalance &&
     hasPersona &&
     requestCount > 0 &&
     usedQuota > 0 &&

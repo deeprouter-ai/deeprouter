@@ -7,7 +7,28 @@ import {
   transformFormDataToPayload,
 } from '@/features/keys/lib/api-key-form'
 import type { ApiKey } from '@/features/keys/types'
+import { fetchOrgSelfKeys } from '@/features/org/api'
 import type { SimplePurposeId } from './purposes'
+
+/**
+ * What a purpose page needs of the key it sets a tool up with: which key, and
+ * which models it is limited to.
+ */
+export type PurposeKey = Pick<
+  ApiKey,
+  'id' | 'model_limits_enabled' | 'model_limits'
+>
+
+/**
+ * A member of an organization has been handed no key that can serve the
+ * purpose. Nothing went wrong: there is somebody to ask, and the page says so.
+ */
+export class NoAssignedKeyError extends Error {
+  constructor() {
+    super('no key assigned for this purpose')
+    this.name = 'NoAssignedKeyError'
+  }
+}
 
 /** The newest enabled key created for this purpose, if any (list is newest-first). */
 export function pickPurposeKey(
@@ -30,12 +51,30 @@ export function pickPurposeKey(
  * backend grants exactly what that purpose allows (media purposes snapshot the
  * account's current catalog and fail closed when it is empty).
  *
+ * A member of an organization makes no key of their own (Enterprise Org PRD
+ * D16). For them the key is the newest one they were handed that can serve the
+ * purpose — the backend says which, and which of the purpose's models it may
+ * call — and when there is none, a `NoAssignedKeyError`.
+ *
  * Throws with the server message when no key can be produced.
  */
 export async function ensurePurposeKey(
   purpose: SimplePurposeId,
-  defaultUseAutoGroup: boolean
-): Promise<ApiKey> {
+  defaultUseAutoGroup: boolean,
+  orgMember = false
+): Promise<PurposeKey> {
+  if (orgMember) {
+    const [assigned] = await fetchOrgSelfKeys(purpose)
+    if (!assigned) throw new NoAssignedKeyError()
+    // The page reads a key's whitelist to learn which models to offer. What
+    // the backend names here is that list already cut down to this purpose.
+    return {
+      id: assigned.id,
+      model_limits_enabled: assigned.models.length > 0,
+      model_limits: assigned.models.join(','),
+    }
+  }
+
   const list = async () => {
     const res = await getApiKeys({ p: 1, size: 100 })
     return res.data?.items ?? []

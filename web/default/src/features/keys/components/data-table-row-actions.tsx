@@ -60,6 +60,7 @@ import {
 import { sendToFluent } from '@/features/chat/lib/send-to-fluent'
 import { updateApiKeyStatus } from '../api'
 import { API_KEY_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
+import { isOrgKey } from '../lib/org-key'
 import { apiKeySchema } from '../types'
 import { useApiKeys } from './api-keys-provider'
 
@@ -191,6 +192,17 @@ export function DataTableRowActions<TData>({
     } finally {
       setIsTogglingStatus(false)
     }
+  }
+
+  // An organization key is changed on the organization's keys page, by whoever
+  // is allowed to there — not by its holder, and not from here (Enterprise Org
+  // PRD §3). The backend refuses all of the actions below for it.
+  if (isOrgKey(apiKey)) {
+    return (
+      <p className='text-muted-foreground text-right text-xs'>
+        {t('Managed by your organization')}
+      </p>
+    )
   }
 
   return (

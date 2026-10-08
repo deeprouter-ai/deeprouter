@@ -16,9 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { z } from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
 import { SignUp } from '@/features/auth/sign-up'
 
+// Enterprise Org: an invite link is /sign-up?org_invite=<code>. Signing up
+// through it joins the organization the code belongs to.
+const searchSchema = z.object({
+  org_invite: z.string().optional(),
+})
+
 export const Route = createFileRoute('/(auth)/sign-up')({
   component: SignUp,
+  validateSearch: searchSchema,
 })

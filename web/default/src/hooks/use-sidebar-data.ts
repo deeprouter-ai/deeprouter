@@ -38,6 +38,10 @@ import {
   HelpCircle,
   Sparkles,
   Receipt,
+  Building2,
+  ShieldCheck,
+  KeyRound,
+  ChartColumn,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -46,6 +50,13 @@ import {
   fetchMyPurchases,
   marketplaceQueryKeys,
 } from '@/features/marketplace/api'
+import {
+  canSeeOrg,
+  useOrgMembership,
+} from '@/features/org/hooks/use-org-membership'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
+import { holds } from '@/features/org/lib/permissions'
+import { reportSections } from '@/features/org/lib/reports'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -60,6 +71,48 @@ export function useSidebarData(): SidebarData {
     staleTime: 5 * 60 * 1000,
   })
   const hasPurchases = (purchasesProbe?.total ?? 0) > 0
+
+  // Enterprise Org: the "Organization" group holds the pages a member's role
+  // lets them see — the two about people take member.read, the keys page
+  // key.read — and the reports page, which every member has: Staff find the
+  // alerts on their own keys there and nothing else. A personal account's
+  // probe answers null and the group never appears.
+  const { data: orgMembership } = useOrgMembership()
+  const walletView = useWalletView()
+  const orgItems = [
+    ...(canSeeOrg(orgMembership)
+      ? [
+          {
+            title: t('Members & departments'),
+            url: '/org/members',
+            icon: Building2,
+          },
+          {
+            title: t('Roles & permissions'),
+            url: '/org/roles',
+            icon: ShieldCheck,
+          },
+        ]
+      : []),
+    ...(holds(orgMembership, 'key.read')
+      ? [
+          {
+            title: t('Organization keys'),
+            url: '/org/keys',
+            icon: KeyRound,
+          },
+        ]
+      : []),
+    ...(reportSections(orgMembership).length > 0
+      ? [
+          {
+            title: t('Reports & alerts'),
+            url: '/org/reports',
+            icon: ChartColumn,
+          },
+        ]
+      : []),
+  ]
 
   return {
     workspaces: [
@@ -115,6 +168,9 @@ export function useSidebarData(): SidebarData {
           },
         ],
       },
+      ...(orgItems.length > 0
+        ? [{ id: 'org', title: t('Organization'), items: orgItems }]
+        : []),
       {
         id: 'personal',
         title: t('Personal'),
@@ -124,11 +180,17 @@ export function useSidebarData(): SidebarData {
             url: '/home',
             icon: Home,
           },
-          {
-            title: t('Wallet'),
-            url: '/wallet',
-            icon: Wallet,
-          },
+          // Enterprise Org: the wallet is the account holder's own. A member
+          // of an organization has none — their keys spend the company's.
+          ...(walletView === 'own'
+            ? [
+                {
+                  title: t('Wallet'),
+                  url: '/wallet',
+                  icon: Wallet,
+                },
+              ]
+            : []),
           {
             title: t('My Skills'),
             url: '/user/skills',

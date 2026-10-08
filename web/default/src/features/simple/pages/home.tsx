@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
+import { CompanyWalletNotice } from '@/features/org/components/company-wallet-notice'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { TopupSheet } from '../components/topup-sheet'
 import { usePullToRefresh } from '../hooks/use-pull-to-refresh'
 import { clipsAffordable } from '../lib/balance'
@@ -45,6 +47,10 @@ export function SimpleHome(props: { openTopup?: boolean }) {
 
   const clips = clipsAffordable(user?.quota)
   const name = user?.display_name || user?.username || ''
+  // Enterprise Org: a member's keys spend the company wallet. They are told so
+  // where a personal account sees its balance, and are offered no top-up —
+  // not by the card, and not by a link that carries `?topup=1` either.
+  const walletView = useWalletView()
 
   return (
     <div className='flex flex-col gap-3 px-4 pt-4'>
@@ -68,29 +74,33 @@ export function SimpleHome(props: { openTopup?: boolean }) {
         </p>
       </header>
 
-      <section className='bg-card border-border rounded-2xl border p-5'>
-        <p className='text-muted-foreground text-sm'>{t('Balance')}</p>
-        <div className='mt-1 flex items-end justify-between gap-3'>
-          <p className='text-4xl font-semibold tracking-tight tabular-nums'>
-            {formatQuota(user?.quota ?? 0)}
+      {walletView === 'company' && <CompanyWalletNotice />}
+
+      {walletView === 'own' && (
+        <section className='bg-card border-border rounded-2xl border p-5'>
+          <p className='text-muted-foreground text-sm'>{t('Balance')}</p>
+          <div className='mt-1 flex items-end justify-between gap-3'>
+            <p className='text-4xl font-semibold tracking-tight tabular-nums'>
+              {formatQuota(user?.quota ?? 0)}
+            </p>
+            <button
+              type='button'
+              onClick={() => setTopupOpen(true)}
+              className='bg-primary text-primary-foreground inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-sm font-semibold transition-transform active:scale-95'
+            >
+              <Plus className='size-4' />
+              {t('Add credit')}
+            </button>
+          </div>
+          <p className='text-muted-foreground mt-2 text-sm'>
+            {clips
+              ? t('Enough for about {{count}} short video clips', {
+                  count: clips,
+                })
+              : t('Add credit to start making things with AI')}
           </p>
-          <button
-            type='button'
-            onClick={() => setTopupOpen(true)}
-            className='bg-primary text-primary-foreground inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-sm font-semibold transition-transform active:scale-95'
-          >
-            <Plus className='size-4' />
-            {t('Add credit')}
-          </button>
-        </div>
-        <p className='text-muted-foreground mt-2 text-sm'>
-          {clips
-            ? t('Enough for about {{count}} short video clips', {
-                count: clips,
-              })
-            : t('Add credit to start making things with AI')}
-        </p>
-      </section>
+        </section>
+      )}
 
       <section className='mt-3'>
         <h2 className='px-1 pb-2 text-base font-semibold'>
@@ -125,11 +135,13 @@ export function SimpleHome(props: { openTopup?: boolean }) {
         </ul>
       </section>
 
-      <TopupSheet
-        open={topupOpen}
-        onOpenChange={handleTopupChange}
-        onBalanceChange={() => void refresh()}
-      />
+      {walletView === 'own' && (
+        <TopupSheet
+          open={topupOpen}
+          onOpenChange={handleTopupChange}
+          onBalanceChange={() => void refresh()}
+        />
+      )}
     </div>
   )
 }

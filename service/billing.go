@@ -19,7 +19,8 @@ const (
 func PreConsumeBilling(c *gin.Context, preConsumedQuota int, relayInfo *relaycommon.RelayInfo) *types.NewAPIError {
 	session, apiErr := NewBillingSession(c, relayInfo, preConsumedQuota)
 	if apiErr != nil {
-		return apiErr
+		noteOrgKeyRefused(relayInfo, apiErr, preConsumedQuota)
+		return orgWalletError(c, relayInfo, apiErr)
 	}
 	relayInfo.Billing = session
 	return nil

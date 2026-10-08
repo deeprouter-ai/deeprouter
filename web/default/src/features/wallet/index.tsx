@@ -20,6 +20,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
 import { SectionPageLayout } from '@/components/layout'
+import { CompanyWalletNotice } from '@/features/org/components/company-wallet-notice'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { AutoTopupCard } from './components/auto-topup-card'
 import { AutoTopupPromptDialog } from './components/dialogs/auto-topup-prompt-dialog'
@@ -35,7 +37,30 @@ interface WalletProps {
   initialShowHistory?: boolean
 }
 
+/**
+ * The wallet page. DeepRouter Enterprise Org: a member of an organization has
+ * no wallet of their own to top up — their keys spend the company's — so the
+ * page tells them that instead. Every "top up" link in the console leads
+ * here, which makes this the one place that has to get it right.
+ */
 export function Wallet(props: WalletProps) {
+  const { t } = useTranslation()
+  const walletView = useWalletView()
+  if (walletView === 'pending') return null
+  if (walletView === 'company') {
+    return (
+      <SectionPageLayout>
+        <SectionPageLayout.Title>{t('Wallet')}</SectionPageLayout.Title>
+        <SectionPageLayout.Content>
+          <CompanyWalletNotice className='mx-auto w-full max-w-2xl' />
+        </SectionPageLayout.Content>
+      </SectionPageLayout>
+    )
+  }
+  return <OwnWallet {...props} />
+}
+
+function OwnWallet(props: WalletProps) {
   const { t } = useTranslation()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [userLoading, setUserLoading] = useState(true)

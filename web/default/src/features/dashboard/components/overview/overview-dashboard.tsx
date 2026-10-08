@@ -52,7 +52,9 @@ import {
   CardStaggerItem,
 } from '@/components/page-transition'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
+import { isOrgKey } from '@/features/keys/lib/org-key'
 import type { ApiKey } from '@/features/keys/types'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { getReferralSummary } from '../../api'
 import { useApiInfo } from '../../hooks/use-status-data'
 import { AnnouncementsPanel } from './announcements-panel'
@@ -152,6 +154,15 @@ function normalizeEndpoint(sourceUrl?: string): string {
 
 function getPreferredKey(keys: ApiKey[]): ApiKey | null {
   return keys.find((item) => item.status === 1) ?? keys[0] ?? null
+}
+
+/**
+ * The id of the key whose value may be fetched for the snippet below, or 0.
+ * An organization key's value may not be (Enterprise Org PRD D15): the snippet
+ * then shows a placeholder.
+ */
+function revealableKeyId(key: ApiKey | null): number {
+  return key && !isOrgKey(key) ? key.id : 0
 }
 
 function formatDisplayKey(key?: string): string {
@@ -534,6 +545,9 @@ export function OverviewDashboard() {
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  // DeepRouter Enterprise Org: adding credit is not a step for a member of an
+  // organization — their keys spend the company wallet.
+  const spendsOwnBalance = useWalletView() === 'own'
 
   const apiKeysQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'api-keys'],
@@ -558,14 +572,15 @@ export function OverviewDashboard() {
     [apiKeysQuery.data]
   )
 
+  const revealKeyId = revealableKeyId(preferredKey)
   const realKeyQuery = useQuery({
-    queryKey: ['dashboard', 'overview', 'token-key', preferredKey?.id],
+    queryKey: ['dashboard', 'overview', 'token-key', revealKeyId],
     queryFn: async () => {
-      if (!preferredKey?.id) return ''
-      const result = await fetchTokenKey(preferredKey.id)
+      if (!revealKeyId) return ''
+      const result = await fetchTokenKey(revealKeyId)
       return result.success && result.data?.key ? `sk-${result.data.key}` : ''
     },
-    enabled: Boolean(preferredKey?.id),
+    enabled: revealKeyId !== 0,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -578,13 +593,17 @@ export function OverviewDashboard() {
         icon: KeyRound,
         completed: Boolean(preferredKey),
       },
-      {
-        title: t('Add credits'),
-        description: t('Keep enough balance before production traffic'),
-        to: '/wallet',
-        icon: CreditCard,
-        completed: remainQuota > 0 || usedQuota > 0,
-      },
+      ...(spendsOwnBalance
+        ? [
+            {
+              title: t('Add credits'),
+              description: t('Keep enough balance before production traffic'),
+              to: '/wallet' as const,
+              icon: CreditCard,
+              completed: remainQuota > 0 || usedQuota > 0,
+            },
+          ]
+        : []),
       {
         title: t('Send a request'),
         description: t('Verify it works from your AI tool'),
@@ -593,7 +612,7 @@ export function OverviewDashboard() {
         completed: requestCount > 0,
       },
     ],
-    [preferredKey, remainQuota, requestCount, t, usedQuota]
+    [preferredKey, remainQuota, requestCount, spendsOwnBalance, t, usedQuota]
   )
 
   const quickActions = useMemo<QuickAction[]>(

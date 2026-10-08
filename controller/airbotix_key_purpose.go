@@ -59,9 +59,28 @@ func mediaModelsForUser(userID int, purpose string) ([]string, error) {
 	return keypurpose.Models(purpose, candidates), nil
 }
 
+// checkSimpleKeyBinding refuses a purpose, brand or price tier the registry
+// does not know. Each of them may be left empty; what is given has to exist.
+func checkSimpleKeyBinding(token *model.Token) error {
+	if token.SimplePurpose != "" && !alias_setting.KnownPurpose(token.SimplePurpose) {
+		return errors.New("token.purpose_unknown")
+	}
+	if token.SimpleBrand != "" && !alias_setting.KnownBrand(token.SimpleBrand) {
+		return errors.New("token.brand_unknown")
+	}
+	if token.SimplePriceTier != "" && !alias_setting.KnownPriceTier(token.SimplePriceTier) {
+		return errors.New("token.price_tier_unknown")
+	}
+	return nil
+}
+
 // applySimpleKeyPurpose is shared by create/update; media may never silently
-// become unrestricted when a purpose has no usable models.
+// become unrestricted when a purpose has no usable models, and no key may
+// become unrestricted because its purpose or price tier was mistyped.
 func applySimpleKeyPurpose(token *model.Token) error {
+	if err := checkSimpleKeyBinding(token); err != nil {
+		return err
+	}
 	if token.SimplePurpose == "" {
 		return nil
 	}

@@ -11,10 +11,18 @@ import { VideoPage } from '../index'
 
 const mockGetApiKeys = vi.hoisted(() => vi.fn())
 const mockIssueConnectToken = vi.hoisted(() => vi.fn())
+/**
+ * What the page is told about the user's organization: a personal account
+ * unless a test says otherwise.
+ */
+const membership = vi.hoisted(() => ({ current: { data: null as unknown } }))
 
 vi.mock('@/features/keys/api', () => ({
   getApiKeys: mockGetApiKeys,
   issueConnectToken: mockIssueConnectToken,
+}))
+vi.mock('@/features/org/hooks/use-org-membership', () => ({
+  useOrgMembership: () => membership.current,
 }))
 
 vi.mock('react-i18next', () => ({
@@ -111,6 +119,7 @@ function keysResponse(items: ApiKey[]) {
 describe('VideoPage — which key the prompt configures', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    membership.current = { data: null }
     mockIssueConnectToken.mockImplementation((id: number) =>
       Promise.resolve({
         success: true,
@@ -275,5 +284,90 @@ describe('VideoPage — which key the prompt configures', () => {
     expect(
       await screen.findByText(/None of your keys can run video models/)
     ).toBeInTheDocument()
+  })
+})
+
+// Enterprise Org P6 (meta-repo docs/enterprise-org-prd.md D16): a member of an
+// organization makes no key of their own, so with no key that fits the page
+// says whom to ask instead of where to create one.
+describe('VideoPage — a member of an organization', () => {
+  const WHOM_TO_ASK =
+    /Keys are handed out by your organization — ask an administrator for one\./
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    membership.current = { data: { org_id: 1 } }
+  })
+
+  it('is told whom to ask when they were handed no key at all', async () => {
+    mockGetApiKeys.mockResolvedValue(keysResponse([]))
+
+    render(<VideoPage />)
+
+    const hint = await screen.findByText(WHOM_TO_ASK)
+    expect(hint).toHaveTextContent(
+      'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+    )
+    // No way to the page where a personal account would create one.
+    expect(screen.queryByRole('link', { name: 'API Keys' })).toBeNull()
+    expect(screen.queryByText(/You need a key first/)).toBeNull()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('is told the same when none of their keys can run video models', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 61,
+          name: 'chat key',
+          org_id: 1,
+          model_limits_enabled: true,
+          model_limits: 'gpt-4o',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    const hint = await screen.findByText(WHOM_TO_ASK)
+    expect(hint).toHaveTextContent(
+      'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+    )
+    expect(screen.queryByText(/create one with the/)).toBeNull()
+    expect(screen.queryByRole('link', { name: 'API Keys' })).toBeNull()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('uses a key they were handed that can', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 62,
+          name: 'video key',
+          org_id: 1,
+          model_limits_enabled: true,
+          model_limits: 'MiniMax-H3',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    expect(await screen.findByText('video key')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(62, ['claude-code'])
+    )
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
+  })
+
+  it('still sends a personal account to the keys page', async () => {
+    membership.current = { data: null }
+    mockGetApiKeys.mockResolvedValue(keysResponse([]))
+
+    render(<VideoPage />)
+
+    expect(await screen.findByText(/You need a key first/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'API Keys' })).toBeInTheDocument()
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
   })
 })

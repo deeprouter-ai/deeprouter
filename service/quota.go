@@ -92,7 +92,7 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	if relayInfo.UsePrice {
 		return nil
 	}
-	userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+	userQuota, err := model.GetUserQuota(relayInfo.WalletUserId(), false)
 	if err != nil {
 		return err
 	}
@@ -422,9 +422,9 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 	} else {
 		// Wallet
 		if quota > 0 {
-			err = model.DecreaseUserQuota(relayInfo.UserId, quota, false)
+			err = model.DecreaseUserQuota(relayInfo.WalletUserId(), quota, false)
 		} else {
-			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
+			err = model.IncreaseUserQuota(relayInfo.WalletUserId(), -quota, false)
 		}
 		if err != nil {
 			return err
@@ -452,6 +452,12 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 }
 
 func checkAndSendQuotaNotify(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int) {
+	// DeepRouter Enterprise Org: the company wallet running low is for the
+	// owner and the admins to hear, never the member who made the request.
+	if relayInfo.OrgId != 0 {
+		notifyOrgWalletLow(relayInfo)
+		return
+	}
 	gopool.Go(func() {
 		userSetting := relayInfo.UserSetting
 		threshold := common.QuotaRemindThreshold

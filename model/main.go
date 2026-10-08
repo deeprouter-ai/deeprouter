@@ -10,6 +10,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	orgmodel "github.com/QuantumNous/new-api/internal/org/model"
 	marketplacemodel "github.com/QuantumNous/new-api/internal/skill-marketplace/model"
 	referralmodel "github.com/QuantumNous/new-api/internal/referral/model"
 
@@ -306,6 +307,9 @@ func migrateDB() error {
 		}
 	}
 	if err := referralmodel.MigrateReferrals(DB); err != nil {
+		return err
+	}
+	if err := orgmodel.Migrate(DB); err != nil {
 		return err
 	}
 	if err := marketplacemodel.Migrate(DB); err != nil {

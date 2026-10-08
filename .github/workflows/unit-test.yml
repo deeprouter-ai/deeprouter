@@ -71,14 +71,20 @@ jobs:
           # Upstream-adjacent fork tests (kept in sync with airbotix-internal.yml).
           go test ./model/ -run 'TestUser_Airbotix' -count=1 -timeout 60s
           go test ./relay/ -run 'TestApplyAirbotixPolicy|TestClampUint|TestCheckAirbotixModelWhitelist|TestKidsModeCoverageMatrix' -count=1 -race -timeout 60s
-          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey' -count=1 -race -timeout 60s
+          # 180s, not 60s: the TestOrg sign-up tests hash real passwords, and
+          # each bcrypt hash costs about 0.6s under the race detector. The
+          # line took 18s on a developer machine when this was raised.
+          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestUpdateSelf|TestOrg' -count=1 -race -timeout 180s
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance + MiniMax/Hailuo video ModelLists (价格未配置
           # regression guards; hailuo also covers the v2/H3 request conversion).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the
           # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
-          go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
+          # TestOrg: Enterprise Org's company wallet on the billing path - whose
+          # balance pays, the usage-log stamp, task refunds, the low-balance
+          # reminder (service/org_wallet_test.go).
+          go test ./service/ -run 'TestGeminiToOpenAIRequest|TestOrg' -count=1 -timeout 60s
           go test ./relay/channel/openai/ -run 'TestConvertOpenAIRequest' -count=1 -timeout 60s
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
@@ -93,7 +99,7 @@ jobs:
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.
-          go test ./router/ -run 'TestSetApiRouter|TestSetConnectRouter' -count=1 -timeout 60s
+          go test ./router/ -run 'TestSetApiRouter|TestSetConnectRouter|TestOrg' -count=1 -timeout 60s
 
       - name: Verify kids coverage matrix
         run: bash scripts/check-kids-coverage-matrix.sh

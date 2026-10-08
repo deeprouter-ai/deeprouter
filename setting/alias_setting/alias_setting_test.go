@@ -1,8 +1,11 @@
 package alias_setting
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func mustInit(t *testing.T) {
@@ -34,7 +37,7 @@ func TestIsVirtualModel(t *testing.T) {
 		"deeprouter-coding":    true,
 		"deeprouter-voice-tts": true,
 		"gpt-4o":               false,
-		"claude-sonnet-4-7":    false,
+		"claude-sonnet-5":      false,
 		"":                     false,
 	}
 	for model, want := range cases {
@@ -48,20 +51,20 @@ func TestResolveAliasFallback(t *testing.T) {
 	mustInit(t)
 
 	// Direct (purpose, brand) hit.
-	if got := ResolveAlias("coding", "openai"); got != "gpt-4o" {
-		t.Errorf("coding+openai → %q, want gpt-4o", got)
+	if got := ResolveAlias("coding", "openai"); got != "gpt-5.4" {
+		t.Errorf("coding+openai → %q, want gpt-5.4", got)
 	}
 	// Brand missing → fall back to auto.
-	if got := ResolveAlias("coding", "gemini"); got != "claude-sonnet-4-7" {
-		t.Errorf("coding+gemini → %q, want auto fallback claude-sonnet-4-7", got)
+	if got := ResolveAlias("coding", "gemini"); got != "claude-sonnet-5" {
+		t.Errorf("coding+gemini → %q, want auto fallback claude-sonnet-5", got)
 	}
 	// Purpose entirely missing → empty.
 	if got := ResolveAlias("nonsense", "claude"); got != "" {
 		t.Errorf("nonsense+claude → %q, want empty", got)
 	}
 	// Empty brand → auto.
-	if got := ResolveAlias("chat", ""); got != "claude-sonnet-4-7" {
-		t.Errorf("chat+empty → %q, want claude-sonnet-4-7", got)
+	if got := ResolveAlias("chat", ""); got != "claude-sonnet-5" {
+		t.Errorf("chat+empty → %q, want claude-sonnet-5", got)
 	}
 }
 
@@ -69,12 +72,12 @@ func TestResolveAliasForVirtualModelOverridesPurpose(t *testing.T) {
 	mustInit(t)
 
 	// Token bound to chat, but client asks for coding via virtual model name.
-	if got := ResolveAliasForVirtualModel("deeprouter-coding", "chat", "openai"); got != "gpt-4o" {
-		t.Errorf("deeprouter-coding under chat token → %q, want gpt-4o", got)
+	if got := ResolveAliasForVirtualModel("deeprouter-coding", "chat", "openai"); got != "gpt-5.4" {
+		t.Errorf("deeprouter-coding under chat token → %q, want gpt-5.4", got)
 	}
 	// Plain "deeprouter" honours the token's bound purpose.
-	if got := ResolveAliasForVirtualModel("deeprouter", "chat", "claude"); got != "claude-sonnet-4-7" {
-		t.Errorf("deeprouter under chat+claude → %q, want claude-sonnet-4-7", got)
+	if got := ResolveAliasForVirtualModel("deeprouter", "chat", "claude"); got != "claude-sonnet-5" {
+		t.Errorf("deeprouter under chat+claude → %q, want claude-sonnet-5", got)
 	}
 	// purpose=all has no alias binding — must return empty so distributor
 	// leaves the client-supplied model name alone.
@@ -239,4 +242,189 @@ func containsPattern(list []string, pattern string) bool {
 		}
 	}
 	return false
+}
+
+// The three checks a key's binding goes through before anything reads it
+// (meta-repo docs/adlc/tasks/fix-key-purpose-validation-and-whitelists-task.md):
+// a value is known when the seed defines it, and nothing else is.
+func TestKnownPurposeBrandAndPriceTier(t *testing.T) {
+	mustInit(t)
+
+	for _, id := range []string{"chat", "coding", "image", "video", "voice", "all"} {
+		if !KnownPurpose(id) {
+			t.Errorf("KnownPurpose(%q) = false, want true", id)
+		}
+	}
+	for _, name := range []string{"claude", "openai", "gemini", "deepseek"} {
+		if !KnownBrand(name) {
+			t.Errorf("KnownBrand(%q) = false, want true", name)
+		}
+	}
+	for _, id := range []string{"economy", "standard", "premium", "ultra"} {
+		if !KnownPriceTier(id) {
+			t.Errorf("KnownPriceTier(%q) = false, want true", id)
+		}
+	}
+	// A typo, another field's value, a persona, the wrong case, nothing at all.
+	for _, unknown := range []string{"", "codng", "Chat", "CHAT", "chat ", "dev", "casual", "team", "auto", "standard", "claude"} {
+		if KnownPurpose(unknown) {
+			t.Errorf("KnownPurpose(%q) = true, want false", unknown)
+		}
+	}
+	for _, unknown := range []string{"", "claud", "Claude", "anthropic", "auto", "chat", "ultra"} {
+		if KnownBrand(unknown) {
+			t.Errorf("KnownBrand(%q) = true, want false", unknown)
+		}
+	}
+	for _, unknown := range []string{"", "standrad", "Standard", "free", "all", "claude"} {
+		if KnownPriceTier(unknown) {
+			t.Errorf("KnownPriceTier(%q) = true, want false", unknown)
+		}
+	}
+}
+
+// ruleLists returns every rule list of the seed that ends up in a key's
+// model_limits, by what it belongs to.
+func ruleLists(t *testing.T) map[string][]string {
+	t.Helper()
+	mustInit(t)
+	lists := map[string][]string{}
+	for _, purpose := range purposes {
+		lists["purpose "+purpose.ID] = purpose.ModelWhitelist
+	}
+	for id, tier := range priceTiers {
+		lists["tier "+id] = tier.ModelWhitelist
+	}
+	return lists
+}
+
+// A rule matches exactly, or — ending in "*" — by prefix (model.MatchModelLimit).
+// A "*" anywhere else is read as a character of the name, so such a rule
+// matches no model at all: "gemini-2*-flash*" sat in the economy tier without
+// ever letting a Gemini model through.
+func TestRules_WildcardOnlyAtTheEnd(t *testing.T) {
+	for owner, rules := range ruleLists(t) {
+		for _, rule := range rules {
+			if rule == "" {
+				t.Errorf("%s has an empty rule", owner)
+			}
+			if at := strings.Index(rule, "*"); at >= 0 && at != len(rule)-1 {
+				t.Errorf("%s: rule %q has a wildcard that is not its last character", owner, rule)
+			}
+		}
+	}
+}
+
+// An empty rule list is how "no model limit" is written, and exactly two
+// things mean that: the purpose "all", which takes its rules from a price
+// tier, and the top tier, which has none and asks for a confirmation. Any
+// other list that came out empty would turn the keys bound to it loose.
+func TestRules_OnlyTheTopTierHasNone(t *testing.T) {
+	for owner, rules := range ruleLists(t) {
+		unlimited := owner == "purpose all" || owner == "tier ultra"
+		if unlimited != (len(rules) == 0) {
+			t.Errorf("%s has %d rules; only \"purpose all\" and \"tier ultra\" have none", owner, len(rules))
+		}
+	}
+	for _, id := range []string{"economy", "standard", "premium"} {
+		if _, limited := ModelWhitelistForToken("all", "", id); !limited {
+			t.Errorf("a key for everything at the %s tier must be limited", id)
+		}
+	}
+	for _, id := range []string{"chat", "coding"} {
+		if _, limited := ModelWhitelistForToken(id, "", ""); !limited {
+			t.Errorf("a %s key must be limited", id)
+		}
+	}
+}
+
+// modelsOnSale reads the models of every enabled channel of the seed file the
+// operators provision a deployment from (scripts/seed-models/channels.yaml):
+// the closest thing the repository has to "what is on sale".
+func modelsOnSale(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile("../../scripts/seed-models/channels.yaml")
+	if err != nil {
+		t.Fatalf("the seed file of channels: %v", err)
+	}
+	var seed struct {
+		Channels []struct {
+			Enabled *bool    `yaml:"enabled"`
+			Models  []string `yaml:"models"`
+		} `yaml:"channels"`
+	}
+	if err := yaml.Unmarshal(raw, &seed); err != nil {
+		t.Fatalf("the seed file of channels: %v", err)
+	}
+	var models []string
+	for _, channel := range seed.Channels {
+		if channel.Enabled == nil || *channel.Enabled {
+			models = append(models, channel.Models...)
+		}
+	}
+	if len(models) < 50 {
+		t.Fatalf("the seed file lists only %d models; has its shape changed?", len(models))
+	}
+	return models
+}
+
+// The chat and coding lists were audited against what is on sale on
+// 2026-10-08 (they had fallen a generation behind: a chat key could call
+// Claude and nothing else that was sold). This keeps them from going stale
+// unnoticed: every rule lets at least one model on sale through, so a family
+// that is retired takes its rule with it.
+func TestChatAndCodingRulesMatchWhatIsOnSale(t *testing.T) {
+	onSale := modelsOnSale(t)
+	lists := ruleLists(t)
+	for _, purpose := range []string{"purpose chat", "purpose coding"} {
+		for _, rule := range lists[purpose] {
+			matched := false
+			for _, name := range onSale {
+				if matchByLimitSemantics([]string{rule}, name) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				t.Errorf("%s: rule %q matches no model on sale", purpose, rule)
+			}
+		}
+	}
+}
+
+// A model made for writing code says so in its name. Whichever of them is on
+// sale, a coding key lets it through — "codestral-latest" was sold for months
+// while no coding key could call it.
+func TestCodingRulesCoverTheModelsMadeForCode(t *testing.T) {
+	coding := ruleLists(t)["purpose coding"]
+	for _, name := range modelsOnSale(t) {
+		lower := strings.ToLower(name)
+		madeForCode := false
+		for _, word := range []string{"codex", "codestral", "coder", "-code"} {
+			madeForCode = madeForCode || strings.Contains(lower, word)
+		}
+		// A provider-prefixed name ("Qwen/…") is another catalogue's spelling.
+		if madeForCode && !strings.Contains(name, "/") && !matchByLimitSemantics(coding, name) {
+			t.Errorf("%q is made for code and on sale, and no coding rule lets it through", name)
+		}
+	}
+}
+
+// A default model is what the virtual names — "deeprouter", "deeprouter-coding"
+// … — resolve to. One that is no longer sold turns every such request into
+// "no channel for this model": on 2026-10-08 nine of the thirteen defaults
+// were on sale nowhere.
+func TestEveryDefaultModelIsOnSale(t *testing.T) {
+	mustInit(t)
+	onSale := map[string]bool{}
+	for _, name := range modelsOnSale(t) {
+		onSale[name] = true
+	}
+	for purpose, byBrand := range aliasMap {
+		for brand, target := range byBrand {
+			if !onSale[target] {
+				t.Errorf("%s + %s resolves to %q, which no enabled channel of the seed file sells", purpose, brand, target)
+			}
+		}
+	}
 }

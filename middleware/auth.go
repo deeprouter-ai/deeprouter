@@ -400,6 +400,12 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
 
+		// DeepRouter Enterprise Org: an organization key spends the company
+		// wallet. A personal key (org_id 0) skips this and nothing changes for it.
+		if token.OrgId != 0 && !attachOrgSpend(c, token) {
+			return
+		}
+
 		err = SetupContextForToken(c, token, parts...)
 		if err != nil {
 			return

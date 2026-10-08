@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -60,15 +61,35 @@ import {
   readAcquisitionMeta,
 } from '@/features/auth/lib/storage'
 import type { RegisterResponseData } from '@/features/auth/types'
+import { useOrgInvitePreview } from '@/features/org/hooks/use-org-invite-preview'
+import { orgRoleLabel } from '@/features/org/lib/roles'
+import { ADVANCED_HOME } from '@/features/simple/lib/mode'
+
+type SignUpFormProps = React.HTMLAttributes<HTMLFormElement> & {
+  /** Enterprise Org: the code of the invite link the visitor arrived through. */
+  orgInvite?: string
+}
 
 export function SignUpForm({
   className,
+  orgInvite,
   ...props
-}: React.HTMLAttributes<HTMLFormElement>) {
+}: SignUpFormProps) {
   const { t } = useTranslation()
   const [isLoading, setIsLoading] = useState(false)
   const [verificationCode, setVerificationCode] = useState('')
   const [agreedToLegal, setAgreedToLegal] = useState(false)
+  // Enterprise Org: tick to sign up as a company — the account becomes the
+  // owner of a new organization with this name.
+  const [createOrg, setCreateOrg] = useState(false)
+  const [orgName, setOrgName] = useState('')
+  // Enterprise Org: arriving through an invite link joins that organization
+  // instead. A link that no longer works blocks the form rather than quietly
+  // producing a personal account — an account cannot join a company later.
+  const invite = useOrgInvitePreview(orgInvite)
+  const inviteBlocksSignUp =
+    invite.status === 'loading' || invite.status === 'invalid'
+  const foundsOrg = createOrg && !orgInvite
   const [wechatCode, setWeChatCode] = useState('')
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
@@ -159,6 +180,13 @@ export function SignUpForm({
       }
     }
 
+    if (inviteBlocksSignUp) return
+
+    if (foundsOrg && !orgName.trim()) {
+      toast.error(t('Please enter your organization name'))
+      return
+    }
+
     setIsLoading(true)
     try {
       const acquisition = readAcquisitionMeta()
@@ -167,6 +195,8 @@ export function SignUpForm({
         password: data.password,
         email: data.email || undefined,
         verification_code: verificationCode || undefined,
+        org_name: foundsOrg ? orgName.trim() : undefined,
+        org_invite: invite.status === 'valid' ? orgInvite : undefined,
         aff: getAffiliateCode(),
         turnstile: turnstileToken,
         // Step 2-4 are captured at /welcome instead — leaving these
@@ -177,6 +207,17 @@ export function SignUpForm({
       })
 
       if (res?.success) {
+        // Enterprise Org D24: whoever founds an organization goes straight
+        // to the Advanced console, where organization management lives. The
+        // backend has stored them as a "team" persona, so nothing sends them
+        // back to /welcome — whose default choice would land them in Simple.
+        if (foundsOrg) {
+          await handleLoginSuccess(
+            res.data as { id?: number } | null,
+            ADVANCED_HOME
+          )
+          return
+        }
         // Backend already set the session; stash the one-shot artifacts
         // (default token, trial quota, next route) for /welcome and
         // navigate there. Welcome page captures persona/brand/client.
@@ -249,6 +290,42 @@ export function SignUpForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
+        {/* Enterprise Org: where the invite link leads */}
+        {invite.status === 'valid' && (
+          <div className='bg-card rounded-lg border p-3 text-sm' role='status'>
+            <p className='font-medium'>
+              {t("You're joining {{org}}", { org: invite.preview.org_name })}
+            </p>
+            <p className='text-muted-foreground mt-0.5 text-xs'>
+              {t('Department: {{department}} · Role: {{role}}', {
+                department: invite.preview.department,
+                role: orgRoleLabel(t, invite.preview.role),
+              })}
+            </p>
+          </div>
+        )}
+        {invite.status === 'invalid' && (
+          <div
+            className='border-destructive/30 bg-destructive/5 rounded-lg border p-3 text-sm'
+            role='alert'
+          >
+            <p className='text-destructive font-medium'>
+              {t('This invite link is invalid or has expired.')}
+            </p>
+            <p className='text-muted-foreground mt-0.5 text-xs'>
+              {t(
+                'Ask your admin for a new link. An account created without one is a personal account and cannot join the company later.'
+              )}{' '}
+              <a
+                href='/sign-up'
+                className='hover:text-foreground font-medium underline underline-offset-4'
+              >
+                {t('Sign up without an invite')}
+              </a>
+            </p>
+          </div>
+        )}
+
         {/* Username Field */}
         <FormField
           control={form.control}
@@ -358,6 +435,44 @@ export function SignUpForm({
           </>
         )}
 
+        {/* Enterprise Org: optional company sign-up. Someone joining a
+            company through an invite link is not founding one. */}
+        {!orgInvite && (
+          <div className='grid gap-3'>
+            <div className='flex items-start gap-3'>
+              <Checkbox
+                id='create-org'
+                checked={createOrg}
+                onCheckedChange={(value) => setCreateOrg(value === true)}
+                className='mt-0.5'
+              />
+              <Label
+                htmlFor='create-org'
+                className='flex-col items-start gap-1 text-left leading-5 font-normal'
+              >
+                <span>{t('Create an organization for my company')}</span>
+                <span className='text-muted-foreground text-xs'>
+                  {t(
+                    'For teams — one shared company wallet, with usage tracked per member.'
+                  )}
+                </span>
+              </Label>
+            </div>
+            {createOrg && (
+              <div className='grid gap-2'>
+                <Label htmlFor='org-name'>{t('Organization name')}</Label>
+                <Input
+                  id='org-name'
+                  placeholder={t('Enter your organization name')}
+                  value={orgName}
+                  maxLength={64}
+                  onChange={(e) => setOrgName(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         <LegalConsent
           status={status}
           checked={agreedToLegal}
@@ -369,13 +484,19 @@ export function SignUpForm({
         <Button
           type='submit'
           className='mt-2 w-full justify-center gap-2'
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+          disabled={
+            isLoading ||
+            inviteBlocksSignUp ||
+            (requiresLegalConsent && !agreedToLegal)
+          }
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
           {t('Create account')}
         </Button>
 
-        {oauthRegisterEnabled && (
+        {/* A third-party sign-up cannot carry the organization name or an
+            invite code, so those buttons step aside for both. */}
+        {oauthRegisterEnabled && !createOrg && !orgInvite && (
           <OAuthProviders
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}

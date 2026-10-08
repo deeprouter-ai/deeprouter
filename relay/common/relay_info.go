@@ -178,6 +178,7 @@ type RelayInfo struct {
 	*ResponsesUsageInfo
 	*ChannelMeta
 	*TaskRelayInfo
+	OrgSpend // DeepRouter Enterprise Org: whose balance pays, see org_spend.go
 }
 
 func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
@@ -461,6 +462,7 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		UserGroup:  common.GetContextKeyString(c, constant.ContextKeyUserGroup),
 		UserQuota:  common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
 		UserEmail:  common.GetContextKeyString(c, constant.ContextKeyUserEmail),
+		OrgSpend:   orgSpendFromContext(c),
 
 		OriginModelName: common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
 

@@ -46,3 +46,13 @@ installStorageShim('sessionStorage')
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {}
 }
+
+// Nor a ResizeObserver, which the command list measures itself with. Nothing
+// a test looks at depends on the measurement.
+if (typeof window !== 'undefined' && !window.ResizeObserver) {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+}

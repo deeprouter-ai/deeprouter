@@ -32,6 +32,8 @@ import { StaggerContainer, StaggerItem } from '@/components/page-transition'
 import { getUserQuotaDates } from '@/features/dashboard/api'
 import { useSummaryCardsConfig } from '@/features/dashboard/hooks/use-dashboard-config'
 import type { QuotaDataItem } from '@/features/dashboard/types'
+import { CompanyWalletNotice } from '@/features/org/components/company-wallet-notice'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { StatCard } from '../ui/stat-card'
 
 const SUMMARY_SPARKLINE_BUCKETS = 12
@@ -118,6 +120,11 @@ export function SummaryCards() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
   const { status, loading } = useStatus()
+  // DeepRouter Enterprise Org: a member's keys spend the company wallet. What
+  // they used and how often is still theirs to see; the balance on their own
+  // account, and the way to top it up, is not shown.
+  const walletView = useWalletView()
+  const spendsOwnBalance = walletView === 'own'
 
   // First-call celebration: pure frontend, no backend `first_call_at`
   // field needed. When request_count flips from 0 → 1+, fire one
@@ -201,6 +208,7 @@ export function SummaryCards() {
     const tones = ['rose', 'teal', 'gray'] as const
 
     return {
+      key: config.key,
       title: config.title,
       value: config.value,
       desc: config.description,
@@ -214,6 +222,9 @@ export function SummaryCards() {
             : sparklineData.requests,
     }
   })
+  const shownItems = items.filter(
+    (item) => spendsOwnBalance || item.key !== 'balance'
+  )
 
   return (
     <div className='bg-card overflow-hidden rounded-2xl border shadow-xs'>
@@ -225,14 +236,20 @@ export function SummaryCards() {
                 {t('Your AI usage')}
               </h3>
               <p className='text-muted-foreground text-sm'>
-                {t(
-                  'What you have, what you used, how many calls you made.'
-                )}
+                {spendsOwnBalance
+                  ? t('What you have, what you used, how many calls you made.')
+                  : t('What you used and how many calls you made.')}
               </p>
             </div>
           </div>
-          <StaggerContainer className='grid gap-3 md:grid-cols-3'>
-            {items.map((it) => (
+          <StaggerContainer
+            className={
+              spendsOwnBalance
+                ? 'grid gap-3 md:grid-cols-3'
+                : 'grid gap-3 md:grid-cols-2'
+            }
+          >
+            {shownItems.map((it) => (
               <StaggerItem
                 key={it.title}
                 className='bg-background/60 rounded-xl border p-3'
@@ -251,52 +268,59 @@ export function SummaryCards() {
           </StaggerContainer>
         </div>
 
-        <div className='bg-warning/10 flex flex-col justify-between gap-5 border-t p-4 sm:p-5 xl:border-t-0 xl:border-l'>
-          <div className='flex flex-col gap-2'>
-            <div className='text-muted-foreground text-sm'>
-              {t('Credit remaining')}
-            </div>
-            <div className='flex items-center gap-2'>
-              <span className='font-mono text-2xl font-semibold tracking-tight'>
-                {summaryValues.remainDisplay}
-              </span>
-              <CreditCard
-                className='text-muted-foreground size-4'
-                aria-hidden='true'
-              />
-            </div>
-            {/* Friendly "how many chats" estimate using a mid-tier model
-              * average ($0.005/chat). Quota units are 500_000 = $1 so
-              * chats ≈ quota / 2_500. Marketing-grade approximation; the
-              * actual cost depends on which model the user invokes. */}
-            {(() => {
-              const remainQuota = Number(user?.quota ?? 0)
-              if (remainQuota <= 0) {
+        {walletView === 'company' && (
+          <div className='border-t p-4 sm:p-5 xl:border-t-0 xl:border-l'>
+            <CompanyWalletNotice className='border-0 p-0' />
+          </div>
+        )}
+        {spendsOwnBalance && (
+          <div className='bg-warning/10 flex flex-col justify-between gap-5 border-t p-4 sm:p-5 xl:border-t-0 xl:border-l'>
+            <div className='flex flex-col gap-2'>
+              <div className='text-muted-foreground text-sm'>
+                {t('Credit remaining')}
+              </div>
+              <div className='flex items-center gap-2'>
+                <span className='font-mono text-2xl font-semibold tracking-tight'>
+                  {summaryValues.remainDisplay}
+                </span>
+                <CreditCard
+                  className='text-muted-foreground size-4'
+                  aria-hidden='true'
+                />
+              </div>
+              {/* Friendly "how many chats" estimate using a mid-tier model
+                * average ($0.005/chat). Quota units are 500_000 = $1 so
+                * chats ≈ quota / 2_500. Marketing-grade approximation; the
+                * actual cost depends on which model the user invokes. */}
+              {(() => {
+                const remainQuota = Number(user?.quota ?? 0)
+                if (remainQuota <= 0) {
+                  return (
+                    <p className='text-muted-foreground text-sm leading-relaxed'>
+                      {t('Top up to start using AI models.')}
+                    </p>
+                  )
+                }
+                const chats = Math.max(0, Math.floor(remainQuota / 2500))
+                const chatsLabel =
+                  chats >= 10_000
+                    ? `${Math.floor(chats / 1000)}k`
+                    : chats >= 1000
+                      ? `${(chats / 1000).toFixed(1).replace(/\.0$/, '')}k`
+                      : String(chats)
                 return (
                   <p className='text-muted-foreground text-sm leading-relaxed'>
-                    {t('Top up to start using AI models.')}
+                    {t('≈ {{count}} chats remaining', { count: chatsLabel })}
                   </p>
                 )
-              }
-              const chats = Math.max(0, Math.floor(remainQuota / 2500))
-              const chatsLabel =
-                chats >= 10_000
-                  ? `${Math.floor(chats / 1000)}k`
-                  : chats >= 1000
-                    ? `${(chats / 1000).toFixed(1).replace(/\.0$/, '')}k`
-                    : String(chats)
-              return (
-                <p className='text-muted-foreground text-sm leading-relaxed'>
-                  {t('≈ {{count}} chats remaining', { count: chatsLabel })}
-                </p>
-              )
-            })()}
+              })()}
+            </div>
+            <Button className='justify-between' render={<Link to='/wallet' />}>
+              <span>{t('Recharge')}</span>
+              <ArrowRight data-icon='inline-end' />
+            </Button>
           </div>
-          <Button className='justify-between' render={<Link to='/wallet' />}>
-            <span>{t('Recharge')}</span>
-            <ArrowRight data-icon='inline-end' />
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   )

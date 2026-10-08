@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	commonRelay "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ import (
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
 	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type;index:idx_logs_org_created,priority:2"`
 	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
 	Content          string `json:"content"`
 	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
@@ -37,6 +38,16 @@ type Log struct {
 	Ip               string `json:"ip" gorm:"index;default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
+	// Enterprise Org (meta-repo docs/enterprise-org-prd.md §7.2): stamped when
+	// an org key is used, with the department the user was in at that moment,
+	// so moving someone between departments never rewrites past bills. Both
+	// stay 0 for personal usage, and omitempty keeps such a log line's JSON
+	// exactly what it was before these columns existed. OrgId is indexed
+	// together with CreatedAt: an organization's usage is always read for a
+	// stretch of time — by its reports, and by the alert scan every few
+	// minutes — and never for all of its history at once.
+	OrgId        int `json:"org_id,omitempty" gorm:"default:0;index:idx_logs_org_created,priority:1"`
+	DepartmentId int `json:"department_id,omitempty" gorm:"default:0;index"`
 }
 
 // don't use iota, avoid change log type value
@@ -241,6 +252,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		RequestId: requestId,
 		Other:     otherStr,
 	}
+	log.stampOrgFromRequest(c) // DeepRouter Enterprise Org, see org_log.go
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		logger.LogError(c, "failed to record log: "+err.Error())
@@ -262,6 +274,7 @@ type RecordTaskBillingLogParams struct {
 	TokenId   int
 	Group     string
 	Other     map[string]interface{}
+	OrgSpend  commonRelay.OrgSpend // DeepRouter Enterprise Org, see org_log.go
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -289,6 +302,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		Group:     params.Group,
 		Other:     common.MapToJsonStr(params.Other),
 	}
+	log.stampOrg(params.OrgSpend)
 	err := LOG_DB.Create(log).Error
 	if err != nil {
 		common.SysLog("failed to record task billing log: " + err.Error())

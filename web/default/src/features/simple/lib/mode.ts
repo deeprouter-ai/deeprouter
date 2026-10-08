@@ -4,11 +4,16 @@
  * Which console a signed-in user sees (PRD `docs/console-simple-advanced-prd.md`
  * in the meta-repo, D5): the persona already stored on the user decides it.
  *
- *   casual / unset / missing / unreadable → Simple
- *   dev / team                            → Advanced
+ *   casual                       → Simple
+ *   dev / team                   → Advanced
+ *   unset / missing / unreadable → the default for the kind of account
  *
  * Simple is the default on purpose: DeepRouter's paying audience is
- * non-technical, and new accounts land in Simple until they opt out.
+ * non-technical, and new accounts land in Simple until they opt out. The
+ * members of an organization are the exception (Enterprise Org, meta-repo
+ * `docs/enterprise-org-prd.md` D42): until they choose, they work in the
+ * Advanced console — where their keys are listed and installed, and where the
+ * organization is managed.
  */
 export type ConsoleMode = 'simple' | 'advanced'
 
@@ -31,14 +36,17 @@ export function readPersona(setting: unknown): string | undefined {
 }
 
 export function consoleModeFor(
-  user: { setting?: unknown } | null | undefined
+  user: { setting?: unknown; org_id?: number } | null | undefined
 ): ConsoleMode {
   const persona = readPersona(user?.setting)
-  return persona === 'dev' || persona === 'team' ? 'advanced' : 'simple'
+  if (persona === 'dev' || persona === 'team') return 'advanced'
+  if (persona === 'casual') return 'simple'
+  // Nothing chosen yet: the profile names an organization only for its members.
+  return user?.org_id ? 'advanced' : 'simple'
 }
 
 export function homePathFor(
-  user: { setting?: unknown } | null | undefined
+  user: { setting?: unknown; org_id?: number } | null | undefined
 ): string {
   return consoleModeFor(user) === 'simple' ? SIMPLE_HOME : ADVANCED_HOME
 }
