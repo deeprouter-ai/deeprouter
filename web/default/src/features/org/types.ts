@@ -233,3 +233,145 @@ export type OrgApiResponse<T = unknown> = {
   message?: string
   data?: T
 }
+
+/** What a usage report is grouped by. */
+export type OrgUsageGroupBy = 'department' | 'member' | 'key' | 'model'
+
+/**
+ * What a usage report measures usage in: money, and the number of requests
+ * behind it. `quota` is in quota units, with refunds already taken off.
+ */
+export type OrgUsageFigures = {
+  requests: number
+  quota: number
+}
+
+/** What one department, member, key or model accounts for in a usage report. */
+export type OrgUsageRow = OrgUsageFigures & {
+  /** The department, the member or the key; 0 for a model, which has only a name. */
+  id: number
+  name: string
+  /** A member that is a service account. */
+  is_service: boolean
+  /** A department or key deleted since, or a member removed since. */
+  gone: boolean
+  /** Who used a key in the period, the biggest spender first. */
+  used_by: string[]
+}
+
+/**
+ * What `GET /api/org/usage` answers: the usage of a period as far as the
+ * caller may see it. `scope` says how far that is, and `departments` are the
+ * ones the report can be narrowed to.
+ */
+export type OrgUsageReport = {
+  group_by: OrgUsageGroupBy
+  scope: OrgRoleScope
+  departments: { id: number; name: string }[]
+  total: OrgUsageFigures
+  rows: OrgUsageRow[]
+}
+
+/** One page of a list the backend pages: alerts, audit records. */
+export type OrgPage<T> = {
+  page: number
+  page_size: number
+  total: number
+  items: T[]
+}
+
+/** What an alert is about: two kinds of warning and three anomaly rules. */
+export type OrgAlertRule = 'quota' | 'monthly' | 'spike' | 'offhours' | 'new_ip'
+
+/** Whether an alert has been dealt with: `''` is not yet. */
+export type OrgAlertState = '' | 'handled' | 'false_alarm'
+
+/**
+ * The numbers an alert was raised with. Which are set depends on the rule:
+ * `used` and `limit` for the two warnings (quota units, or requests for
+ * `monthly`), `spent` and `daily_average` for a spike and for spending outside
+ * working hours, `ips` and `known_ips` for an unfamiliar address.
+ */
+export type OrgAlertDetail = {
+  /** The key's name when the alert was raised. */
+  key?: string
+  used?: number
+  limit?: number
+  /**
+   * On a quota warning raised because a request was refused: what the request
+   * had to have in hand, which was more than the key had left.
+   */
+  needed?: number
+  spent?: number
+  daily_average?: number
+  ips?: string[]
+  known_ips?: number
+}
+
+/** One alert of the organization, as `GET /api/org/alerts` lists it. */
+export type OrgAlert = {
+  id: number
+  /** A rule this build has no words for shows as its code. */
+  rule: OrgAlertRule | string
+  /** The share a warning is about, in percent; 0 for an anomaly. */
+  level: number
+  key_id: number
+  /** Who held the key when the alert was raised, and where they sat. */
+  holder_id: number
+  holder: string
+  department_id: number
+  department: string
+  detail: OrgAlertDetail
+  created_time: number
+  state: OrgAlertState
+  acked_by: number
+  acked_by_name: string
+  acked_time: number
+}
+
+/**
+ * When the organization works: an IANA time zone, the days of the week
+ * (0 is Sunday) and the minutes of the day it starts and ends at.
+ */
+export type OrgWorkHours = {
+  timezone: string
+  days: number[]
+  start: number
+  end: number
+}
+
+/**
+ * What the warnings and alerts run on. `min_spend` is in quota units;
+ * `work_hours` is null while the organization has not said when it works,
+ * which leaves the outside-working-hours rule switched off.
+ */
+export type OrgAlertSettings = {
+  warn_at: number[]
+  spike_multiple: number
+  off_hours_percent: number
+  min_spend: number
+  work_hours: OrgWorkHours | null
+}
+
+/** One record of the audit log, as `GET /api/org/audit-logs` lists it. */
+export type OrgAuditLog = {
+  id: number
+  actor_user_id: number
+  /** Who that is today; empty when the account no longer exists. */
+  actor: string
+  action: string
+  target_type: string
+  target_id: number
+  /**
+   * What it was done to, by name: a member as they are called today, anything
+   * else by the name its record carries. Empty when the record has none.
+   */
+  target: string
+  /** What the target was and what it became, with the names of the time. */
+  detail: {
+    before?: Record<string, unknown>
+    after?: Record<string, unknown>
+  } | null
+  ip: string
+  created_time: number
+}

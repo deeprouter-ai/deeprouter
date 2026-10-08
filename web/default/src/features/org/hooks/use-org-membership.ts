@@ -57,12 +57,14 @@ export function canSeeOrg(
  * the platform role, so it asks the backend who this user is in their
  * organization and sends anyone whose role does not grant the page's primitive
  * to the 403 page: `member.read` for the pages about people, `key.read` for
- * the keys page. It is a courtesy — every /api/org call checks again — that
- * keeps people off pages which could only show them errors.
+ * the keys page. A page made of sections that each take their own primitive
+ * passes all of them, and whoever holds one gets in. It is a courtesy — every
+ * /api/org call checks again — that keeps people off pages which could only
+ * show them errors.
  */
 export async function requireOrgAccess(
   queryClient: QueryClient,
-  primitive: string = 'member.read'
+  primitive: string | string[] = 'member.read'
 ) {
   const userId = useAuthStore.getState().auth.user?.id
   let membership: OrgMembership | null
@@ -77,7 +79,7 @@ export async function requireOrgAccess(
     // failure itself and offers a retry, where a 403 would be a wrong answer.
     return
   }
-  if (!holds(membership, primitive)) {
+  if (![primitive].flat().some((one) => holds(membership, one))) {
     throw redirect({ to: '/403' })
   }
 }

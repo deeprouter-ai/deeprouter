@@ -41,6 +41,7 @@ import {
   Building2,
   ShieldCheck,
   KeyRound,
+  ChartColumn,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
@@ -55,6 +56,7 @@ import {
 } from '@/features/org/hooks/use-org-membership'
 import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { holds } from '@/features/org/lib/permissions'
+import { reportSections } from '@/features/org/lib/reports'
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -72,8 +74,9 @@ export function useSidebarData(): SidebarData {
 
   // Enterprise Org: the "Organization" group holds the pages a member's role
   // lets them see — the two about people take member.read, the keys page
-  // key.read — and is not there at all when that is none of them, as for
-  // Staff. A personal account's probe answers null and the group never appears.
+  // key.read, the reports page any of usage.read, alert.read and audit.read —
+  // and is not there at all when that is none of them, as for Staff. A
+  // personal account's probe answers null and the group never appears.
   const { data: orgMembership } = useOrgMembership()
   const walletView = useWalletView()
   const orgItems = [
@@ -97,6 +100,15 @@ export function useSidebarData(): SidebarData {
             title: t('Organization keys'),
             url: '/org/keys',
             icon: KeyRound,
+          },
+        ]
+      : []),
+    ...(reportSections(orgMembership).length > 0
+      ? [
+          {
+            title: t('Reports & alerts'),
+            url: '/org/reports',
+            icon: ChartColumn,
           },
         ]
       : []),

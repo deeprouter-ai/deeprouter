@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { api } from '@/lib/api'
 import type {
+  OrgAlert,
+  OrgAlertSettings,
   OrgApiResponse,
+  OrgAuditLog,
   OrgDepartment,
   OrgInvite,
   OrgInvitePreview,
@@ -15,9 +18,12 @@ import type {
   OrgMember,
   OrgMembership,
   OrgOwnKey,
+  OrgPage,
   OrgPermissionCatalog,
   OrgRole,
   OrgRoleInput,
+  OrgUsageGroupBy,
+  OrgUsageReport,
 } from './types'
 
 export const orgQueryKeys = {
@@ -36,6 +42,14 @@ export const orgQueryKeys = {
   keyTemplates: () => [...orgQueryKeys.all, 'key-templates'] as const,
   keyModels: (holderId: number) =>
     [...orgQueryKeys.all, 'key-models', holderId] as const,
+  usage: (params: OrgUsageParams) =>
+    [...orgQueryKeys.all, 'usage', params] as const,
+  alerts: () => [...orgQueryKeys.all, 'alerts'] as const,
+  alertList: (params: OrgAlertsParams) =>
+    [...orgQueryKeys.alerts(), params] as const,
+  alertSettings: () => [...orgQueryKeys.all, 'alert-settings'] as const,
+  auditLogs: (params: OrgAuditParams) =>
+    [...orgQueryKeys.all, 'audit-logs', params] as const,
 }
 
 /** The caller's organization and role, or null for a personal account. */
@@ -325,4 +339,89 @@ export async function fetchOrgInvitePreview(
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data?.success ? (res.data.data as OrgInvitePreview) : null
+}
+
+/**
+ * What a usage report is asked for. A bound that is left out leaves that side
+ * of the period open; without a department the report covers every department
+ * the caller may see.
+ */
+export type OrgUsageParams = {
+  group_by: OrgUsageGroupBy
+  /** Unix seconds, included. */
+  start_timestamp?: number
+  /** Unix seconds, included. */
+  end_timestamp?: number
+  department_id?: number
+}
+
+/**
+ * The organization's usage over a period, summed by department, member, key
+ * or model — as much of it as the caller's role lets them see. Naming a
+ * department out of their reach is a 403.
+ */
+export async function fetchOrgUsage(
+  params: OrgUsageParams
+): Promise<OrgUsageReport> {
+  const res = await api.get('/api/org/usage', { params })
+  return res.data?.data as OrgUsageReport
+}
+
+/** Which page of the alert list to fetch; `state: 'open'` leaves out the ones dealt with. */
+export type OrgAlertsParams = {
+  p: number
+  page_size: number
+  state?: 'open'
+}
+
+/** One page of the alerts the caller may see, newest first. */
+export async function fetchOrgAlerts(
+  params: OrgAlertsParams
+): Promise<OrgPage<OrgAlert>> {
+  const res = await api.get('/api/org/alerts', { params })
+  return res.data?.data as OrgPage<OrgAlert>
+}
+
+/** Marks an alert as handled or as a false alarm; the owner's and the admins' to do. */
+export async function handleOrgAlert(
+  id: number,
+  state: 'handled' | 'false_alarm'
+): Promise<OrgApiResponse> {
+  const res = await api.post(`/api/org/alerts/${id}/handle`, { state })
+  return res.data
+}
+
+/** What the warnings and alerts run on; only the owner and admins may read it. */
+export async function fetchOrgAlertSettings(): Promise<OrgAlertSettings> {
+  const res = await api.get('/api/org/alert-settings')
+  return res.data?.data as OrgAlertSettings
+}
+
+/** Replaces the warning levels, the alert rules and the working hours. */
+export async function updateOrgAlertSettings(
+  settings: OrgAlertSettings
+): Promise<OrgApiResponse<OrgAlertSettings>> {
+  const res = await api.put('/api/org/alert-settings', settings)
+  return res.data
+}
+
+/** Which page of the audit log to fetch, and what to narrow it down to. */
+export type OrgAuditParams = {
+  p: number
+  page_size: number
+  /** Part of the name of whoever did it. */
+  actor?: string
+  target_type?: string
+  /** Unix seconds, included. */
+  start_timestamp?: number
+  /** Unix seconds, included. */
+  end_timestamp?: number
+}
+
+/** One page of the organization's audit log, newest first. */
+export async function fetchOrgAuditLogs(
+  params: OrgAuditParams
+): Promise<OrgPage<OrgAuditLog>> {
+  const res = await api.get('/api/org/audit-logs', { params })
+  return res.data?.data as OrgPage<OrgAuditLog>
 }

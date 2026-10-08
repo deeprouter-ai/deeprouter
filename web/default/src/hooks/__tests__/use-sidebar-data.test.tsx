@@ -8,10 +8,11 @@ import { membershipOf } from '@/features/org/__tests__/fixtures'
 import type { OrgMembership } from '@/features/org/types'
 import { useSidebarData } from '../use-sidebar-data'
 
-// Enterprise Org P3 to P5: the "Organization" group of the sidebar holds the
+// Enterprise Org P3 to P9: the "Organization" group of the sidebar holds the
 // pages a member's role shows them — the two about people for member.read, the
-// keys page for key.read. Everyone else — personal accounts above all — must
-// see the sidebar exactly as it was.
+// keys page for key.read, the reports page for any of usage.read, alert.read
+// and audit.read. Everyone else — personal accounts above all — must see the
+// sidebar exactly as it was.
 
 const mockFetchOrgMembership = vi.hoisted(() => vi.fn())
 
@@ -51,7 +52,7 @@ beforeEach(() => {
 })
 
 describe('sidebar: the Organization group', () => {
-  it('is there, right after General, for the preset roles that see people and keys', async () => {
+  it('is there, right after General, with all four pages for the preset roles that read everything in their reach', async () => {
     for (const viewer of [
       membershipOf('owner'),
       membershipOf('admin'),
@@ -77,6 +78,10 @@ describe('sidebar: the Organization group', () => {
         expect.objectContaining({
           title: 'Organization keys',
           url: '/org/keys',
+        }),
+        expect.objectContaining({
+          title: 'Reports & alerts',
+          url: '/org/reports',
         }),
       ])
     }
@@ -114,21 +119,40 @@ describe('sidebar: the Organization group', () => {
     ])
   })
 
-  it('is absent for staff, and for a role that only sees usage', async () => {
-    for (const viewer of [
-      membershipOf('staff'),
-      membershipOf('staff', {
-        role: 'Finance Ops',
-        role_scope: 'org',
-        permissions: ['usage.read'],
-      }),
+  it('offers the reports page to whoever reads usage, alerts or the audit log', async () => {
+    // Any one of the three opens it: the page shows each reader their part.
+    for (const [role, permission] of [
+      ['Finance Ops', 'usage.read'],
+      ['On call', 'alert.read'],
+      ['Auditor', 'audit.read'],
     ]) {
-      const groups = await sidebarGroupsFor(viewer)
+      const groups = await sidebarGroupsFor(
+        membershipOf('staff', {
+          role,
+          role_scope: 'org',
+          permissions: [permission],
+        })
+      )
       expect(
         groups.map((group) => group.id),
-        viewer.role
-      ).toEqual(['general', 'personal', 'admin'])
+        role
+      ).toEqual(['general', 'org', 'personal', 'admin'])
+      expect(groups[1].items, role).toEqual([
+        expect.objectContaining({
+          title: 'Reports & alerts',
+          url: '/org/reports',
+        }),
+      ])
     }
+  })
+
+  it('is absent for staff', async () => {
+    const groups = await sidebarGroupsFor(membershipOf('staff'))
+    expect(groups.map((group) => group.id)).toEqual([
+      'general',
+      'personal',
+      'admin',
+    ])
   })
 
   it('is absent for a personal account', async () => {
