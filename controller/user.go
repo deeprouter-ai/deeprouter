@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -18,12 +19,17 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/alias_setting"
 
 	"github.com/QuantumNous/new-api/constant"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
+
+// maxDisplayNameLength is how long a display name may be, in characters: the
+// same bound the User struct's validation puts on it.
+const maxDisplayNameLength = 20
 
 type LoginRequest struct {
 	Username string `json:"username"`
@@ -47,6 +53,13 @@ type RegisterRequest struct {
 	PreferredClient    string `json:"preferred_client,omitempty"`    // cherry-studio|chatbox|...|playground|dashboard|''
 	AcquisitionChannel string `json:"acquisition_channel,omitempty"` // utm_source / referrer marker
 	Timezone           string `json:"timezone,omitempty"`            // IANA tz from browser
+
+	// Enterprise Org P2: when set, the sign-up also creates this organization
+	// and the new user becomes its owner. Empty = a personal account, as before.
+	OrgName string `json:"org_name,omitempty"`
+	// Enterprise Org P3: the code of an invite link. When set, the new user
+	// joins that organization with the invite's role and department.
+	OrgInvite string `json:"org_invite,omitempty"`
 }
 
 func Login(c *gin.Context) {
@@ -111,6 +124,12 @@ func Login(c *gin.Context) {
 
 // setup session & cookies and then return user info
 func setupLogin(user *model.User, c *gin.Context) {
+	// Enterprise Org: a service account holds keys and never signs in. Every
+	// way of signing in ends here, so this one check covers them all.
+	if user.IsService {
+		common.ApiErrorI18n(c, msgOrgServiceAccountLogin)
+		return
+	}
 	model.UpdateUserLastLoginAt(user.Id)
 	session := sessions.Default(c)
 	session.Set("id", user.Id)
@@ -218,6 +237,13 @@ func Register(c *gin.Context) {
 	if persona == "" {
 		persona = "unset"
 	}
+	// Enterprise Org D24: whoever founds an organization works in the Advanced
+	// console, where organization management lives. "team" puts them there
+	// from the first sign-in and keeps the persona prompt from sending them
+	// to the Simple console.
+	if req.OrgName != "" {
+		persona = "team"
+	}
 	defaultSetting := dto.UserSetting{
 		Persona:            persona,
 		BrandPreference:    req.BrandPreference,
@@ -236,8 +262,13 @@ func Register(c *gin.Context) {
 	if settingBytes, mErr := common.Marshal(defaultSetting); mErr == nil {
 		cleanUser.Setting = string(settingBytes)
 	}
-	if err := cleanUser.Insert(inviterId); err != nil {
-		common.ApiError(c, err)
+	// Enterprise Org: with org_name the account founds an organization, with
+	// org_invite it joins one (controller/org.go); with neither this is the
+	// plain Insert. orgError answers anything that is not an organization
+	// refusal exactly as ApiError did.
+	orgId, err := insertRegisteredUser(c, &cleanUser, inviterId, &req)
+	if err != nil {
+		orgError(c, err)
 		return
 	}
 
@@ -253,7 +284,9 @@ func Register(c *gin.Context) {
 	// initial response the key string is gone; the user has to copy it
 	// or regenerate via /keys.
 	var defaultTokenKey string
-	if constant.GenerateDefaultToken {
+	// Enterprise Org D16: a member who joined by invite holds only the keys an
+	// admin hands them, so no starter key is made for them.
+	if constant.GenerateDefaultToken && req.OrgInvite == "" {
 		key, kErr := common.GenerateKey()
 		if kErr != nil {
 			common.ApiErrorI18n(c, i18n.MsgUserDefaultTokenFailed)
@@ -271,20 +304,22 @@ func Register(c *gin.Context) {
 			UnlimitedQuota:     true,
 			ModelLimitsEnabled: false,
 		}
-		// Bind the default token to the wizard-captured brand so a casual
-		// user who picked Claude can immediately call model: "deeprouter"
-		// in Cherry Studio without configuring anything else. See
-		// setting/alias_setting/seed/aliases.yaml + middleware/distributor
-		// for the resolution path.
-		if req.Persona != "" && req.Persona != "unset" &&
-			req.Persona != "all" {
-			token.SimplePurpose = req.Persona
-		}
-		if req.BrandPreference != "" {
+		// The starter key records the brand the wizard captured, when it is
+		// one the registry knows (setting/alias_setting/seed/aliases.yaml).
+		// It is bound to no purpose: a persona — casual, dev, team — is not
+		// one, and copying it into simple_purpose left keys with a purpose
+		// nothing recognises.
+		if alias_setting.KnownBrand(req.BrandPreference) {
 			token.SimpleBrand = req.BrandPreference
 		}
 		if setting.DefaultUseAutoGroup {
 			token.Group = "auto"
+		}
+		if orgId != 0 {
+			// An organization account holds organization keys only (Enterprise
+			// Org PRD D16), so its starter key is one from the first second.
+			token.OrgId = orgId
+			token.CreatedBy = insertedUser.Id
 		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)
@@ -520,6 +555,12 @@ func GetSelf(c *gin.Context) {
 		"stripe_customer":              user.StripeCustomer,
 		"sidebar_modules":              userSetting.SidebarModules, // 正确提取sidebar_modules字段
 		"permissions":                  permissions,                // 新增权限字段
+	}
+	// DeepRouter Enterprise Org: a member's console must know at once that
+	// the balance above is not what their keys spend (internal/org/README.md,
+	// "The company wallet"). A personal account's answer is exactly what it was.
+	if user.OrgId != 0 {
+		responseData["org_id"] = user.OrgId
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -792,6 +833,26 @@ func UpdateSelf(c *gin.Context) {
 		return
 	}
 
+	// DeepRouter (Enterprise Org D48): a display name on its own takes no
+	// password. It is no credential — it is what the member list, the reports
+	// and the alerts call the person — and the path below asks for the current
+	// password because it also changes the username and the password.
+	if name, ok := requestData["display_name"]; ok && len(requestData) == 1 {
+		displayName, isString := name.(string)
+		displayName = strings.TrimSpace(displayName)
+		if !isString || displayName == "" || utf8.RuneCountInString(displayName) > maxDisplayNameLength {
+			common.ApiErrorI18n(c, i18n.MsgUserDisplayNameInvalid)
+			return
+		}
+		renamed := model.User{Id: c.GetInt("id"), DisplayName: displayName}
+		if err := renamed.Update(false); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
+			return
+		}
+		common.ApiSuccessI18n(c, i18n.MsgUpdateSuccess, nil)
+		return
+	}
+
 	// 自动充值自助设置：用户自己开关/设阈值/设金额（金额单位为 quota，由前端按售价换算）
 	if _, ok := requestData["auto_topup_enabled"]; ok {
 		userId := c.GetInt("id")
@@ -924,6 +985,17 @@ func DeleteSelf(c *gin.Context) {
 
 	if user.Role == common.RoleRootUser {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotDeleteRootUser)
+		return
+	}
+	// Enterprise Org: the owner cannot be removed, their own hand included.
+	if isOrgOwner(user) {
+		common.ApiErrorI18n(c, msgOrgOwnerCannotDeleteAccount)
+		return
+	}
+	// Nor does any other member leave by deleting their account: whoever may
+	// remove members does that, and their keys are taken back with it.
+	if isOrgMember(user) {
+		common.ApiErrorI18n(c, msgOrgMemberCannotDeleteAccount)
 		return
 	}
 

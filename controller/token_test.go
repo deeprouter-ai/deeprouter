@@ -595,6 +595,12 @@ func TestGetTokenKeyRequiresOwnershipAndReturnsFullKey(t *testing.T) {
 
 func TestAddTokenReturnsCreatedKey(t *testing.T) {
 	db := setupTokenControllerTestDB(t)
+	// Creating a key asks whether the caller belongs to an organization
+	// (Enterprise Org PRD D16), so the users table has to be there; user 1 is
+	// in nobody's, like every personal account.
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatalf("failed to migrate users: %v", err)
+	}
 
 	// Regression (2026-10-04): AddToken answered {success:true} with no data,
 	// so the frontend's "shown once" success dialog — which gates on

@@ -5,12 +5,17 @@ import type { ApiKey } from '@/features/keys/types'
 
 const getApiKeys = vi.fn()
 const createApiKey = vi.fn()
+const fetchOrgSelfKeys = vi.fn()
 vi.mock('@/features/keys/api', () => ({
   getApiKeys: (...args: unknown[]) => getApiKeys(...args),
   createApiKey: (...args: unknown[]) => createApiKey(...args),
 }))
+vi.mock('@/features/org/api', () => ({
+  fetchOrgSelfKeys: (...args: unknown[]) => fetchOrgSelfKeys(...args),
+}))
 
-const { ensurePurposeKey, pickPurposeKey } = await import('./purpose-key')
+const { ensurePurposeKey, NoAssignedKeyError, pickPurposeKey } =
+  await import('./purpose-key')
 
 const key = (over: Partial<ApiKey>): ApiKey =>
   ({ id: 1, name: 'k', status: 1, simple_purpose: '', ...over }) as ApiKey
@@ -31,6 +36,7 @@ describe('ensurePurposeKey', () => {
   beforeEach(() => {
     getApiKeys.mockReset()
     createApiKey.mockReset()
+    fetchOrgSelfKeys.mockReset()
   })
 
   it('reuses an existing key without creating one', async () => {
@@ -74,5 +80,70 @@ describe('ensurePurposeKey', () => {
       })
     createApiKey.mockResolvedValue({ success: true })
     expect((await ensurePurposeKey('chat', false)).id).toBe(11)
+  })
+})
+
+// Enterprise Org P6 (meta-repo docs/enterprise-org-prd.md D16): a member of an
+// organization makes no key of their own.
+describe('ensurePurposeKey for a member of an organization', () => {
+  beforeEach(() => {
+    getApiKeys.mockReset()
+    createApiKey.mockReset()
+    fetchOrgSelfKeys.mockReset()
+  })
+
+  it('takes the newest key they were handed for the purpose, cut down to its models', async () => {
+    fetchOrgSelfKeys.mockResolvedValue([
+      { id: 31, name: 'newest', models: ['MiniMax-H3', 'seedance'] },
+      { id: 30, name: 'older', models: ['MiniMax-H3'] },
+    ])
+
+    expect(await ensurePurposeKey('video', false, true)).toEqual({
+      id: 31,
+      model_limits_enabled: true,
+      model_limits: 'MiniMax-H3,seedance',
+    })
+    expect(fetchOrgSelfKeys).toHaveBeenCalledWith('video')
+    // Their keys are asked for by purpose, never listed or made here.
+    expect(getApiKeys).not.toHaveBeenCalled()
+    expect(createApiKey).not.toHaveBeenCalled()
+  })
+
+  it('reads a key that names no model for the purpose as not limited by name', async () => {
+    fetchOrgSelfKeys.mockResolvedValue([{ id: 40, name: 'coding', models: [] }])
+
+    expect(await ensurePurposeKey('coding', true, true)).toEqual({
+      id: 40,
+      model_limits_enabled: false,
+      model_limits: '',
+    })
+  })
+
+  it('makes no key when they were handed none: that is an error of its own', async () => {
+    fetchOrgSelfKeys.mockResolvedValue([])
+
+    await expect(ensurePurposeKey('image', false, true)).rejects.toThrow(
+      NoAssignedKeyError
+    )
+    expect(createApiKey).not.toHaveBeenCalled()
+    expect(getApiKeys).not.toHaveBeenCalled()
+  })
+
+  it('passes on a failure to ask, as what it is', async () => {
+    fetchOrgSelfKeys.mockRejectedValue(new Error('offline'))
+
+    const asked = ensurePurposeKey('image', false, true)
+    await expect(asked).rejects.toThrow('offline')
+    await expect(asked).rejects.not.toBeInstanceOf(NoAssignedKeyError)
+    expect(createApiKey).not.toHaveBeenCalled()
+  })
+
+  it('leaves a personal account exactly as it was', async () => {
+    getApiKeys.mockResolvedValue({
+      data: { items: [key({ id: 7, simple_purpose: 'image' })] },
+    })
+
+    expect((await ensurePurposeKey('image', false, false)).id).toBe(7)
+    expect(fetchOrgSelfKeys).not.toHaveBeenCalled()
   })
 })

@@ -40,6 +40,14 @@ type Token struct {
 	TpmLimit     int            `json:"tpm_limit" gorm:"default:0"`     // max estimated tokens per minute
 	MonthlyLimit int            `json:"monthly_limit" gorm:"default:0"` // max requests per calendar month
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	// Enterprise Org (meta-repo docs/enterprise-org-prd.md §7.2). OrgId 0 is a
+	// personal key. None of the three is writable through the personal key
+	// endpoints: AddToken copies an explicit field list and Update() selects an
+	// explicit column list, and neither includes them. omitempty keeps a
+	// personal key's JSON exactly what it was before these columns existed.
+	OrgId          int    `json:"org_id,omitempty" gorm:"default:0;index"`
+	CreatedBy      int    `json:"created_by,omitempty" gorm:"default:0"`                        // who created an org key (the holder is UserId)
+	PolicyTemplate string `json:"policy_template,omitempty" gorm:"type:varchar(64);default:''"` // policy template applied to an org key; empty = none
 }
 
 func (token *Token) Clean() {

@@ -43,6 +43,38 @@ Added by this fork (`model/user.go:60-66`). Stored plaintext like the upstream c
 
 Plus 3 auto-topup columns (also added in the same `User` extension): `auto_topup_enabled`, `auto_topup_threshold`, `auto_topup_amount`.
 
+## Enterprise Org tables and columns
+
+Added by `internal/org` (see its README for the rules). An organization is a customer company; `org_id = 0` everywhere means "personal", which is every row that existed before the feature.
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `organizations` | One customer company. Holds no money: the company wallet is the owner's `users.quota`. `alert_settings` is what the company changed about its warnings and alerts — warning levels, the two anomaly multiples, the floor, working hours — and empty means the defaults | PK `id`; UNQ `owner_user_id`; `name` varchar(64); TEXT `alert_settings` (JSON) |
+| `departments` | Structural unit only — scopes managers and groups reports, carries no permissions. Every organization starts with the rows of `model.PresetDepartments`: a default department that cannot be deleted, plus five business units. Deleting a department moves its members and unused invite links to the default one | PK `id`; IDX `org_id`; `is_default`; `preset_key` (starter entry the row came from, NULL if the company made it); `parent_id` (always 0 for now); SOFT-DELETE |
+| `org_roles` | A bundle of permission primitives. `org_id = 0` rows are the five platform presets, synced from `model.PresetRoles` on every boot; the others are an organization's custom roles (`scope` `org` or `dept` only), stored with the reads their writes imply. Deleting a custom role sends its holders and its invite links back to the preset `staff` | PK `id`; IDX `org_id`; `scope` = `org` \| `dept` \| `self`; CSV `permissions`; SOFT-DELETE |
+| `department_managers` | The *further* departments a member manages. A member whose role has `dept` scope always manages the department in `users.department_id` — that one has no row here. Rows exist only for members with such a role | Composite PK `(department_id, user_id)` |
+| `org_invites` | Invite links carrying a role and a department. A link is not consumed: it admits every sign-up that presents it until `expires_time` (7 days after creation) or until the row is deleted (revoked) | PK `id`; UNQ `code` (32 random characters); IDX `org_id` |
+| `org_alerts` | What an organization is told about a key, raised by a background task and never blocking anything: a warning that the key has used a share of its quota or of its monthly request limit (`rule` `quota` \| `monthly`, with `warn_level` the share in percent and `warn_cycle` what makes it "once": the month, or what the key was given in all), or an anomaly (`spike` \| `offhours` \| `new_ip`). `user_id` and `department_id` are the key's holder and their department when it was raised, and are not rewritten afterwards. `notified_time` is 0 until the alert has gone out as a notification; `state` is `''` (open), `handled` or `false_alarm`, with `acked_by` / `acked_time` | PK `id`; IDX `org_id`, `token_id`, `department_id`, `notified_time`; TEXT `detail` (JSON: the numbers behind the alert and the key's name) |
+| `org_audit_logs` | Append-only record of org management actions, written in the transaction of the change itself. `action` is one of `model.Audit…` (`role.assign`, `department.rename`, `member.invite`, `key.rotate`, `key.deliver`, …), `target_type` one of `department` \| `role` \| `member` \| `invite` \| `key` \| `alert` \| `organization`. `detail` is `{"before": …, "after": …}` with names as well as ids, and never a credential — an invite code or a key's value | PK `id`; IDX `org_id`; `actor_user_id`; `ip`; TEXT `detail` (JSON) |
+
+Columns added to platform tables — all default to zero and are `omitempty` in JSON, so a personal row looks exactly as it did before:
+
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `users.org_id` | `bigint`, indexed | `0` | Organization the account belongs to |
+| `users.role_id` | `bigint` | `0` | The member's **org** role → `org_roles.id`. Unrelated to `users.role`, which stays `1` for every org member (Go field `OrgRoleId`) |
+| `users.department_id` | `bigint` | `0` | Department the member sits in |
+| `users.is_service` | `boolean` | `false` | Service account: holds keys, cannot log in. The row is written by `internal/org` with a generated `svc-…` username, the company's name for it in `display_name`, no password, email or access token, and zero quota |
+| `tokens.org_id` | `bigint`, indexed | `0` | Organization that owns the key |
+| `tokens.created_by` | `bigint` | `0` | Who created an org key (the holder is `user_id`) |
+| `tokens.policy_template` | `varchar(64)` | `''` | Policy template applied to an org key |
+| `logs.org_id` | `bigint`, indexed together with `created_at` (`idx_logs_org_created`) | `0` | Stamped when an org key is used: on the usage line of the request, and on the refund or settlement line of a task it started. The usage line of an org key also always carries `ip`, which a personal key's does only when its user switched that on |
+| `logs.department_id` | `bigint`, indexed | `0` | The user's department at that moment — moving someone never rewrites past bills |
+
+One JSON column gains fields instead of the table gaining columns: `tasks.private_data` keeps `org_id`, `org_department_id` and `org_wallet_user_id` for a task submitted with an org key — who paid for it, so that a refund decided minutes later goes back to the company wallet. They are left out of a personal task's data altogether.
+
+The org tables migrate fail-soft (`internal/org/model.Migrate` logs and carries on); the columns above migrate with the core `AutoMigrate` and are fatal on failure.
+
 ## Layer-2 routing: the `abilities` table
 
 This is the lookup that powers `model/channel_cache.go:GetRandomSatisfiedChannel`. It's flat and denormalized:

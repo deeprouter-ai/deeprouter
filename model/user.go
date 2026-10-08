@@ -82,6 +82,18 @@ type User struct {
 	AutoTopupEnabled   bool `json:"auto_topup_enabled" gorm:"type:boolean;default:false;column:auto_topup_enabled"`
 	AutoTopupThreshold int  `json:"auto_topup_threshold,omitempty" gorm:"type:int;default:0;column:auto_topup_threshold"`
 	AutoTopupAmount    int  `json:"auto_topup_amount,omitempty" gorm:"type:int;default:0;column:auto_topup_amount"`
+
+	// === Enterprise Org (meta-repo docs/enterprise-org-prd.md §7.2) ===
+	// Membership of a customer organization; all zero for a personal account.
+	// 🔴 Org roles are entirely separate from the global Role above: every org
+	// member, the owner included, keeps Role = 1, and nothing here may ever be
+	// read as platform privilege. OrgRoleId points at org_roles, not at Role.
+	// omitempty keeps a personal account's JSON exactly what it was before
+	// these columns existed. See internal/org for the consumers.
+	OrgId        int  `json:"org_id,omitempty" gorm:"default:0;index;column:org_id"`
+	OrgRoleId    int  `json:"org_role_id,omitempty" gorm:"default:0;column:role_id"`
+	DepartmentId int  `json:"department_id,omitempty" gorm:"default:0;column:department_id"`
+	IsService    bool `json:"is_service,omitempty" gorm:"type:boolean;default:false;column:is_service"` // service account: holds keys, cannot log in
 }
 
 func (user *User) ToBaseUser() *UserBase {

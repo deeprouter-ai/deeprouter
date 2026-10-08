@@ -16,9 +16,27 @@ on:
       - 'relay/airbotix_policy_test.go'
       - 'relay/kids_coverage_matrix_test.go'
       - 'service/airbotix_billing.go'
+      - 'service/org_wallet.go'
+      - 'service/org_wallet_test.go'
+      - 'service/org_alerts.go'
+      - 'service/org_alerts_test.go'
+      - 'service/billing.go'
+      - 'service/billing_session.go'
+      - 'service/quota.go'
+      - 'service/task_billing.go'
+      - 'service/text_quota.go'
+      - 'middleware/auth.go'
+      - 'middleware/org_wallet.go'
+      - 'model/log.go'
+      - 'model/org_log.go'
+      - 'model/task.go'
+      - 'relay/common/relay_info.go'
+      - 'relay/common/org_spend.go'
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
+      # setting/alias_setting's tests hold its rule lists against this file.
+      - 'scripts/seed-models/channels.yaml'
       - 'relay/channel/task/doubao/**'
       - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
@@ -43,9 +61,27 @@ on:
       - 'relay/airbotix_policy_test.go'
       - 'relay/kids_coverage_matrix_test.go'
       - 'service/airbotix_billing.go'
+      - 'service/org_wallet.go'
+      - 'service/org_wallet_test.go'
+      - 'service/org_alerts.go'
+      - 'service/org_alerts_test.go'
+      - 'service/billing.go'
+      - 'service/billing_session.go'
+      - 'service/quota.go'
+      - 'service/task_billing.go'
+      - 'service/text_quota.go'
+      - 'middleware/auth.go'
+      - 'middleware/org_wallet.go'
+      - 'model/log.go'
+      - 'model/org_log.go'
+      - 'model/task.go'
+      - 'relay/common/relay_info.go'
+      - 'relay/common/org_spend.go'
       - 'constant/context_key.go'
       - 'setting/ratio_setting/**'
       - 'setting/alias_setting/**'
+      # setting/alias_setting's tests hold its rule lists against this file.
+      - 'scripts/seed-models/channels.yaml'
       - 'relay/channel/task/doubao/**'
       - 'relay/channel/task/hailuo/**'
       - 'service/convert.go'
@@ -110,7 +146,10 @@ jobs:
           # Smart-router integration: catalog endpoint pricing math, kids
           # pre-filter, brand map, input validation, cross-model fallback,
           # internal-token auth, ResolveAutoModel hot path.
-          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey' -count=1 -race -timeout 60s
+          # 180s, not 60s: the TestOrg sign-up tests hash real passwords, and
+          # each bcrypt hash costs about 0.6s under the race detector. The
+          # line took 18s on a developer machine when this was raised.
+          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestUpdateSelf|TestOrg' -count=1 -race -timeout 180s
           # kids_mode middleware layer: policy resolution + defensive pass-through (DR-12).
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel|TestDistributeTaskFetch' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
@@ -118,7 +157,10 @@ jobs:
           # regression guards; hailuo also covers the v2/H3 request conversion).
           # Gemini protocol conversion: top_k must not reach OpenAI, and the
           # Gemini->Claude bridge must keep producing Claude/Gemini shapes.
-          go test ./service/ -run 'TestGeminiToOpenAIRequest' -count=1 -timeout 60s
+          # TestOrg: Enterprise Org's company wallet on the billing path - whose
+          # balance pays, the usage-log stamp, task refunds, the low-balance
+          # reminder (service/org_wallet_test.go).
+          go test ./service/ -run 'TestGeminiToOpenAIRequest|TestOrg' -count=1 -timeout 60s
           go test ./relay/channel/openai/ -run 'TestConvertOpenAIRequest' -count=1 -timeout 60s
           go test ./relay/channel/claude/ -run 'TestConvertGeminiRequest|TestHandleClaudeResponseData|TestHandleStreamResponseData' -count=1 -timeout 60s
           go test ./setting/ratio_setting/ -count=1 -timeout 60s
@@ -133,7 +175,7 @@ jobs:
           # Route registration smoke: gin validates its tree at registration
           # time, so a wildcard-name conflict (e.g. /api/skills/:slug vs :id)
           # panics on startup and only this test catches it before deploy.
-          go test ./router/ -run 'TestSetApiRouter|TestSetConnectRouter' -count=1 -timeout 60s
+          go test ./router/ -run 'TestSetApiRouter|TestSetConnectRouter|TestOrg' -count=1 -timeout 60s
 
       - name: Verify kids coverage matrix (go test -list)
         # scripts/check-kids-coverage-matrix.sh parses docs/kids-coverage-matrix.md,

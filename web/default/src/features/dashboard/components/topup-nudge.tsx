@@ -22,6 +22,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/auth-store'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 
 // Show the top-up nudge while the balance is below ~$1 of usage. New users
 // start with a tiny trial quota, so this naturally targets them too.
@@ -31,8 +32,16 @@ export function TopupNudge() {
   const { t } = useTranslation()
   const quota = useAuthStore((s) => s.auth.user?.quota)
   const [dismissed, setDismissed] = useState(false)
+  // DeepRouter Enterprise Org: a member's own balance is not what their keys
+  // spend, so it running low is nothing to nudge them about.
+  const walletView = useWalletView()
 
-  if (dismissed || quota === undefined || quota >= LOW_BALANCE_QUOTA) {
+  if (
+    walletView !== 'own' ||
+    dismissed ||
+    quota === undefined ||
+    quota >= LOW_BALANCE_QUOTA
+  ) {
     return null
   }
 

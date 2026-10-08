@@ -221,6 +221,28 @@ func CheckTPM(ctx context.Context, rdb *redis.Client, tokenID int, limit int, es
 	return true, nil
 }
 
+// monthlyKey names a token's request counter for the calendar month of now.
+func monthlyKey(tokenID int, now time.Time) string {
+	return fmt.Sprintf("tq:monthly:%d:%d%02d", tokenID, now.Year(), int(now.Month()))
+}
+
+// MonthlyUsed returns how many requests a token has made this calendar month,
+// as CheckMonthly counted them. It only reads: nothing is counted or reserved.
+// rdb may be nil (reads the in-memory fallback).
+func MonthlyUsed(ctx context.Context, rdb *redis.Client, tokenID int) (int, error) {
+	key := monthlyKey(tokenID, time.Now())
+	if rdb != nil {
+		used, err := rdb.Get(ctx, key).Int()
+		if err == redis.Nil {
+			return 0, nil
+		}
+		return used, err
+	}
+	memMonthly.mu.Lock()
+	defer memMonthly.mu.Unlock()
+	return memMonthly.store[key], nil
+}
+
 // CheckMonthly checks the per-calendar-month request counter for a token.
 // rdb may be nil (falls back to in-memory keyed by year-month).
 func CheckMonthly(ctx context.Context, rdb *redis.Client, tokenID int, limit int) (bool, error) {
@@ -229,7 +251,7 @@ func CheckMonthly(ctx context.Context, rdb *redis.Client, tokenID int, limit int
 	}
 
 	now := time.Now()
-	monthKey := fmt.Sprintf("tq:monthly:%d:%d%02d", tokenID, now.Year(), int(now.Month()))
+	monthKey := monthlyKey(tokenID, now)
 
 	if rdb != nil {
 		nextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location())

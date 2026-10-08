@@ -21,6 +21,7 @@ import { Link } from '@tanstack/react-router'
 import { Check, Copy, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
 import { SectionPageLayout } from '@/components/layout'
 import {
@@ -35,7 +36,7 @@ import {
 } from '@/features/keys/lib'
 import { keyPermitsModel } from '@/features/keys/lib/model-limits'
 import type { ApiKey } from '@/features/keys/types'
-import { useStatus } from '@/hooks/use-status'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
@@ -71,6 +72,10 @@ import {
  */
 export function VideoPage() {
   const { t, i18n } = useTranslation()
+  // A member of an organization makes no key of their own (Enterprise Org PRD
+  // D16): the one-click key is not offered to them, and with no key that fits
+  // the page says whom to ask rather than where to create one.
+  const isOrgMember = Boolean(useOrgMembership().data)
 
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null)
@@ -109,7 +114,8 @@ export function VideoPage() {
   // an account without a MiniMax channel is perfectly usable, and demanding the
   // full set hid it from this page entirely.
   const videoKeys = useMemo(
-    () => keys.filter((k) => VIDEO_MODELS.some((m) => keyPermitsModel(k, m.id))),
+    () =>
+      keys.filter((k) => VIDEO_MODELS.some((m) => keyPermitsModel(k, m.id))),
     [keys]
   )
 
@@ -300,9 +306,11 @@ export function VideoPage() {
                 </p>
                 <ol className='text-muted-foreground mt-1 list-decimal space-y-0.5 ps-4 text-xs leading-relaxed'>
                   <li>
-                    {t(
-                      'Create a video key below (skip if you already have one).'
-                    )}
+                    {isOrgMember
+                      ? t('Your organization hands you a video key (below).')
+                      : t(
+                          'Create a video key below (skip if you already have one).'
+                        )}
                   </li>
                   {/* "Project" means a folder to these tools, and it is where
                       the setup lives — so the user has to know to make one,
@@ -334,19 +342,31 @@ export function VideoPage() {
           <section>
             <h3 className='text-sm font-semibold'>{t('1. Your video key')}</h3>
             <div className='mt-3 space-y-3'>
-              <Button
-                type='button'
-                onClick={handleCreateKey}
-                disabled={creating || !keysLoaded}
-                className='bg-accent text-accent-foreground hover:bg-accent/90'
-              >
-                <Plus className='h-4 w-4' />
-                {creating ? t('Creating...') : t('Create a video key')}
-              </Button>
+              {!isOrgMember && (
+                <Button
+                  type='button'
+                  onClick={handleCreateKey}
+                  disabled={creating || !keysLoaded}
+                  className='bg-accent text-accent-foreground hover:bg-accent/90'
+                >
+                  <Plus className='h-4 w-4' />
+                  {creating ? t('Creating...') : t('Create a video key')}
+                </Button>
+              )}
 
               {keysLoaded && videoKeys.length === 0 ? (
                 <p className='border-border text-muted-foreground rounded-[7px] border border-dashed px-4 py-6 text-sm'>
-                  {t('No video key yet — the button above makes one in a second.')}
+                  {isOrgMember
+                    ? keys.length > 0
+                      ? t(
+                          'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+                        )
+                      : t(
+                          'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+                        )
+                    : t(
+                        'No video key yet — the button above makes one in a second.'
+                      )}
                 </p>
               ) : (
                 videoKeys.length > 0 && (
@@ -413,9 +433,13 @@ export function VideoPage() {
 
             {keysLoaded && !apiKey ? (
               <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
-                {t(
-                  'Create a video key above first — the text to copy appears here.'
-                )}
+                {isOrgMember
+                  ? t(
+                      'The text to copy appears here once you have a video key.'
+                    )
+                  : t(
+                      'Create a video key above first — the text to copy appears here.'
+                    )}
               </p>
             ) : (
               <>

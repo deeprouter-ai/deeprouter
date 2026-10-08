@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"testing"
 
+	orgmodel "github.com/QuantumNous/new-api/internal/org/model"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -202,6 +203,117 @@ func TestConnectHandler_RedeemFailureIsReadableShell(t *testing.T) {
 	c.Params = gin.Params{{Key: "token", Value: "garbage"}}
 	RedeemScript(c)
 	require.Contains(t, w.Body.String(), `Write-Host 'This setup command is no longer valid.'`)
+}
+
+// redeemFrom is redeem for a request arriving from a given address.
+func redeemFrom(t *testing.T, token string, remoteAddr string) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/i/"+token, nil)
+	c.Request.RemoteAddr = remoteAddr
+	c.Params = gin.Params{{Key: "token", Value: token}}
+	RedeemScript(c)
+	return w
+}
+
+// orgAuditLog returns every organization audit record, oldest first.
+func orgAuditLog(t *testing.T) []orgmodel.OrgAuditLog {
+	t.Helper()
+	var records []orgmodel.OrgAuditLog
+	require.NoError(t, model.DB.Order("id").Find(&records).Error)
+	return records
+}
+
+// Enterprise Org P5 (meta-repo docs/enterprise-org-prd.md, D15 and D32): the
+// value of an organization key leaves the server here and nowhere else, so
+// each time it does the organization's audit log is told — whose key, into
+// which tools, and the address of the machine that took it. Acceptance:
+// 成员的 key 只能由持有人本人经一键配置下发到自己的工具，每次下发留审计记录.
+func TestConnectHandler_RedeemRecordsTheDeliveryOfAnOrganizationKey(t *testing.T) {
+	useMemoryStore(t)
+	withKeysDB(t)
+	require.NoError(t, model.DB.AutoMigrate(&orgmodel.OrgAuditLog{}))
+	require.NoError(t, model.DB.Create(&model.Token{
+		Id: 3, UserId: 300, OrgId: 7, Name: "carol's key", Key: "carol-org-secret-key", Status: 1,
+	}).Error)
+
+	// Asking for the one-time token delivers nothing yet and records nothing:
+	// the Simple console asks for one every time a purpose page is opened.
+	token := tokenFrom(t, issueAs(t, 300, 3, []string{ToolCodex, ToolClaudeCode}))
+	require.Empty(t, orgAuditLog(t))
+
+	got := redeemFrom(t, token, "198.51.100.9:4711")
+	require.Contains(t, got.Body.String(), "carol-org-secret-key")
+
+	records := orgAuditLog(t)
+	require.Len(t, records, 1)
+	record := records[0]
+	require.Equal(t, 7, record.OrgId)
+	require.Equal(t, 300, record.ActorUserId, "the holder, who is the only one a token can be issued to")
+	require.Equal(t, "key.deliver", record.Action)
+	require.Equal(t, "key", record.TargetType)
+	require.Equal(t, 3, record.TargetId)
+	require.Equal(t, "198.51.100.9", record.Ip, "the machine the key went to")
+	require.NotZero(t, record.CreatedTime)
+	var detail struct {
+		After struct {
+			Name  string   `json:"name"`
+			Tools []string `json:"tools"`
+		} `json:"after"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(record.Detail), &detail))
+	require.Equal(t, "carol's key", detail.After.Name)
+	require.Equal(t, NormalizeTools([]string{ToolCodex, ToolClaudeCode}), detail.After.Tools)
+	require.NotContains(t, record.Detail, "carol-org-secret-key", "the log never holds a key")
+
+	// A spent token delivers nothing more, and records nothing more.
+	again := redeemFrom(t, token, "198.51.100.9:4711")
+	require.NotContains(t, again.Body.String(), "carol-org-secret-key")
+	require.Len(t, orgAuditLog(t), 1)
+
+	// Each delivery is its own record.
+	redeemFrom(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolCodex})), "203.0.113.40:9")
+	records = orgAuditLog(t)
+	require.Len(t, records, 2)
+	require.Equal(t, "203.0.113.40", records[1].Ip)
+
+	// The env lines an AI agent reads are a delivery like any other.
+	env := redeemEnv(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolClaudeCode})), "curl/8.21.0")
+	require.Contains(t, env.Body.String(), "DR_API_KEY='carol-org-secret-key'")
+	require.Len(t, orgAuditLog(t), 3)
+
+	// A personal key is nobody's business but its owner's.
+	personal := redeem(t, tokenFrom(t, issueAs(t, 100, 1, []string{ToolCodex})))
+	require.Contains(t, personal.Body.String(), "alice-secret-key")
+	require.Len(t, orgAuditLog(t), 3)
+}
+
+// No record, no key. If the delivery cannot be written down, the script that
+// would have carried the key is not sent — it says so, and fails, like every
+// other dead end here.
+func TestConnectHandler_RedeemWithholdsAnOrganizationKeyItCannotRecord(t *testing.T) {
+	useMemoryStore(t)
+	withKeysDB(t) // a database with no audit table at all
+	require.NoError(t, model.DB.Create(&model.Token{
+		Id: 3, UserId: 300, OrgId: 7, Name: "carol's key", Key: "carol-org-secret-key", Status: 1,
+	}).Error)
+
+	got := redeem(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolCodex})))
+	require.Equal(t, http.StatusOK, got.Code, "curl -f drops error-status bodies")
+	body := got.Body.String()
+	require.NotContains(t, body, "carol-org-secret-key")
+	require.Contains(t, body, `echo 'Setup could not be completed just now.'`)
+	require.Contains(t, body, "exit 1")
+
+	// In env mode the refusal is the one machine-readable line, never the key.
+	env := redeemEnv(t, tokenFrom(t, issueAs(t, 300, 3, []string{ToolCodex})), "curl/8.21.0")
+	require.Contains(t, env.Body.String(), "DR_ERROR='")
+	require.NotContains(t, env.Body.String(), "carol-org-secret-key")
+
+	// A personal key never needed the audit log, and still does not.
+	personal := redeem(t, tokenFrom(t, issueAs(t, 100, 1, []string{ToolCodex})))
+	require.Contains(t, personal.Body.String(), "alice-secret-key")
 }
 
 func TestConnectHandler_ListToolsMatchesCatalogue(t *testing.T) {

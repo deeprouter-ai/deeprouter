@@ -11,6 +11,11 @@ import { VideoPage } from '../index'
 const mockGetApiKeys = vi.hoisted(() => vi.fn())
 const mockIssueConnectToken = vi.hoisted(() => vi.fn())
 const mockCreateApiKey = vi.hoisted(() => vi.fn())
+/**
+ * What the page is told about the user's organization: a personal account
+ * unless a test says otherwise.
+ */
+const membership = vi.hoisted(() => ({ current: { data: null as unknown } }))
 
 vi.mock('@/features/keys/api', () => ({
   getApiKeys: mockGetApiKeys,
@@ -20,6 +25,9 @@ vi.mock('@/features/keys/api', () => ({
 
 vi.mock('@/hooks/use-status', () => ({
   useStatus: () => ({ status: { default_use_auto_group: false } }),
+}))
+vi.mock('@/features/org/hooks/use-org-membership', () => ({
+  useOrgMembership: () => membership.current,
 }))
 
 vi.mock('react-i18next', () => ({
@@ -81,6 +89,7 @@ function keysResponse(items: ApiKey[]) {
 describe('VideoPage — the video-key panel and the prompt it feeds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    membership.current = { data: null }
     mockIssueConnectToken.mockImplementation((id: number) =>
       Promise.resolve({
         success: true,
@@ -141,7 +150,9 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
     // The copy is where the selected key is bound.
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
     await waitFor(() =>
-      expect(mockIssueConnectToken).toHaveBeenLastCalledWith(12, ['claude-code'])
+      expect(mockIssueConnectToken).toHaveBeenLastCalledWith(12, [
+        'claude-code',
+      ])
     )
     const copied = writeText.mock.calls[0][0] as string
     expect(copied).toContain('/i/tok_key12?format=env')
@@ -180,9 +191,7 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
 
     render(<VideoPage />)
 
-    expect(
-      await screen.findByText(/No video key yet/)
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/No video key yet/)).toBeInTheDocument()
     expect(
       screen.getByText(/Create a video key above first/)
     ).toBeInTheDocument()
@@ -262,9 +271,7 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
   it('one-click create: posts the Simple video purpose, then binds the new key', async () => {
     mockGetApiKeys
       .mockResolvedValueOnce(keysResponse([]))
-      .mockResolvedValue(
-        keysResponse([key({ id: 99, name: 'my-video-key' })])
-      )
+      .mockResolvedValue(keysResponse([key({ id: 99, name: 'my-video-key' })]))
     mockCreateApiKey.mockResolvedValue({
       success: true,
       data: { id: 99, key: 'raw-key' },
@@ -342,8 +349,110 @@ describe('VideoPage — the video-key panel and the prompt it feeds', () => {
     // "Project" is jargon to this audience: the steps must say it is a folder
     // they make themselves, and that next time they reopen the same one —
     // the setup lives in it, so any other folder knows nothing.
-    expect(screen.getByText(/That folder is your "project"/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/That folder is your "project"/)
+    ).toBeInTheDocument()
     expect(screen.getByText(/open the same folder/)).toBeInTheDocument()
   })
+})
 
+// Enterprise Org P6 (meta-repo docs/enterprise-org-prd.md D16): a member of an
+// organization makes no key of their own, so with no key that fits the page
+// says whom to ask instead of where to create one.
+describe('VideoPage — a member of an organization', () => {
+  const WHOM_TO_ASK =
+    /Keys are handed out by your organization — ask an administrator for one\./
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    membership.current = { data: { org_id: 1 } }
+  })
+
+  it('is told whom to ask when they were handed no key at all', async () => {
+    mockGetApiKeys.mockResolvedValue(keysResponse([]))
+
+    render(<VideoPage />)
+
+    const hint = await screen.findByText(WHOM_TO_ASK)
+    expect(hint).toHaveTextContent(
+      'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+    )
+    // A member makes no key of their own: no one-click button, and the primer
+    // and the prompt panel do not send them to one.
+    expect(
+      screen.queryByRole('button', { name: /Create a video key/ })
+    ).toBeNull()
+    expect(screen.queryByText(/No video key yet/)).toBeNull()
+    expect(screen.queryByText(/Create a video key below/)).toBeNull()
+    expect(
+      screen.getByText('Your organization hands you a video key (below).')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'The text to copy appears here once you have a video key.'
+      )
+    ).toBeInTheDocument()
+    expect(mockCreateApiKey).not.toHaveBeenCalled()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('is told the same when none of their keys can run video models', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 61,
+          name: 'chat key',
+          org_id: 1,
+          model_limits_enabled: true,
+          model_limits: 'gpt-4o',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    const hint = await screen.findByText(WHOM_TO_ASK)
+    expect(hint).toHaveTextContent(
+      'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+    )
+    expect(
+      screen.queryByRole('button', { name: /Create a video key/ })
+    ).toBeNull()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('uses a key they were handed that can', async () => {
+    mockGetApiKeys.mockResolvedValue(
+      keysResponse([
+        key({
+          id: 62,
+          name: 'video key',
+          org_id: 1,
+          model_limits_enabled: true,
+          model_limits: 'MiniMax-H3',
+        }),
+      ])
+    )
+
+    render(<VideoPage />)
+
+    expect(await screen.findByText('video key')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(62, ['claude-code'])
+    )
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
+  })
+
+  it('still offers a personal account the one-click key', async () => {
+    membership.current = { data: null }
+    mockGetApiKeys.mockResolvedValue(keysResponse([]))
+
+    render(<VideoPage />)
+
+    expect(await screen.findByText(/No video key yet/)).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Create a video key/ })
+    ).toBeInTheDocument()
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
+  })
 })

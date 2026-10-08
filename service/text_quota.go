@@ -397,7 +397,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	// cross goroutine boundary.
 	asyncCtxForTopup := ctx.Copy()
 	gopool.Go(func() {
-		MaybeAutoTopup(asyncCtxForTopup, relayInfo.UserId)
+		MaybeAutoTopup(asyncCtxForTopup, relayInfo.WalletUserId())
 	})
 
 	logModel := summary.ModelName

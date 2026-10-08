@@ -277,6 +277,51 @@ func TestCheckMonthly_TokenIsolation(t *testing.T) {
 // Sliding window — entries older than 60s are evicted
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Monthly — reading the counter (memory path)
+// ---------------------------------------------------------------------------
+
+// MonthlyUsed answers with the count CheckMonthly refuses by: the requests
+// that were let through this month — a refused one is not counted — and it
+// only reads.
+func TestMonthlyUsed_IsTheCountCheckMonthlyKeeps(t *testing.T) {
+	resetMemState()
+	ctx := context.Background()
+	used := func(tokenID int) int {
+		n, err := MonthlyUsed(ctx, nil, tokenID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return n
+	}
+	if got := used(5); got != 0 {
+		t.Fatalf("a token nobody used has made no request, got %d", got)
+	}
+	for i := 0; i < 3; i++ {
+		CheckMonthly(ctx, nil, 5, 3) //nolint
+	}
+	if ok, _ := CheckMonthly(ctx, nil, 5, 3); ok {
+		t.Fatal("the fourth request should be refused")
+	}
+	if got := used(5); got != 3 {
+		t.Fatalf("three requests were let through, got %d", got)
+	}
+	for i := 0; i < 10; i++ {
+		used(5)
+	}
+	if got := used(5); got != 3 {
+		t.Fatalf("reading the count must not change it, got %d", got)
+	}
+	if got := used(6); got != 0 {
+		t.Fatalf("another token's count is its own, got %d", got)
+	}
+	// A token without a monthly limit is not counted at all.
+	CheckMonthly(ctx, nil, 7, 0) //nolint
+	if got := used(7); got != 0 {
+		t.Fatalf("no limit, no count, got %d", got)
+	}
+}
+
 func TestCheckRPM_WindowExpiry(t *testing.T) {
 	resetMemState()
 	const limit = 1

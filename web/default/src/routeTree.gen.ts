@@ -61,6 +61,10 @@ import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as SimpleUsePurposeRouteImport } from './routes/simple/use.$purpose'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
+import { Route as AuthenticatedOrgRolesRouteImport } from './routes/_authenticated/org/roles'
+import { Route as AuthenticatedOrgReportsRouteImport } from './routes/_authenticated/org/reports'
+import { Route as AuthenticatedOrgMembersRouteImport } from './routes/_authenticated/org/members'
+import { Route as AuthenticatedOrgKeysRouteImport } from './routes/_authenticated/org/keys'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedKeysTestRouteImport } from './routes/_authenticated/keys/test'
 import { Route as AuthenticatedHelpPricingRouteImport } from './routes/_authenticated/help/pricing'
@@ -358,6 +362,26 @@ const AuthenticatedUsageLogsSectionRoute =
     path: '/usage-logs/$section',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedOrgRolesRoute = AuthenticatedOrgRolesRouteImport.update({
+  id: '/org/roles',
+  path: '/org/roles',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOrgReportsRoute = AuthenticatedOrgReportsRouteImport.update({
+  id: '/org/reports',
+  path: '/org/reports',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOrgMembersRoute = AuthenticatedOrgMembersRouteImport.update({
+  id: '/org/members',
+  path: '/org/members',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOrgKeysRoute = AuthenticatedOrgKeysRouteImport.update({
+  id: '/org/keys',
+  path: '/org/keys',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
@@ -553,6 +577,10 @@ export interface FileRoutesByFullPath {
   '/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/org/keys': typeof AuthenticatedOrgKeysRoute
+  '/org/members': typeof AuthenticatedOrgMembersRoute
+  '/org/reports': typeof AuthenticatedOrgReportsRoute
+  '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -629,6 +657,10 @@ export interface FileRoutesByTo {
   '/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/keys/test': typeof AuthenticatedKeysTestRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/org/keys': typeof AuthenticatedOrgKeysRoute
+  '/org/members': typeof AuthenticatedOrgMembersRoute
+  '/org/reports': typeof AuthenticatedOrgReportsRoute
+  '/org/roles': typeof AuthenticatedOrgRolesRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
@@ -710,6 +742,10 @@ export interface FileRoutesById {
   '/_authenticated/help/pricing': typeof AuthenticatedHelpPricingRoute
   '/_authenticated/keys/test': typeof AuthenticatedKeysTestRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
+  '/_authenticated/org/keys': typeof AuthenticatedOrgKeysRoute
+  '/_authenticated/org/members': typeof AuthenticatedOrgMembersRoute
+  '/_authenticated/org/reports': typeof AuthenticatedOrgReportsRoute
+  '/_authenticated/org/roles': typeof AuthenticatedOrgRolesRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/simple/use/$purpose': typeof SimpleUsePurposeRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
@@ -790,6 +826,10 @@ export interface FileRouteTypes {
     | '/help/pricing'
     | '/keys/test'
     | '/models/$section'
+    | '/org/keys'
+    | '/org/members'
+    | '/org/reports'
+    | '/org/roles'
     | '/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/channels/'
@@ -866,6 +906,10 @@ export interface FileRouteTypes {
     | '/help/pricing'
     | '/keys/test'
     | '/models/$section'
+    | '/org/keys'
+    | '/org/members'
+    | '/org/reports'
+    | '/org/roles'
     | '/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/channels'
@@ -946,6 +990,10 @@ export interface FileRouteTypes {
     | '/_authenticated/help/pricing'
     | '/_authenticated/keys/test'
     | '/_authenticated/models/$section'
+    | '/_authenticated/org/keys'
+    | '/_authenticated/org/members'
+    | '/_authenticated/org/reports'
+    | '/_authenticated/org/roles'
     | '/_authenticated/usage-logs/$section'
     | '/simple/use/$purpose'
     | '/_authenticated/channels/'
@@ -1377,6 +1425,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsageLogsSectionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/org/roles': {
+      id: '/_authenticated/org/roles'
+      path: '/org/roles'
+      fullPath: '/org/roles'
+      preLoaderRoute: typeof AuthenticatedOrgRolesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/org/reports': {
+      id: '/_authenticated/org/reports'
+      path: '/org/reports'
+      fullPath: '/org/reports'
+      preLoaderRoute: typeof AuthenticatedOrgReportsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/org/members': {
+      id: '/_authenticated/org/members'
+      path: '/org/members'
+      fullPath: '/org/members'
+      preLoaderRoute: typeof AuthenticatedOrgMembersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/org/keys': {
+      id: '/_authenticated/org/keys'
+      path: '/org/keys'
+      fullPath: '/org/keys'
+      preLoaderRoute: typeof AuthenticatedOrgKeysRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/models/$section': {
       id: '/_authenticated/models/$section'
       path: '/models/$section'
@@ -1653,6 +1729,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedHelpPricingRoute: typeof AuthenticatedHelpPricingRoute
   AuthenticatedKeysTestRoute: typeof AuthenticatedKeysTestRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
+  AuthenticatedOrgKeysRoute: typeof AuthenticatedOrgKeysRoute
+  AuthenticatedOrgMembersRoute: typeof AuthenticatedOrgMembersRoute
+  AuthenticatedOrgReportsRoute: typeof AuthenticatedOrgReportsRoute
+  AuthenticatedOrgRolesRoute: typeof AuthenticatedOrgRolesRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
@@ -1684,6 +1764,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedHelpPricingRoute: AuthenticatedHelpPricingRoute,
   AuthenticatedKeysTestRoute: AuthenticatedKeysTestRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
+  AuthenticatedOrgKeysRoute: AuthenticatedOrgKeysRoute,
+  AuthenticatedOrgMembersRoute: AuthenticatedOrgMembersRoute,
+  AuthenticatedOrgReportsRoute: AuthenticatedOrgReportsRoute,
+  AuthenticatedOrgRolesRoute: AuthenticatedOrgRolesRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,

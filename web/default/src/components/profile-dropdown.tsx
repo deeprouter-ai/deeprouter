@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { SignOutDialog } from '@/components/sign-out-dialog'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { persistPersona } from '@/features/profile/lib/persist-persona'
 import { SIMPLE_HOME } from '@/features/simple/lib/mode'
 
@@ -48,6 +49,9 @@ export function ProfileDropdown() {
   const user = useAuthStore((state) => state.auth.user)
   const { displayName, roleLabel } = useUserDisplay(user)
   const isSuperAdmin = user?.role === ROLE.SUPER_ADMIN
+  // DeepRouter Enterprise Org: the wallet is the account holder's own; a
+  // member of an organization has none to go to.
+  const walletView = useWalletView()
   const avatarName = user?.username || displayName
   const avatarFallback = getUserAvatarFallback(avatarName)
   const avatarFallbackStyle = useMemo(
@@ -107,10 +111,12 @@ export function ProfileDropdown() {
             {t('Profile')}
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={() => navigate({ to: '/wallet' })}>
-            <Wallet className='size-4' />
-            {t('Wallet')}
-          </DropdownMenuItem>
+          {walletView === 'own' && (
+            <DropdownMenuItem onClick={() => navigate({ to: '/wallet' })}>
+              <Wallet className='size-4' />
+              {t('Wallet')}
+            </DropdownMenuItem>
+          )}
 
           <DropdownMenuItem
             onClick={async () => {

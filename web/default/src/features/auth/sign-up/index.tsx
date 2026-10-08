@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Link } from '@tanstack/react-router'
+import { Link, useSearch } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useStatus } from '@/hooks/use-status'
 import { AuthLayout } from '../auth-layout'
@@ -26,6 +26,7 @@ import { SignUpForm } from './components/sign-up-form'
 export function SignUp() {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const { org_invite: orgInvite } = useSearch({ from: '/(auth)/sign-up' })
 
   return (
     <AuthLayout>
@@ -46,7 +47,7 @@ export function SignUp() {
           </p>
         </div>
 
-        <SignUpForm />
+        <SignUpForm orgInvite={orgInvite} />
 
         <TermsFooter
           variant='sign-up'

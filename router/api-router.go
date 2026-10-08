@@ -428,5 +428,69 @@ func SetApiRouter(router *gin.Engine) {
 			adminSkillsRoute.POST("/:id/versions/:vid/activate", controller.AdminActivateVersion)
 			adminSkillsRoute.DELETE("/:id/versions/:vid", controller.AdminDeleteVersion)
 		}
+
+		// Enterprise Org (meta-repo docs/enterprise-org-prd.md). 🔴 UserAuth
+		// only: org owners and admins are common users on the platform, so
+		// nothing under /api/org may ever sit behind AdminAuth or RootAuth —
+		// who may do what inside an organization is decided by internal/org.
+		orgRoute := apiRouter.Group("/org")
+		orgRoute.Use(middleware.UserAuth())
+		{
+			orgRoute.GET("/self", controller.GetOrgSelf)
+			orgRoute.GET("/self/keys", controller.ListOrgSelfKeys)
+
+			orgRoute.GET("/departments", controller.ListOrgDepartments)
+			orgRoute.POST("/departments", controller.CreateOrgDepartment)
+			orgRoute.PUT("/departments/:id", controller.RenameOrgDepartment)
+			orgRoute.DELETE("/departments/:id", controller.DeleteOrgDepartment)
+
+			orgRoute.GET("/permissions", controller.GetOrgPermissions)
+			orgRoute.GET("/roles", controller.ListOrgRoles)
+			orgRoute.POST("/roles", controller.CreateOrgRole)
+			orgRoute.PUT("/roles/:id", controller.UpdateOrgRole)
+			orgRoute.DELETE("/roles/:id", controller.DeleteOrgRole)
+			orgRoute.POST("/role-packs/:key/adopt", controller.AdoptOrgRolePack)
+
+			orgRoute.GET("/members", controller.ListOrgMembers)
+			orgRoute.PUT("/members/:id", controller.UpdateOrgMember)
+			orgRoute.DELETE("/members/:id", controller.RemoveOrgMember)
+			orgRoute.POST("/service-accounts", controller.CreateOrgServiceAccount)
+
+			orgRoute.GET("/invites", controller.ListOrgInvites)
+			orgRoute.POST("/invites", controller.CreateOrgInvite)
+			orgRoute.DELETE("/invites/:id", controller.RevokeOrgInvite)
+
+			// Creating and rotating answer with the key's value when it is a
+			// service account's, so neither answer may be cached anywhere.
+			orgRoute.GET("/keys", controller.ListOrgKeys)
+			orgRoute.POST("/keys", middleware.DisableCache(), controller.CreateOrgKey)
+			orgRoute.PUT("/keys/:id", controller.UpdateOrgKey)
+			orgRoute.DELETE("/keys/:id", controller.DeleteOrgKey)
+			orgRoute.POST("/keys/:id/rotate", middleware.DisableCache(), controller.RotateOrgKey)
+			orgRoute.POST("/keys/:id/freeze", controller.FreezeOrgKey)
+			orgRoute.POST("/keys/:id/unfreeze", controller.UnfreezeOrgKey)
+			orgRoute.POST("/keys/:id/assign", middleware.DisableCache(), controller.AssignOrgKey)
+			orgRoute.POST("/keys/:id/reclaim", controller.ReclaimOrgKey)
+			orgRoute.GET("/key-holders", controller.ListOrgKeyHolders)
+			orgRoute.GET("/key-assignees", controller.ListOrgKeyAssignees)
+			orgRoute.GET("/key-templates", controller.ListOrgKeyTemplates)
+			orgRoute.GET("/key-models", controller.ListOrgKeyModels)
+
+			orgRoute.GET("/audit-logs", controller.ListOrgAuditLogs)
+			orgRoute.GET("/usage", controller.GetOrgUsage)
+			orgRoute.GET("/usage/trend", controller.GetOrgUsageTrend)
+
+			orgRoute.GET("/alerts", controller.ListOrgAlerts)
+			orgRoute.POST("/alerts/:id/handle", controller.HandleOrgAlert)
+			orgRoute.GET("/alert-settings", controller.GetOrgAlertSettings)
+			orgRoute.PUT("/alert-settings", controller.UpdateOrgAlertSettings)
+		}
+		// The one organization route without a sign-in: the sign-up page asks
+		// it what an invite link leads to, for a visitor who has no account
+		// yet. It deliberately stays off CriticalRateLimit, whose per-address
+		// budget it would share with sign-up itself: every colleague opening
+		// the link from the same office would use up a sign-up. An invite code
+		// is 32 random characters, so the global API limit is guard enough.
+		apiRouter.GET("/org/invite/:code", controller.GetOrgInvitePreview)
 	}
 }

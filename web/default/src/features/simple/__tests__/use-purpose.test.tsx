@@ -4,17 +4,30 @@ import type { ReactNode } from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { NoAssignedKeyError } from '../lib/purpose-key'
 import { findPurpose } from '../lib/purposes'
 import { SimpleUsePurpose } from '../pages/use-purpose'
 
 const mockEnsurePurposeKey = vi.hoisted(() => vi.fn())
 const mockIssueConnectToken = vi.hoisted(() => vi.fn())
+/**
+ * What the page is told about the user's organization: a personal account
+ * unless a test says otherwise.
+ */
+const membership = vi.hoisted(() => ({
+  current: { data: null as unknown, isLoading: false },
+}))
 
-vi.mock('../lib/purpose-key', () => ({
+vi.mock('../lib/purpose-key', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/purpose-key')>()),
   ensurePurposeKey: mockEnsurePurposeKey,
 }))
 vi.mock('@/features/keys/api', () => ({
   issueConnectToken: mockIssueConnectToken,
+}))
+vi.mock('@/features/org/api', () => ({ fetchOrgSelfKeys: vi.fn() }))
+vi.mock('@/features/org/hooks/use-org-membership', () => ({
+  useOrgMembership: () => membership.current,
 }))
 vi.mock('@/hooks/use-status', () => ({
   useStatus: () => ({
@@ -48,12 +61,14 @@ function videoKey(modelLimits: string) {
 }
 
 beforeEach(() => {
+  mockEnsurePurposeKey.mockReset()
+  membership.current = { data: null, isLoading: false }
   writeText.mockReset().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText },
     configurable: true,
   })
-  mockIssueConnectToken.mockResolvedValue({
+  mockIssueConnectToken.mockReset().mockResolvedValue({
     success: true,
     data: { base_url: 'https://api.deeprouter.co', script_path: '/i/TOKEN' },
   })
@@ -108,5 +123,92 @@ describe('Simple video page', () => {
     expect(
       screen.getByText(/Use Seedance 2.5 for this one/)
     ).toBeInTheDocument()
+  })
+})
+
+// Enterprise Org P6 (meta-repo docs/enterprise-org-prd.md D16): a member of an
+// organization makes no key of their own. The page uses one they were handed
+// and, when none of those can serve the purpose, says whom to ask.
+describe('a member of an organization', () => {
+  const member = { data: { org_id: 1 }, isLoading: false }
+  const WHOM_TO_ASK =
+    'You have no key that can do this yet. Keys are handed out by your organization — ask an administrator for one.'
+
+  it('asks for a key the way a personal account does unless told otherwise', async () => {
+    mockEnsurePurposeKey.mockResolvedValue(
+      videoKey('doubao-seedance-2-0-260128')
+    )
+    render(<SimpleUsePurpose purpose={findPurpose('video')!} />)
+
+    await waitFor(() =>
+      expect(mockEnsurePurposeKey).toHaveBeenCalledWith('video', false, false)
+    )
+  })
+
+  it('is set up with a key they were handed', async () => {
+    membership.current = member
+    mockEnsurePurposeKey.mockResolvedValue({
+      id: 31,
+      model_limits_enabled: true,
+      model_limits: 'doubao-seedance-2-0-260128',
+    })
+    render(<SimpleUsePurpose purpose={findPurpose('video')!} />)
+
+    await waitFor(() =>
+      expect(mockEnsurePurposeKey).toHaveBeenCalledWith('video', false, true)
+    )
+    await waitFor(() =>
+      expect(mockIssueConnectToken).toHaveBeenCalledWith(31, ['claude-code'])
+    )
+    expect(
+      await screen.findByRole('button', { name: /Copy for my AI/ })
+    ).toBeEnabled()
+  })
+
+  it('is told whom to ask when no key of theirs can do this, and offered nothing to copy', async () => {
+    membership.current = member
+    mockEnsurePurposeKey.mockRejectedValue(new NoAssignedKeyError())
+    render(<SimpleUsePurpose purpose={findPurpose('image')!} />)
+
+    expect(await screen.findByText(WHOM_TO_ASK)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Copy for my AI/ })).toBeNull()
+    // Nothing went wrong, so it does not read as a failure either.
+    expect(screen.queryByText(/Could not get this ready/)).toBeNull()
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+
+    // Once an administrator has handed them a key, checking again finds it.
+    mockEnsurePurposeKey.mockResolvedValue({
+      id: 32,
+      model_limits_enabled: false,
+      model_limits: '',
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(
+      await screen.findByRole('button', { name: /Copy for my AI/ })
+    ).toBeEnabled()
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
+    expect(mockEnsurePurposeKey).toHaveBeenCalledTimes(2)
+  })
+
+  it('still calls a failure a failure', async () => {
+    membership.current = member
+    mockEnsurePurposeKey.mockRejectedValue(new Error('the network is down'))
+    render(<SimpleUsePurpose purpose={findPurpose('image')!} />)
+
+    expect(
+      await screen.findByText('Could not get this ready: the network is down')
+    ).toBeInTheDocument()
+    expect(screen.queryByText(WHOM_TO_ASK)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled()
+  })
+
+  it('makes no key while it does not know yet whether the user is in an organization', async () => {
+    membership.current = { data: undefined, isLoading: true }
+    render(<SimpleUsePurpose purpose={findPurpose('video')!} />)
+
+    expect(screen.getByText('Getting ready…')).toBeInTheDocument()
+    // A beat for an effect that should not run.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(mockEnsurePurposeKey).not.toHaveBeenCalled()
   })
 })

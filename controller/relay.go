@@ -424,6 +424,11 @@ func RelayMidjourney(c *gin.Context) {
 		return
 	}
 
+	// DeepRouter Enterprise Org: not served to organization keys, see org_wallet.go.
+	if refuseOrgKeyForMidjourney(c, relayInfo) {
+		return
+	}
+
 	var mjErr *dto.MidjourneyResponse
 	switch relayInfo.RelayMode {
 	case relayconstant.RelayModeMidjourneyNotify:
@@ -594,6 +599,7 @@ func RelayTask(c *gin.Context) {
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
+		task.PrivateData.OrgSpend = relayInfo.OrgSpend // DeepRouter Enterprise Org: the refund goes back to whoever paid
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
 			ModelPrice:      relayInfo.PriceData.ModelPrice,
 			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,

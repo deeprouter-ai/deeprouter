@@ -36,8 +36,11 @@ export function SimpleShell() {
   // A brand-new account still carries the `unset` persona, which the full
   // console answers by bouncing to /welcome. Landing here *is* the choice
   // (new users default to Simple, PRD D5), so record it once, silently.
+  // Not for a member of an organization: their default is the Advanced
+  // console (Enterprise Org D42), so nothing sends them here unasked, and a
+  // visit is not taken for a choice — that they make on the welcome page.
   useEffect(() => {
-    if (user && readPersona(user.setting) === 'unset') {
+    if (user && !user.org_id && readPersona(user.setting) === 'unset') {
       void persistPersona('casual')
     }
   }, [user])

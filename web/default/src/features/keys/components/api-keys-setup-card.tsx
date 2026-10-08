@@ -30,6 +30,7 @@ import {
 import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
 import { chatPresetAction } from '@/features/chat/lib/chat-links'
 import { getConnectTools } from '../api'
+import { isOrgKey } from '../lib/org-key'
 import type { ConnectTool } from '../types'
 import { ApiKeysAskAiSection } from './api-keys-ask-ai-section'
 import { ApiKeysOneClickSection } from './api-keys-one-click-card'
@@ -107,7 +108,11 @@ export function ApiKeysSetupCard() {
   // the right next step, and a disabled block here would only add noise.
   // Media keys never get here — the provider leaves them out of the candidates.
   if (!setupKey) return null
-  if (tools.length === 0 && appPresets.length === 0) return null
+  // An organization key's value never reaches this page (Enterprise Org PRD
+  // D15), and the app buttons work by handing the app that value. One-click
+  // setup is how such a key gets into a tool, so that section is what is left.
+  const presets = isOrgKey(setupKey) ? [] : appPresets
+  if (tools.length === 0 && presets.length === 0) return null
 
   return (
     <div className='bg-muted/30 mb-4 rounded-lg border p-4 sm:p-5'>
@@ -183,7 +188,7 @@ export function ApiKeysSetupCard() {
 
       <ApiKeysOneClickSection tools={tools} apiKey={setupKey} />
       <ApiKeysQuickAppsSection
-        presets={appPresets}
+        presets={presets}
         serverAddress={serverAddress}
         apiKey={setupKey}
       />

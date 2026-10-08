@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { StatusBadge } from '@/components/status-badge'
+import { isOrgKey } from '../lib/org-key'
 import { type ApiKey } from '../types'
 import { useApiKeys } from './api-keys-provider'
 
@@ -88,6 +89,24 @@ export function ApiKeyCell({ apiKey }: { apiKey: ApiKey }) {
     setCurrentRow,
     setOpen,
   ])
+
+  // An organization key shows its masked form and nothing to click: its value
+  // is not this page's to fetch (Enterprise Org PRD D15) — its holder installs
+  // it with one-click setup, above.
+  if (isOrgKey(apiKey)) {
+    return (
+      <div className='flex items-center gap-2'>
+        <span className='text-muted-foreground px-2.5 font-mono text-xs'>
+          {maskedKey}
+        </span>
+        <StatusBadge
+          label={t('Organization key')}
+          variant='neutral'
+          copyable={false}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className='flex items-center'>

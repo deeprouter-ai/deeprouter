@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import { formatQuota } from '@/lib/format'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
+import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 
 interface BalanceWidgetProps {
   className?: string
@@ -38,7 +39,10 @@ interface BalanceWidgetProps {
 export function BalanceWidget({ className }: BalanceWidgetProps) {
   const { t } = useTranslation()
   const user = useAuthStore((s) => s.auth.user)
-  if (!user) return null
+  // DeepRouter Enterprise Org: a member's keys spend the company wallet, so
+  // the balance on their own account is not shown to them.
+  const walletView = useWalletView()
+  if (!user || walletView !== 'own') return null
   const quota = user.quota ?? 0
   return (
     <Link

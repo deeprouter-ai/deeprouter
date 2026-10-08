@@ -3,6 +3,7 @@ package connect
 import (
 	"net/http"
 
+	orgservice "github.com/QuantumNous/new-api/internal/org/service"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 
@@ -113,6 +114,22 @@ func RedeemScript(c *gin.Context) {
 		return
 	}
 
+	// An organization key leaves the server here and nowhere else - as env
+	// lines or as a script - so this is where its audit log hears of it
+	// (Enterprise Org PRD D15, D32). No record, no key: the token is spent
+	// either way, and a fresh command is cheap.
+	if err := orgservice.RecordKeyDelivery(model.DB, key, grant.Tools, c.ClientIP()); err != nil {
+		if wantEnv {
+			c.String(http.StatusOK, RenderDeadTokenEnv())
+			return
+		}
+		c.String(http.StatusOK, RenderDeadTokenScript(
+			PlatformFromUserAgent(c.GetHeader("User-Agent")),
+			"Setup could not be completed just now.",
+			"Open your API keys page and copy a fresh command."))
+		return
+	}
+
 	c.Header("Cache-Control", "no-store")
 	if wantEnv {
 		c.String(http.StatusOK, RenderEnv(system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
@@ -123,7 +140,6 @@ func RedeemScript(c *gin.Context) {
 	// wrong is not a no-op: PowerShell echoes every line it cannot parse, and
 	// the line holding the key is one of them.
 	platform := PlatformFromUserAgent(c.Request.UserAgent())
-
 	c.String(http.StatusOK, RenderScript(platform, system_setting.ServerAddress, key.GetFullKey(), grant.Tools))
 }
 

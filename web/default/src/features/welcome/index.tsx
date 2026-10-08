@@ -39,6 +39,14 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { takeWelcomeHandoff } from '@/features/auth/lib/storage'
 import type { RegisterResponseData } from '@/features/auth/types'
+import {
+  CompanyWalletNotice,
+  OrgNotice,
+} from '@/features/org/components/company-wallet-notice'
+import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
+import { walletViewOf } from '@/features/org/hooks/use-wallet-view'
+import { holds } from '@/features/org/lib/permissions'
+import type { OrgMembership } from '@/features/org/types'
 import { updateUserSettings } from '@/features/profile/api'
 import { PERSONA_PRESETS } from '@/features/profile/lib/persona-presets'
 import type { Persona, UserSettings } from '@/features/profile/types'
@@ -109,11 +117,27 @@ export function Welcome() {
     }
   }, [user, navigate])
 
-  const [persona, setPersona] = useState<Persona | null>('casual')
-  // Casual (the default) lands in the Simple console, so this page speaks
-  // its language: pick a purpose, copy for your AI — no key, no settings.
-  const simple = (persona ?? 'casual') === 'casual'
+  // What the user picked in the question at the bottom, if anything.
+  const [picked, setPicked] = useState<Persona | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  // Enterprise Org: whoever signed up through an invitation is a member of an
+  // organization, and little of what this page tells a personal account is
+  // true for them — they are given no credit of their own and no key of their
+  // own. They get an introduction of their own (MemberIntro, below); the
+  // question the page asks and where it sends them afterwards are shared.
+  const membershipQuery = useOrgMembership()
+  const walletView = walletViewOf(user?.org_id, membershipQuery.data)
+  // Everyone in an organization but its owner. An account whose place could
+  // not be asked is treated the same: better no credit shown than a member
+  // shown credit that is not theirs to spend.
+  const asMember = walletView !== 'own'
+  // Until they pick, a personal account is offered the Simple console (Console
+  // Simple/Advanced PRD D5) and a member of an organization the Advanced one
+  // (Enterprise Org D42).
+  const persona: Persona = picked ?? (asMember ? 'team' : 'casual')
+  // Casual lands in the Simple console, so this page speaks its language:
+  // pick a purpose, copy for your AI — no key, no settings.
+  const simple = persona === 'casual'
 
   // Persist persona (+ its sidebar preset), then navigate to `target`.
   // EVERY CTA on this screen goes through here: PersonaPickerHost redirects
@@ -124,7 +148,7 @@ export function Welcome() {
     if (submitting) return
     setSubmitting(true)
     try {
-      const finalPersona = persona ?? 'casual'
+      const finalPersona = persona
       const settingPatch: Partial<UserSettings> = { persona: finalPersona }
       const preset = PERSONA_PRESETS[finalPersona]
       if (preset?.sidebarModules) {
@@ -180,130 +204,145 @@ export function Welcome() {
   }
 
   if (!user) return null
+  // A member whose place is still being asked: nothing for that moment, rather
+  // than a personal account's page that is taken back a moment later.
+  if (walletView === 'pending' && membershipQuery.isLoading) return null
 
   const name = handoff?.display_name || user?.username || ''
   const trialQuota = handoff?.trial_quota ?? 0
 
   return (
     <div className='mx-auto max-w-2xl px-4 py-8 sm:py-12'>
-      {/* H1 — the RESULT, not a question */}
-      <div className='mb-6 flex items-start gap-3'>
-        <span className='mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300'>
-          <CheckCircle2 className='h-6 w-6' aria-hidden='true' />
-        </span>
-        <div>
-          <h1 className='text-2xl font-bold sm:text-3xl'>
-            {t('Your account is ready, {{name}}', { name })} 🎉
-          </h1>
-          <p className='text-muted-foreground mt-1.5 text-sm'>
+      {asMember ? (
+        <MemberIntro
+          name={name}
+          membership={membershipQuery.data ?? undefined}
+          simple={simple}
+          submitting={submitting}
+          onStart={() => finishTo(simple ? SIMPLE_HOME : '/keys')}
+        />
+      ) : (
+        <>
+          {/* H1 — the RESULT, not a question */}
+          <div className='mb-6 flex items-start gap-3'>
+            <span className='mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300'>
+              <CheckCircle2 className='h-6 w-6' aria-hidden='true' />
+            </span>
+            <div>
+              <h1 className='text-2xl font-bold sm:text-3xl'>
+                {t('Your account is ready, {{name}}', { name })} 🎉
+              </h1>
+              <p className='text-muted-foreground mt-1.5 text-sm'>
+                {t(
+                  "Everything's set up. Here's what you got — and how to start using it."
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* What you just got */}
+          <div className='mb-6 grid gap-3 sm:grid-cols-2'>
+            <WelcomeCard
+              icon={Gift}
+              label={t('Free trial credit')}
+              value={trialQuota ? formatQuota(trialQuota) : '—'}
+              sub={
+                trialQuota
+                  ? t('≈ {{count}} chats, on us', {
+                      count: formatChatsCount(estimateChats(trialQuota)),
+                    })
+                  : ''
+              }
+            />
+            {/* Simple users never handle a key — the purpose page hands it to
+            their AI as a one-time link. Developers and teams still get it. */}
+            {simple ? null : handoff?.default_token ? (
+              <CopyCard
+                icon={KeyRound}
+                label={t('Your key (API Key)')}
+                value={handoff.default_token}
+              />
+            ) : (
+              <KeyFallbackCard />
+            )}
+          </div>
+
+          {/* Start in 3 steps — concrete next actions */}
+          <section className='bg-card mb-6 rounded-2xl border p-4 sm:p-5'>
+            <h2 className='text-sm font-semibold sm:text-base'>
+              {t('Start using it in 3 steps')}
+            </h2>
+            <ol className='mt-3 space-y-2.5'>
+              {simple ? (
+                <>
+                  <Step
+                    n={1}
+                    text={t(
+                      'Pick what you want to make — a video, a picture, a voice-over…'
+                    )}
+                  />
+                  <Step n={2} text={t('Tap “Copy for my AI”.')} />
+                  <Step
+                    n={3}
+                    text={t(
+                      'Paste it into Claude Code or Codex on your computer — it sets itself up and makes a first test.'
+                    )}
+                  />
+                </>
+              ) : (
+                <>
+                  <Step n={1} text={t('Copy your key above.')} />
+                  <Step
+                    n={2}
+                    text={t(
+                      'Paste it into the AI tool you already use — find the field labelled “API Key” in its settings and save.'
+                    )}
+                  />
+                  <Step
+                    n={3}
+                    text={t(
+                      'Come back and check it works — one tap confirms your key and credit are live.'
+                    )}
+                  />
+                </>
+              )}
+            </ol>
+          </section>
+
+          {/* Primary + secondary action */}
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <Button
+              type='button'
+              size='lg'
+              disabled={submitting}
+              onClick={() => finishTo(simple ? SIMPLE_HOME : '/keys/test')}
+              className='sm:flex-1'
+            >
+              {submitting
+                ? t('Just a sec…')
+                : simple
+                  ? t('Get started')
+                  : t('Check it works')}
+              <ArrowRight className='ml-1.5 h-4 w-4' aria-hidden='true' />
+            </Button>
+            <Button
+              type='button'
+              variant='outline'
+              size='lg'
+              disabled={submitting}
+              onClick={() => finishTo('/wallet')}
+            >
+              <CreditCard className='mr-1.5 h-4 w-4' aria-hidden='true' />
+              {t('Add credit')}
+            </Button>
+          </div>
+          <p className='text-muted-foreground mt-2 text-xs'>
             {t(
-              "Everything's set up. Here's what you got — and how to start using it."
+              'Your free credit is enough to start — top up later when it runs out.'
             )}
           </p>
-        </div>
-      </div>
-
-      {/* What you just got */}
-      <div className='mb-6 grid gap-3 sm:grid-cols-2'>
-        <WelcomeCard
-          icon={Gift}
-          label={t('Free trial credit')}
-          value={trialQuota ? formatQuota(trialQuota) : '—'}
-          sub={
-            trialQuota
-              ? t('≈ {{count}} chats, on us', {
-                  count: formatChatsCount(estimateChats(trialQuota)),
-                })
-              : ''
-          }
-        />
-        {/* Simple users never handle a key — the purpose page hands it to
-            their AI as a one-time link. Developers and teams still get it. */}
-        {simple ? null : handoff?.default_token ? (
-          <CopyCard
-            icon={KeyRound}
-            label={t('Your key (API Key)')}
-            value={handoff.default_token}
-          />
-        ) : (
-          <KeyFallbackCard />
-        )}
-      </div>
-
-      {/* Start in 3 steps — concrete next actions */}
-      <section className='bg-card mb-6 rounded-2xl border p-4 sm:p-5'>
-        <h2 className='text-sm font-semibold sm:text-base'>
-          {t('Start using it in 3 steps')}
-        </h2>
-        <ol className='mt-3 space-y-2.5'>
-          {simple ? (
-            <>
-              <Step
-                n={1}
-                text={t(
-                  'Pick what you want to make — a video, a picture, a voice-over…'
-                )}
-              />
-              <Step n={2} text={t('Tap “Copy for my AI”.')} />
-              <Step
-                n={3}
-                text={t(
-                  'Paste it into Claude Code or Codex on your computer — it sets itself up and makes a first test.'
-                )}
-              />
-            </>
-          ) : (
-            <>
-              <Step n={1} text={t('Copy your key above.')} />
-              <Step
-                n={2}
-                text={t(
-                  'Paste it into the AI tool you already use — find the field labelled “API Key” in its settings and save.'
-                )}
-              />
-              <Step
-                n={3}
-                text={t(
-                  'Come back and check it works — one tap confirms your key and credit are live.'
-                )}
-              />
-            </>
-          )}
-        </ol>
-      </section>
-
-      {/* Primary + secondary action */}
-      <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
-        <Button
-          type='button'
-          size='lg'
-          disabled={submitting}
-          onClick={() => finishTo(simple ? SIMPLE_HOME : '/keys/test')}
-          className='sm:flex-1'
-        >
-          {submitting
-            ? t('Just a sec…')
-            : simple
-              ? t('Get started')
-              : t('Check it works')}
-          <ArrowRight className='ml-1.5 h-4 w-4' aria-hidden='true' />
-        </Button>
-        <Button
-          type='button'
-          variant='outline'
-          size='lg'
-          disabled={submitting}
-          onClick={() => finishTo('/wallet')}
-        >
-          <CreditCard className='mr-1.5 h-4 w-4' aria-hidden='true' />
-          {t('Add credit')}
-        </Button>
-      </div>
-      <p className='text-muted-foreground mt-2 text-xs'>
-        {t(
-          'Your free credit is enough to start — top up later when it runs out.'
-        )}
-      </p>
+        </>
+      )}
 
       {/* Optional persona — secondary, never blocks the golden path */}
       <section className='mt-8 border-t pt-6'>
@@ -321,12 +360,126 @@ export function Welcome() {
               description={t(p.descKey)}
               badge={p.badge ? t(p.badge) : undefined}
               selected={persona === p.id}
-              onClick={() => setPersona(p.id)}
+              onClick={() => setPicked(p.id)}
             />
           ))}
         </div>
       </section>
     </div>
+  )
+}
+
+/**
+ * What the page says to a member of an organization in place of the personal
+ * introduction (Enterprise Org, meta-repo `docs/enterprise-org-prd.md` D41):
+ * who pays, where their keys come from, and the steps that are true for
+ * someone who is handed their keys and never sees a key's value.
+ */
+function MemberIntro(props: {
+  name: string
+  /** `undefined` when the member's place could not be asked. */
+  membership: OrgMembership | undefined
+  simple: boolean
+  submitting: boolean
+  onStart: () => void
+}) {
+  const { t } = useTranslation()
+  const { name, membership } = props
+  // Whoever may create the organization's keys can make one out to themselves;
+  // everyone else is handed theirs.
+  const createsKeys = holds(membership, 'key.create')
+
+  return (
+    <>
+      <div className='mb-6 flex items-start gap-3'>
+        <span className='mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300'>
+          <CheckCircle2 className='h-6 w-6' aria-hidden='true' />
+        </span>
+        <div>
+          <h1 className='text-2xl font-bold sm:text-3xl'>
+            {membership
+              ? t('You’ve joined {{org}}, {{name}}', {
+                  org: membership.org_name,
+                  name,
+                })
+              : t('Your account is ready, {{name}}', { name })}{' '}
+            🎉
+          </h1>
+          <p className='text-muted-foreground mt-1.5 text-sm'>
+            {t('Your account is ready. Two things to know, then how to start.')}
+          </p>
+        </div>
+      </div>
+
+      <div className='mb-6 grid gap-3'>
+        <CompanyWalletNotice />
+        <OrgNotice
+          icon={KeyRound}
+          title={t('Your keys come from your organization')}
+        >
+          {createsKeys
+            ? t(
+                'Your organization’s keys are created and handed out on the Organization keys page, in professional mode. You are allowed to do that, and can make one out to yourself there.'
+              )
+            : t(
+                'You do not create keys yourself. Once an administrator hands you one, it shows up in your account. If you have none yet, ask an administrator of your organization for one.'
+              )}
+        </OrgNotice>
+      </div>
+
+      <section className='bg-card mb-6 rounded-2xl border p-4 sm:p-5'>
+        <h2 className='text-sm font-semibold sm:text-base'>
+          {props.simple
+            ? t('Start using it in 3 steps')
+            : t('Start using it in 2 steps')}
+        </h2>
+        <ol className='mt-3 space-y-2.5'>
+          {props.simple ? (
+            <>
+              <Step
+                n={1}
+                text={t(
+                  'Pick what you want to make — a video, a picture, a voice-over…'
+                )}
+              />
+              <Step n={2} text={t('Tap “Copy for my AI”.')} />
+              <Step
+                n={3}
+                text={t(
+                  'Paste it into Claude Code or Codex on your computer — it sets itself up and makes a first test.'
+                )}
+              />
+            </>
+          ) : (
+            <>
+              <Step
+                n={1}
+                text={t(
+                  'Open the API keys page — the keys your organization handed you are listed there.'
+                )}
+              />
+              <Step
+                n={2}
+                text={t(
+                  'Use “One-click setup” on that page to install a key into the tool you use. There is nothing to copy: a key’s value is never shown.'
+                )}
+              />
+            </>
+          )}
+        </ol>
+      </section>
+
+      <Button
+        type='button'
+        size='lg'
+        disabled={props.submitting}
+        onClick={props.onStart}
+        className='w-full'
+      >
+        {props.submitting ? t('Just a sec…') : t('Get started')}
+        <ArrowRight className='ml-1.5 h-4 w-4' aria-hidden='true' />
+      </Button>
+    </>
   )
 }
 

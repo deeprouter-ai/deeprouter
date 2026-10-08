@@ -94,6 +94,7 @@ var (
 	purposes       []PurposeInfo
 	purposesByID   map[string]*PurposeInfo
 	priceTiers     map[string]PriceTierInfo
+	brands         map[string]struct{}          // every brand some purpose offers
 	aliasMap       map[string]map[string]string // purpose → brand → target
 	virtualModels  map[string]struct{}
 	defaultTierID  = "standard"
@@ -113,8 +114,12 @@ func InitAliasSettings() error {
 
 	purposes = seed.Purposes
 	purposesByID = make(map[string]*PurposeInfo, len(seed.Purposes))
+	brands = make(map[string]struct{})
 	for i := range purposes {
 		purposesByID[purposes[i].ID] = &purposes[i]
+		for _, brand := range purposes[i].AvailableBrands {
+			brands[brand] = struct{}{}
+		}
 	}
 
 	priceTiers = make(map[string]PriceTierInfo, len(seed.PriceTiers))
@@ -227,6 +232,34 @@ func ResolveAliasForVirtualModel(virtualModel, tokenPurpose, tokenBrand string) 
 		return ""
 	}
 	return ResolveAlias(purpose, tokenBrand)
+}
+
+// KnownPurpose reports whether id is a purpose the seed defines: one of the
+// cards a key can be created for. Whoever binds a key checks its purpose,
+// brand and price tier with these three first — ModelWhitelistForToken answers
+// "no limit" for a value it cannot find, exactly as it does for the one
+// binding that means it.
+func KnownPurpose(id string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	_, ok := purposesByID[id]
+	return ok
+}
+
+// KnownBrand reports whether name is a brand some purpose of the seed offers.
+func KnownBrand(name string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	_, ok := brands[name]
+	return ok
+}
+
+// KnownPriceTier reports whether id is a price tier the seed defines.
+func KnownPriceTier(id string) bool {
+	mu.RLock()
+	defer mu.RUnlock()
+	_, ok := priceTiers[id]
+	return ok
 }
 
 // ModelWhitelistForToken returns the comma-joined model_limits string for

@@ -22,7 +22,10 @@
 #   - Fill voice human_estimate strings with real numbers from platform
 #     (video done 2026-09-28, Video First Wave AC-E).
 #   - Audit model_whitelist against actually-enabled channels (video done
-#     2026-09-28; the rest still unaudited).
+#     2026-09-28; chat and coding done 2026-10-08 against
+#     scripts/seed-models/channels.yaml and production's public catalogue —
+#     alias_setting_test.go keeps them matching the seed file; image, voice
+#     and the price tiers still unaudited).
 
 purposes:
   - id: chat
@@ -39,10 +42,13 @@ purposes:
     model_whitelist:
       - claude-*
       - gpt-4o*
-      - gpt-4-turbo*
+      - gpt-4.1*
+      - gpt-5*
+      - gpt-6*
+      - chatgpt-4o-latest
       - gemini-2*
-      - deepseek-v3*
-      - deepseek-chat*
+      - gemini-3*
+      - deepseek-*
 
   - id: coding
     label_en: "Coding"
@@ -58,11 +64,16 @@ purposes:
     model_whitelist:
       - claude-sonnet-*
       - claude-opus-*
+      - claude-fable-*
       - gpt-4o*
-      - gpt-4-turbo*
-      - o1*
-      - deepseek-coder*
-      - deepseek-v3*
+      - gpt-4.1*
+      - gpt-5*
+      - gpt-6*
+      - deepseek-*
+      # Models made for code, whatever their maker.
+      - codestral-*
+      - kimi-k2.7-code*
+      - qwen3-coder-*
 
   - id: image
     label_en: "Image generation"
@@ -142,7 +153,9 @@ price_tiers:
     model_whitelist:
       - gpt-4o-mini*
       - claude-haiku-*
-      - gemini-2*-flash*
+      # A "*" counts only as the last character of a rule (model.MatchModelLimit):
+      # "gemini-2*-flash*" matched no model at all. One rule per family instead.
+      - gemini-2.5-flash*
       - deepseek-v3*
       - deepseek-chat*
   standard:
@@ -193,19 +206,19 @@ price_tiers:
 # Falls back to (purpose, auto) if the specific brand binding is missing.
 aliases:
   # Chat
-  - { purpose: chat,   brand: auto,     target: claude-sonnet-4-7 }
-  - { purpose: chat,   brand: claude,   target: claude-sonnet-4-7 }
-  - { purpose: chat,   brand: openai,   target: gpt-4o }
-  - { purpose: chat,   brand: gemini,   target: gemini-2.0-pro }
-  - { purpose: chat,   brand: deepseek, target: deepseek-v3 }
+  - { purpose: chat,   brand: auto,     target: claude-sonnet-5 }
+  - { purpose: chat,   brand: claude,   target: claude-sonnet-5 }
+  - { purpose: chat,   brand: openai,   target: gpt-5.4 }
+  - { purpose: chat,   brand: gemini,   target: gemini-2.5-pro }
+  - { purpose: chat,   brand: deepseek, target: deepseek-v4-pro }
   # Coding
-  - { purpose: coding, brand: auto,     target: claude-sonnet-4-7 }
-  - { purpose: coding, brand: claude,   target: claude-sonnet-4-7 }
-  - { purpose: coding, brand: openai,   target: gpt-4o }
-  - { purpose: coding, brand: deepseek, target: deepseek-coder-v3 }
+  - { purpose: coding, brand: auto,     target: claude-sonnet-5 }
+  - { purpose: coding, brand: claude,   target: claude-sonnet-5 }
+  - { purpose: coding, brand: openai,   target: gpt-5.4 }
+  - { purpose: coding, brand: deepseek, target: deepseek-v4-pro }
   # Image
-  - { purpose: image,  brand: auto,     target: flux-pro }
-  - { purpose: image,  brand: openai,   target: dall-e-3 }
+  - { purpose: image,  brand: auto,     target: gpt-image-1 }
+  - { purpose: image,  brand: openai,   target: gpt-image-1 }
   # Video (wave 1) — the video page's default model; also what the
   # deeprouter-video virtual name resolves to.
   - { purpose: video,  brand: auto,     target: MiniMax-H3 }
