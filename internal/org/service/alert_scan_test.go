@@ -366,6 +366,116 @@ func TestScanAllowances_AnUnreadableCounterDoesNotStopTheOthers(t *testing.T) {
 	})
 }
 
+// --- a key refused before 100% -------------------------------------------------
+
+// PRD D45: a key the gateway turned away because what it had left was less
+// than the request could cost is warned about as if it had reached 100% — with
+// the numbers of the refusal — once per cycle, like any other warning.
+func TestWarnRefused_IsTheLastWarningOfTheCycle(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		org, staff, key := keyInSales(t, db, "Acme")
+		sales := departmentNamed(t, db, org.id, "Sales")
+		setAllowance(t, db, key.Id, 930, 70)
+
+		raised, err := WarnRefused(db, key.Id, 120, scanNow)
+		require.NoError(t, err)
+		assert.Equal(t, 1, raised)
+		alerts := alertsOf(t, db, org.id)
+		require.Equal(t, []string{"quota@100"}, rulesOf(alerts))
+		warning := alerts[0]
+		assert.Equal(t, key.Id, warning.TokenId)
+		assert.Equal(t, staff.Id, warning.UserId, "the key's holder")
+		assert.Equal(t, sales.Id, warning.DepartmentId)
+		assert.Equal(t, "q1000", warning.Cycle, "the same cycle the scan would use")
+		assert.Equal(t, scanNow.Unix(), warning.CreatedTime)
+		assert.Zero(t, warning.NotifiedTime, "waiting to be sent")
+		assert.Equal(t, orgmodel.AlertDetail{Key: "Design tools", Used: 930, Limit: 1000, Needed: 120}, detailOf(t, warning))
+
+		raised, err = WarnRefused(db, key.Id, 150, scanNow.Add(time.Minute))
+		require.NoError(t, err)
+		assert.Zero(t, raised, "refused again: told already")
+		require.Len(t, scanAllowances(t, db, org.id, noMonthlyUsage), 1, "and the scan has nothing to add: 80% is below what was told")
+
+		// Smaller requests still get through, and the key does run out.
+		setAllowance(t, db, key.Id, 1000, 0)
+		require.Len(t, scanAllowances(t, db, org.id, noMonthlyUsage), 1, "100% was told, as the refusal")
+
+		// Given more, it starts over — and a refusal in the new cycle speaks again.
+		_, err = UpdateKey(db, actorFor(t, db, org.owner.Id), key.Id, KeyPatch{RemainQuota: intPtr(1000)}, fixedModels(testCatalogue))
+		require.NoError(t, err)
+		setAllowance(t, db, key.Id, 1900, 100)
+		raised, err = WarnRefused(db, key.Id, 300, scanNow.Add(time.Hour))
+		require.NoError(t, err)
+		assert.Equal(t, 1, raised)
+		alerts = alertsOf(t, db, org.id)
+		require.Equal(t, []string{"quota@100", "quota@100"}, rulesOf(alerts))
+		assert.Equal(t, "q2000", alerts[1].Cycle)
+	})
+}
+
+// A refusal after the 80% warning is the next level; one after the key was
+// already told it is used up is nothing new.
+func TestWarnRefused_FollowsWhatTheScanHasSaid(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		org, staff, first := keyInSales(t, db, "Acme")
+		second := seedKey(t, db, org, staff.Id, "Second")
+		setAllowance(t, db, first.Id, 850, 150)
+		setAllowance(t, db, second.Id, 1000, 0)
+		require.Equal(t, []string{"quota@80", "quota@100"}, rulesOf(scanAllowances(t, db, org.id, noMonthlyUsage)))
+
+		raised, err := WarnRefused(db, first.Id, 200, scanNow)
+		require.NoError(t, err)
+		assert.Equal(t, 1, raised, "80% was told; the refusal is the 100%")
+		raised, err = WarnRefused(db, second.Id, 1, scanNow)
+		require.NoError(t, err)
+		assert.Zero(t, raised, "a key told it was used up is not told again when it is refused")
+		assert.Equal(t, []string{"quota@80", "quota@100", "quota@100"}, rulesOf(alertsOf(t, db, org.id)))
+	})
+}
+
+// What is not a refusal for lack of quota raises nothing: a key that could
+// have paid, one with no limit, a personal key, and a key of an organization
+// that has switched its warnings off.
+func TestWarnRefused_LeavesAloneWhatWasNotRefusedForItsQuota(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		org, staff, key := keyInSales(t, db, "Acme")
+		setAllowance(t, db, key.Id, 500, 500)
+		unlimited := seedKey(t, db, org, staff.Id, "Unlimited")
+		require.NoError(t, db.Model(&platformmodel.Token{}).Where("id = ?", unlimited.Id).
+			Updates(map[string]any{"unlimited_quota": true, "used_quota": 5000, "remain_quota": 0}).Error)
+		loner := seedUser(t, db, "loner", common.RoleCommonUser)
+		personal := platformmodel.Token{
+			UserId: loner.Id, Name: "personal", Key: "personal-key-value", Status: common.TokenStatusEnabled,
+			ExpiredTime: -1, UsedQuota: 990, RemainQuota: 10,
+		}
+		require.NoError(t, db.Create(&personal).Error)
+		initech, _, silentKey := keyInSales(t, db, "Initech")
+		never := orgmodel.DefaultAlertSettings()
+		never.WarnAt = []int{}
+		_, err := UpdateAlertSettings(db, actorFor(t, db, initech.owner.Id), never)
+		require.NoError(t, err)
+		setAllowance(t, db, silentKey.Id, 990, 10)
+
+		for name, refusal := range map[string]struct {
+			keyID  int
+			needed int
+		}{
+			"it could have paid":      {key.Id, 300},
+			"it has no limit":         {unlimited.Id, 300},
+			"a personal key":          {personal.Id, 300},
+			"warnings switched off":   {silentKey.Id, 300},
+			"a key that is not there": {personal.Id + 1000, 300},
+		} {
+			raised, err := WarnRefused(db, refusal.keyID, refusal.needed, scanNow)
+			require.NoError(t, err, name)
+			assert.Zero(t, raised, name)
+		}
+		var total int64
+		require.NoError(t, db.Model(&orgmodel.OrgAlert{}).Count(&total).Error)
+		assert.Zero(t, total)
+	})
+}
+
 // --- anomaly rule one: a spike ------------------------------------------------
 
 // Acceptance: 日用量超 7 日均值 N 倍. "More than five times" means more than, the
@@ -735,8 +845,10 @@ func TestScans_NeverTouchTheKey(t *testing.T) {
 		require.NoError(t, err)
 		_, err = ScanAnomalies(db, db, scanNow)
 		require.NoError(t, err)
+		_, err = WarnRefused(db, key.Id, 200, scanNow)
+		require.NoError(t, err)
 
-		require.Equal(t, []string{"quota@80", "monthly@100", orgmodel.AlertRuleSpike, orgmodel.AlertRuleOffHours, orgmodel.AlertRuleNewIP},
+		require.Equal(t, []string{"quota@80", "monthly@100", orgmodel.AlertRuleSpike, orgmodel.AlertRuleOffHours, orgmodel.AlertRuleNewIP, "quota@100"},
 			rulesOf(alertsOf(t, db, org.id)), "every rule fired")
 		assert.Equal(t, before, reloadKey(t, db, key.Id), "and the key is untouched")
 		assert.Equal(t, common.TokenStatusEnabled, reloadKey(t, db, key.Id).Status)

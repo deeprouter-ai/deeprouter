@@ -10,12 +10,12 @@ changing the code.
 | Package | Holds | May import the platform `model` package? |
 |---|---|---|
 | `model/` | The seven org tables and the migration; the permission vocabulary — primitives, inherent powers, preset roles, role packs, audit actions — and the permission engine `Can`; the alert rules and the settings they run on | **No** — `model/main.go` imports it to migrate, so the reverse is a cycle |
-| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log, warnings and alerts | Yes |
+| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log, warnings and alerts, the usage report | Yes |
 | `orgtest/` | Throwaway databases for tests, one per engine | **No** — tests in both packages above use it |
 
-Handlers live in `controller/org.go`, `controller/org_keys.go` and
-`controller/org_alerts.go`, routes under `/api/org` in `router/api-router.go`. The web pages are
-`web/default/src/features/org`. What an organization key does on the relay
+Handlers live in `controller/org.go`, `controller/org_keys.go`,
+`controller/org_alerts.go` and `controller/org_usage.go`, routes under `/api/org` in
+`router/api-router.go`. The web pages are `web/default/src/features/org`. What an organization key does on the relay
 path — whose balance pays, how its usage is stamped — is under "The company
 wallet" below.
 
@@ -84,7 +84,8 @@ What each endpoint asks for:
 | `POST /service-accounts` | power `service_account.manage` (PRD D27) |
 | `DELETE /members/:id` | `member.remove` over the member — never the owner, never oneself, an admin only by the owner |
 | `POST /invites`, `GET /invites`, `DELETE /invites/:id` | `member.invite` reaching the invite's department — see below |
-| `GET /audit-logs` | `audit.read` across the whole organization |
+| `GET /audit-logs` | `audit.read` across the whole organization; `?actor=`, `?target_type=`, `?start_timestamp=` and `?end_timestamp=` narrow it |
+| `GET /usage?group_by=` | being a member — `usage.read` decides how much is answered: everything, what was spent in the departments the role reaches, or only what the caller used themselves. `&department_id=` takes `usage.read` over that department |
 | `GET /keys` | `key.read`; a `dept`-scoped role is sent the keys held in its departments only |
 | `GET /key-templates` | `key.read` anywhere |
 | `GET /key-holders` | `key.create` anywhere; answers the members a key can be made out to, each with their role only where the caller may read that member (D34) |
@@ -409,7 +410,7 @@ tests named beside it are what would notice.
 | `middleware/auth.go` (`TokenAuth`) | `attachOrgSpend` for a key with `org_id` | `router` `TestOrgWallet_ThroughTheRealGateway` |
 | `relay/common/relay_info.go` | the `OrgSpend` field, filled in `genBaseRelayInfo` | `service` `TestOrgWallet_TheRequestCarriesWhoPays` |
 | `service/billing_session.go` | `wallet_only` for organization keys; `WalletUserId()` in `tryWallet` | `service` `TestOrgWallet_*` |
-| `service/billing.go` | `orgWalletError` around the pre-consume error | `service` `…AnEmptyCompanyWalletRefuses…` |
+| `service/billing.go` | `orgWalletError` around the pre-consume error; `noteOrgKeyRefused` before it, which raises the warning for a key refused for its quota | `service` `…AnEmptyCompanyWalletRefuses…`, `…AKeyRefusedForLackOfQuota…` |
 | `service/quota.go` | `WalletUserId()` in `PostConsumeQuota` and `PreWssConsumeQuota`; the reminder's branch | `service` `TestOrgWallet_*` |
 | `service/text_quota.go` | `MaybeAutoTopup` on `WalletUserId()` | **nothing** — it needs Redis and Stripe to observe |
 | `service/task_billing.go` | `taskWalletUserId`; `OrgSpend` on the two task log lines | `service` `…ATaskIs…` |
@@ -468,13 +469,19 @@ What to know before changing any of it:
   request's estimated cost off the key up front and puts the difference back
   at settlement, so a pass that falls in between sees a share slightly ahead
   of the truth, and may warn one request early.
-- ⚠️ **A key can stop short of 100%.** With less than ten dollars left the
-  gateway refuses a request when what is left does not cover its estimated
-  cost (`pre_consume_token_quota_failed`). A client that asks for a large
-  `max_tokens` is therefore turned away with a few percent of the quota
-  unused, and the 100% warning — which means nothing is left — never goes
-  out for that key. The 80% one has by then. Telling people about that
-  refusal is not built (see "Not here yet").
+- **A key can stop short of 100%, and that is warned about where it happens**
+  (PRD D45). With less than ten dollars left the gateway refuses a request
+  when what is left does not cover its estimated cost
+  (`pre_consume_token_quota_failed`), so a client that asks for a large
+  `max_tokens` is turned away with a few percent of the quota unused — and no
+  scan would ever know: nothing was spent. `service.PreConsumeBilling` tells
+  `noteOrgKeyRefused` about every refusal, and for an organization key
+  refused for its quota that calls `WarnRefused`, off the request's goroutine.
+  It raises the quota warning at level 100 with `Needed` in the detail — the
+  same rule and cycle as the scan's, so the two never tell a key's people
+  twice — and the next pass sends it, worded as a refusal. The one line on
+  the request path raises an alert after the request is over; it still stops
+  nothing.
 - **The anomaly rules read the usage log** (`ScanAnomalies`). "A day" is the
   last 24 hours and "usual" is the 7 days before them, per key **under its
   current holder** — lines written by whoever held the key before are
@@ -517,6 +524,11 @@ What to know before changing any of it:
   notification type is the task's own (`org_alert`), so these never compete
   with the low-balance reminder. An alert that could not go out within a day
   stays in the list and is not sent.
+- **A notification links to the alert list only for whoever can open it.**
+  The owner's and an admin's ends with a link to the alerts section of the
+  reports page (`AlertDigest.SeesList`, `orgAlertListLink`). A holder who is
+  told about their own key gets no link: as a staff member they have no such
+  page, and a link that ends on a 403 is worse than none.
 - **The alert list** (`ListAlerts`) is cut by the department stamped on the
   alert — the holder's when it was raised — so, like a usage line, an alert
   stays with that department when its holder moves. Marking an alert handled
@@ -555,6 +567,94 @@ target, the values before and after, the request's address, when.
   moment a person's key leaves the server.
 - The log is append-only. Nothing in this package updates or deletes a record,
   and there is no endpoint that does.
+- **Reading it** (`ListAuditLogs`) is by page, newest first, narrowed by an
+  `AuditFilter`: part of the name of whoever did it — display name or
+  username, in any case, a removed member's included, with `%` and `_` taken
+  as characters — the kind of thing it was done to, and a period. The total
+  it answers with counts what the filter lets through.
+- **Every record in the list names its target** (`AuditLogView.Target`). A
+  record about a member holds what changed and not who they are, so members
+  are named from the accounts, as they are called today; an alert is named by
+  its key; anything else by the name its record carries, the later one first.
+  An invite link has none, and the page calls it by what it is.
+
+## Usage reports
+
+`ReportUsage` sums what the organization's keys spent over a period, by
+department, member, key or model (PRD §6). It has no table of its own: it
+reads the usage log, where every line of an organization key says who used
+which key on which model for how much, and carries the organization and the
+department of that moment (see "The company wallet").
+
+- **How much the caller is shown is part of the query, not a filter on the
+  answer.** A role that reads usage across the organization gets everything; a
+  department-scoped one gets `department_id IN (the departments it reaches)`;
+  everyone else gets `user_id = themselves`, because the engine lets every
+  member see their own usage. The answer says which of the three it was
+  (`scope`). So the endpoint has no gate of its own to forget — it cannot be
+  asked for more than it filters by.
+- **Naming a department is asking about that department.** It takes
+  `usage.read` over it, and outside the caller's reach it is `ErrForbidden` —
+  a 403, never an empty report. That holds for a member's own department too:
+  a department's usage is everybody's in it. A department of another
+  organization has no usage here, and whoever may name any department gets an
+  empty report for it.
+- **Usage counts where it was spent.** A line belongs to the department its
+  user sat in at that moment, so moving someone neither brings their past
+  usage to their new manager nor takes it from the old one, and one member
+  can have usage in two departments.
+- **Money is what left the company wallet.** A refund line (`type` 6: a task
+  that failed, or was settled for less than was reserved) is taken off, and is
+  not a request. The platform's own figures — `SumUsedQuota`,
+  `users.used_quota`, the dashboard — add what was consumed and never take a
+  refund off, so they can read higher than the report for the same period.
+- **Rows are called what they are called today**, by id: a department or a
+  key renamed since shows under its new name, once. What is gone is still
+  named and marked (`gone`) — a dissolved department, a deleted key, a
+  removed member — which is why the lookups are `Unscoped`. A service account
+  is marked as one.
+- **A key's row says who used it** (`used_by`), the biggest spender first: a
+  key that changed hands has two names, and three keys called "Claude Code"
+  are told apart by theirs. The names come from the same lines as the
+  numbers, so a manager is never told about someone outside their
+  departments.
+- **The period** is two Unix timestamps, both included; either can be left
+  out. A period that ends before it starts, or a grouping that is none of the
+  four, is `ErrInvalidUsageQuery` — invalid parameters, not a 403.
+- **Nothing is paged.** A report has one row per department, member, key or
+  model that spent anything, sorted by what it spent; the page shows the first
+  hundred and the rest on request.
+- **`departments` in the answer** are the departments the caller may narrow
+  the report to — all that exist, or the ones they manage. It is there so that
+  a role holding nothing but `usage.read` needs no other endpoint to fill the
+  filter.
+
+### The page
+
+"Reports & alerts" (`/org/reports`, `web/default/src/features/org/reports.tsx`)
+is one page with three sections — usage, alerts, the audit log — and each
+takes its own primitive: `usage.read`, `alert.read`, `audit.read`
+(`lib/reports.ts`). Whoever holds one of them gets the page and the tabs they
+may read; the sidebar entry and the route's gate
+(`requireOrgAccess(queryClient, REPORT_PRIMITIVES)`) follow the same list. The
+section is in the address (`?section=alerts`), which is what a notification
+links to.
+
+- **Staff have no such page.** Their own calls are on the usage logs page, as
+  before. The endpoint still answers them — with their own usage — which is
+  what "staff see only their own" rests on.
+- **Marking an alert and the settings form are the owner's and the admins'**
+  (`canManageOrg`), like everything else an inherent power covers. The form
+  checks every field itself, because the backend refuses a bad request with
+  one message for all of them (`org.alert_settings_invalid`).
+- **Two things the form converts**: the floor is typed in the console's
+  currency and stored in quota units; the hours of a working day are clock
+  times on the form and minutes after midnight on the wire, where a day that
+  ends at 00:00 is minute 1440.
+- **An audit record is put into words on the page** (`lib/audit.ts`): the
+  action, and what changed — only what differs between "before" and "after",
+  with a list shown as what was added and what was taken out. A field the
+  page has no words for shows under its own name; none is dropped.
 
 ## What exists today
 
@@ -593,9 +693,15 @@ target, the values before and after, the request's address, when.
   owner and the admins hear when the wallet runs low.
 - The personal endpoints closed to members: creating a key, deleting one's own
   account.
-- The audit log: written by every management write, read by page.
-- Warnings and alerts: raised and sent by a background task; the alert list,
-  marking an alert, and the settings, over four endpoints.
+- The audit log: written by every management write; read by page, narrowed
+  by who did it, by what kind of thing and by when.
+- Warnings and alerts: raised and sent by a background task, and raised on
+  the spot for a key refused for lack of quota; the alert list, marking an
+  alert, and the settings, over four endpoints.
+- Usage reports: one endpoint, four groupings, a period, and a department to
+  narrow to; money and requests, no token counts (PRD D44).
+- The console's "Reports & alerts" page: the usage report, the alert list
+  with its marks and its settings form, and the audit log.
 
 ### How a refusal travels
 
@@ -655,13 +761,18 @@ is missing from a locale file.
   member's username and email stay taken — so there is no way to bring the
   same account back, and none to move an existing personal account into an
   organization. Not in v1.
-- **The pages for all of the above** (P9): the alert list, the settings form,
-  the usage reports and the audit log. The endpoints are here, and the usage
-  log lines the reports will read are stamped since P7. A notification about
-  alerts carries no link yet, because there is no page to link to.
-- **Telling people that a key was refused for lack of quota.** A key can be
-  turned away before its quota reads 100% used (see "Warnings and alerts");
-  nobody is told when that happens.
+- **A report over time, a chart, an export.** `ReportUsage` groups by one
+  column and answers totals for a period; the page shows a table. The chart —
+  spend by department and by model over days, weeks, months or years — is the
+  next card of the PRD (P10): a second query over the same lines, bucketed by
+  `created_at`. A CSV for the finance role would be another handler over the
+  same query.
+- **Usage from before the stamp.** Lines written before P7 carry no
+  organization and are in no report; none exist in production.
+- **A summary table.** Reports read the usage log directly, through the
+  `(org_id, created_at)` index (PRD §8). `quota_data` — the platform's hourly
+  aggregate — has no key or department on it; adding them is the step to take
+  when a company's log grows past what one grouped scan answers quickly.
 - **Midjourney for organization keys.** Refused until its task table can say
   who paid for a task.
 - **Stopping a member from topping up their own account.** The console

@@ -5,14 +5,17 @@ package service
 // writes what it finds to the organization's alert list, and tells the people
 // who should hear about it.
 //
-// 🔴 Nothing here is on the path of a request, and nothing here stops one
-// (PRD D13, red line 4). The task reads what requests left behind — a key's
-// row, the usage log, the monthly request counter — once a minute. It does not
-// hang off the settlement of a request, on purpose: a key's spending reaches
-// its row a few seconds after the request (BATCH_UPDATE_ENABLED), so a check
-// made right at settlement reads the numbers from before it; and settlements
-// happen in several places — chat, audio, realtime, video tasks, refunds —
-// that a scan of the keys covers without a line in any of them.
+// 🔴 Nothing here stops a request (PRD D13, red line 4), and only one thing
+// here is on the path of one. The task reads what requests left behind — a
+// key's row, the usage log, the monthly request counter — once a minute. It
+// does not hang off the settlement of a request, on purpose: a key's spending
+// reaches its row a few seconds after the request (BATCH_UPDATE_ENABLED), so a
+// check made right at settlement reads the numbers from before it; and
+// settlements happen in several places — chat, audio, realtime, video tasks,
+// refunds — that a scan of the keys covers without a line in any of them. The
+// exception is a key refused for lack of quota (noteOrgKeyRefused): a refusal
+// leaves nothing behind to scan, so it is raised where it happens, after the
+// request is already over.
 //
 // What it decides is in internal/org/service (alert_scan.go, alert_digest.go).
 // This file holds what needs the platform: the loop, the counter of requests
@@ -36,6 +39,9 @@ import (
 	tenantquota "github.com/QuantumNous/new-api/internal/quota"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/system_setting"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
 )
@@ -144,7 +150,11 @@ func (w *orgAlertWatch) send(now time.Time) {
 		}
 		for _, digest := range digests {
 			setting := digest.Recipient.GetSetting()
-			if err := sendOrgAlertNotice(digest.Recipient.Id, digest.Recipient.Email, setting, orgAlertNotice(setting, digest.Alerts)); err != nil {
+			list := ""
+			if digest.SeesList {
+				list = orgAlertListLink()
+			}
+			if err := sendOrgAlertNotice(digest.Recipient.Id, digest.Recipient.Email, setting, orgAlertNotice(setting, digest.Alerts, list)); err != nil {
 				common.SysError(fmt.Sprintf("failed to send organization alerts to user %d: %s", digest.Recipient.Id, err.Error()))
 			}
 		}
@@ -168,6 +178,25 @@ func orgAlertDigestGap() time.Duration {
 	return window/time.Duration(max(constant.NotifyLimitCount, 1)) + time.Minute
 }
 
+// noteOrgKeyRefused is told about every request refused before it was sent,
+// with the quota it would have had to reserve, and acts on one kind: a request
+// made with an organization key that the key had too little left to pay for.
+// That is the key's last warning (PRD D45) — nothing was spent, so the
+// background task would never see it — and it is raised off the request's
+// goroutine: the request is already over, and a failure here must not reach
+// the client. Any other refusal is about something else and is left alone.
+func noteOrgKeyRefused(relayInfo *relaycommon.RelayInfo, apiErr *types.NewAPIError, needed int) {
+	if relayInfo.OrgId == 0 || apiErr.GetErrorCode() != types.ErrorCodePreConsumeTokenQuotaFailed {
+		return
+	}
+	keyID := relayInfo.TokenId
+	gopool.Go(func() {
+		if _, err := orgservice.WarnRefused(model.DB, keyID, needed, time.Now()); err != nil {
+			common.SysError(fmt.Sprintf("failed to raise the warning for refused organization key %d: %s", keyID, err.Error()))
+		}
+	})
+}
+
 // orgMonthlyUsage answers how many requests a key has made this calendar
 // month, from the counter the gateway's own monthly limit keeps.
 func orgMonthlyUsage(keyID int) (int, error) {
@@ -178,11 +207,18 @@ func orgMonthlyUsage(keyID int) (int, error) {
 	return tenantquota.MonthlyUsed(context.Background(), rdb, keyID)
 }
 
+// orgAlertListLink is where the organization's alert list is: the alerts
+// section of the console's "Reports & alerts" page.
+func orgAlertListLink() string {
+	return fmt.Sprintf("%s/org/reports?section=alerts", system_setting.ServerAddress)
+}
+
 // orgAlertNotice words one notification for one member: a title that says how
 // many alerts there are and a line for each, in the language they saved — as
 // plain text for the channels that cannot show HTML. A notification that
-// reports an anomaly closes by saying that nothing was blocked.
-func orgAlertNotice(setting dto.UserSetting, alerts []orgservice.AlertNotice) dto.Notify {
+// reports an anomaly closes by saying that nothing was blocked, and one for a
+// member who can open the alert list ends with list, the link to it.
+func orgAlertNotice(setting dto.UserSetting, alerts []orgservice.AlertNotice, list string) dto.Notify {
 	plain := setting.NotifyType == dto.NotifyTypeBark || setting.NotifyType == dto.NotifyTypeGotify
 	separator := "<br/>"
 	if plain {
@@ -202,6 +238,13 @@ func orgAlertNotice(setting dto.UserSetting, alerts []orgservice.AlertNotice) dt
 	}
 	if reportsAnomaly {
 		lines = append(lines, i18n.Translate(lang, i18n.MsgOrgAlertFooter))
+	}
+	if list != "" {
+		message := i18n.MsgOrgAlertListHTML
+		if plain {
+			message = i18n.MsgOrgAlertList
+		}
+		lines = append(lines, i18n.Translate(lang, message, map[string]any{"Link": list}))
 	}
 	title := i18n.Translate(lang, i18n.MsgOrgAlertTitle, map[string]any{"Count": len(alerts)})
 	return dto.NewNotify(notifyTypeOrgAlert, title, strings.Join(lines, separator), nil)
@@ -228,7 +271,13 @@ func orgAlertLine(lang string, alert orgservice.AlertNotice, plain bool) string 
 	case orgmodel.AlertRuleQuota:
 		args["Used"], args["Limit"] = logger.FormatQuota(detail.Used), logger.FormatQuota(detail.Limit)
 		message = i18n.MsgOrgAlertQuota
-		if spent {
+		switch {
+		case detail.Needed > 0:
+			// Refused with something left: say what was left and what the
+			// request had to have (PRD D45).
+			args["Left"], args["Needed"] = logger.FormatQuota(detail.Limit-detail.Used), logger.FormatQuota(detail.Needed)
+			message = i18n.MsgOrgAlertQuotaRefused
+		case spent:
 			message = i18n.MsgOrgAlertQuotaSpent
 		}
 	case orgmodel.AlertRuleMonthly:

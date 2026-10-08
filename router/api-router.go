@@ -477,6 +477,7 @@ func SetApiRouter(router *gin.Engine) {
 			orgRoute.GET("/key-models", controller.ListOrgKeyModels)
 
 			orgRoute.GET("/audit-logs", controller.ListOrgAuditLogs)
+			orgRoute.GET("/usage", controller.GetOrgUsage)
 
 			orgRoute.GET("/alerts", controller.ListOrgAlerts)
 			orgRoute.POST("/alerts/:id/handle", controller.HandleOrgAlert)

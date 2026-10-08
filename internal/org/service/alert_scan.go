@@ -14,10 +14,12 @@ import (
 )
 
 // Warnings and anomaly alerts (PRD §4, §7.4). Both are scans a background task
-// runs: nothing here is on the path of a request, and nothing here ever stops
-// one (PRD D13, red line 4). A scan reads what requests left behind — a key's
-// row, the usage log — decides, and writes rows to org_alerts. Telling people
-// about those rows is alert_digest.go.
+// runs: a scan reads what requests left behind — a key's row, the usage log —
+// decides, and writes rows to org_alerts. The one exception is WarnRefused,
+// which the gateway calls after it has refused a request a key could not pay
+// for: a refusal leaves nothing behind for a scan to read. Nothing here ever
+// stops a request (PRD D13, red line 4). Telling people about the rows is
+// alert_digest.go.
 
 // The windows of the anomaly rules. PRD §4 fixes them; what an organization
 // may change is in orgmodel.AlertSettings.
@@ -105,6 +107,44 @@ func ScanAllowances(db *gorm.DB, since int64, now time.Time, monthly MonthlyUsag
 	}
 	raised, err := raiseAlerts(db, fresh, now)
 	return raised, errors.Join(failed, err)
+}
+
+// WarnRefused raises the quota warning for an organization key the gateway has
+// just refused a request, because what the key had left was less than the
+// request could cost (PRD D45). Nothing was spent, so no scan would ever see
+// it; and for the key it is the end of its quota — a client that asks for a
+// large max_tokens is turned away with a few percent unused — so the warning
+// is the last level's, 100%, raised once per cycle like any other: a key
+// already told it was used up is not told again, and one that is refused is
+// not told about 100% afterwards. The answer is how many warnings were
+// raised. A key with no limit, a key that could in fact have paid (the refusal
+// was about something else), and an organization that has switched its
+// warnings off get nothing.
+func WarnRefused(db *gorm.DB, keyID int, needed int, now time.Time) (int, error) {
+	var keys []platformmodel.Token
+	if err := db.Select("id", "user_id", "org_id", "name", "remain_quota", "used_quota", "unlimited_quota").
+		Where("id = ? AND org_id > ?", keyID, 0).Limit(1).Find(&keys).Error; err != nil {
+		return 0, err
+	}
+	if len(keys) == 0 || keys[0].UnlimitedQuota || keys[0].RemainQuota >= needed {
+		return 0, nil
+	}
+	key := &keys[0]
+	settings, err := alertSettingsOf(db, key.OrgId)
+	if err != nil {
+		return 0, err
+	}
+	if len(settings.WarnAt) == 0 {
+		return 0, nil
+	}
+	given := key.UsedQuota + key.RemainQuota
+	warning := warningFor(key, orgmodel.AlertRuleQuota, "q"+strconv.Itoa(given), 100, key.UsedQuota, given)
+	warning.Detail = alertDetailJSON(orgmodel.AlertDetail{Key: key.Name, Used: key.UsedQuota, Limit: given, Needed: needed})
+	fresh, err := withoutRepeatedWarnings(db, []orgmodel.OrgAlert{warning})
+	if err != nil {
+		return 0, err
+	}
+	return raiseAlerts(db, fresh, now)
 }
 
 // warningFor words one warning about a key: which rule, which level of which

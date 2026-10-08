@@ -202,7 +202,7 @@ func TestOrgMessages_AreTranslatedInEveryLocale(t *testing.T) {
 		// What a notification about an organization's alerts is made of.
 		i18n.MsgOrgAlertTitle, i18n.MsgOrgAlertQuota, i18n.MsgOrgAlertQuotaSpent, i18n.MsgOrgAlertMonthly,
 		i18n.MsgOrgAlertMonthlySpent, i18n.MsgOrgAlertSpike, i18n.MsgOrgAlertOffHours, i18n.MsgOrgAlertNewIP,
-		i18n.MsgOrgAlertMore, i18n.MsgOrgAlertFooter}
+		i18n.MsgOrgAlertMore, i18n.MsgOrgAlertFooter, i18n.MsgOrgAlertList, i18n.MsgOrgAlertListHTML}
 	for _, refusal := range orgRefusals {
 		if strings.HasPrefix(refusal.key, "org.") {
 			keys = append(keys, refusal.key)

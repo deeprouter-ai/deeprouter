@@ -117,6 +117,7 @@ var orgRefusals = []struct {
 	{orgservice.ErrAlertNotFound, msgOrgAlertNotFound, http.StatusOK},
 	{orgservice.ErrInvalidAlertState, msgOrgAlertStateInvalid, http.StatusOK},
 	{orgservice.ErrInvalidAlertSettings, msgOrgAlertSettingsInvalid, http.StatusOK},
+	{orgservice.ErrInvalidUsageQuery, i18n.MsgInvalidParams, http.StatusOK},
 	{errOrgKeyManagedByOrg, msgOrgKeyManagedByOrg, http.StatusForbidden},
 	{errOrgMemberPersonalKey, msgOrgMemberPersonalKey, http.StatusForbidden},
 	{errOrgSignUpAmbiguous, i18n.MsgInvalidParams, http.StatusOK},
@@ -169,6 +170,34 @@ func orgPathID(c *gin.Context) (int, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// orgQueryNumber reads an optional whole-number query parameter of an
+// organization route. Left out, it is zero.
+func orgQueryNumber(c *gin.Context, name string) (int64, bool) {
+	raw := c.Query(name)
+	if raw == "" {
+		return 0, true
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n < 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return 0, false
+	}
+	return n, true
+}
+
+// orgPeriod reads the period an organization route is asked about:
+// ?start_timestamp= and ?end_timestamp=, in Unix seconds, either of which may
+// be left out.
+func orgPeriod(c *gin.Context) (start int64, end int64, ok bool) {
+	if start, ok = orgQueryNumber(c, "start_timestamp"); !ok {
+		return 0, 0, false
+	}
+	if end, ok = orgQueryNumber(c, "end_timestamp"); !ok {
+		return 0, 0, false
+	}
+	return start, end, true
 }
 
 // orgBody decodes the JSON body of an organization request.
@@ -379,14 +408,25 @@ func AdoptOrgRolePack(c *gin.Context) {
 }
 
 // ListOrgAuditLogs returns one page of the organization's audit log, newest
-// first.
+// first. ?actor= keeps the records of whoever has that in their name,
+// ?target_type= the ones about that kind of thing, and ?start_timestamp= and
+// ?end_timestamp= the ones made in that period.
 func ListOrgAuditLogs(c *gin.Context) {
 	actor, ok := orgActor(c)
 	if !ok {
 		return
 	}
+	start, end, ok := orgPeriod(c)
+	if !ok {
+		return
+	}
 	pageInfo := common.GetPageQuery(c)
-	logs, total, err := orgservice.ListAuditLogs(model.DB, actor, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := orgservice.ListAuditLogs(model.DB, actor, orgservice.AuditFilter{
+		Actor:      c.Query("actor"),
+		TargetType: c.Query("target_type"),
+		Start:      start,
+		End:        end,
+	}, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		orgError(c, err)
 		return

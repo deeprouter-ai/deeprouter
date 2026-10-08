@@ -60,6 +60,8 @@ const (
 	// removers may take a member out of the organization: member.remove,
 	// which HR Ops holds across all of it.
 	removers = runners + " " + kindHROps
+	// usageReaders hold usage.read across the whole organization.
+	usageReaders = runners + " " + kindReadonly + " " + kindITOps + " " + kindFinance
 )
 
 // cast is one organization with a member of every kind.
@@ -122,6 +124,7 @@ func (a managementAction) open(kind string) bool {
 // it any number of times.
 func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 	t.Helper()
+	withUsageLog(t, db)
 	serial := 0
 	next := func() int { serial++; return serial }
 	org := c.org
@@ -416,7 +419,22 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 
 		// --- audit.read, across the whole organization ---------------------------
 		{name: "read the audit log", openTo: runners + " " + kindReadonly, run: func(actor *Actor) error {
-			_, _, err := ListAuditLogs(db, actor, 0, 10)
+			_, _, err := ListAuditLogs(db, actor, AuditFilter{}, 0, 10)
+			return err
+		}},
+
+		// --- usage.read: every member is answered as far as the usage is theirs
+		// to see; a department is named only by a role that reaches it ----------
+		{name: "read the usage report", openTo: strings.Join(allKinds, " "), run: func(actor *Actor) error {
+			_, err := ReportUsage(db, db, actor, UsageQuery{GroupBy: UsageByMember})
+			return err
+		}},
+		{name: "read the usage of Sales", openTo: usageReaders + " " + kindManager, run: func(actor *Actor) error {
+			_, err := ReportUsage(db, db, actor, UsageQuery{GroupBy: UsageByMember, DepartmentId: c.sales.Id})
+			return err
+		}},
+		{name: "read the usage of Product", openTo: usageReaders, run: func(actor *Actor) error {
+			_, err := ReportUsage(db, db, actor, UsageQuery{GroupBy: UsageByMember, DepartmentId: c.product.Id})
 			return err
 		}},
 
@@ -471,7 +489,7 @@ func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
 		actions := managementActions(t, db, c)
-		require.Len(t, actions, 55, "a new management action belongs in managementActions")
+		require.Len(t, actions, 58, "a new management action belongs in managementActions")
 		require.Len(t, c.actors, len(allKinds))
 
 		for _, action := range actions {
@@ -641,7 +659,7 @@ func TestManagement_StaysInsideTheActorsOrganization(t *testing.T) {
 		// Nor their audit log: the intruder sees no record of the other
 		// company, which by now has some.
 		require.NotEmpty(t, auditRecords(t, db, other.id))
-		records, total, err := ListAuditLogs(db, intruder, 0, 100)
+		records, total, err := ListAuditLogs(db, intruder, AuditFilter{}, 0, 100)
 		require.NoError(t, err)
 		require.Empty(t, records)
 		require.Zero(t, total)

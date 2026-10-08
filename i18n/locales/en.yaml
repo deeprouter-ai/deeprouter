@@ -335,6 +335,7 @@ org.alert_settings_invalid: "These alert settings are out of range. Warning leve
 org.alert_title: "{{.Count}} new alert(s) about your organization's keys"
 org.alert_quota: "Key “{{.Key}}” ({{.Holder}}) has used {{.Percent}}% of its quota: {{.Used}} of {{.Limit}}."
 org.alert_quota_spent: "Key “{{.Key}}” ({{.Holder}}) has used up its quota of {{.Limit}} and no longer works. An administrator of your organization can give it more."
+org.alert_quota_refused: "Key “{{.Key}}” ({{.Holder}}) has {{.Left}} of its quota left — less than a request has to have in hand ({{.Needed}} this time) — so its requests are refused. An administrator of your organization can give it more."
 org.alert_monthly: "Key “{{.Key}}” ({{.Holder}}) has made {{.Used}} of the {{.Limit}} requests it may make this month ({{.Percent}}%)."
 org.alert_monthly_spent: "Key “{{.Key}}” ({{.Holder}}) has made all {{.Limit}} requests it may make this month and stops working until next month. An administrator of your organization can raise the limit."
 org.alert_spike: "Key “{{.Key}}” ({{.Holder}}) spent {{.Spent}} in the last 24 hours. Over the week before it spent {{.Average}} a day."
@@ -342,3 +343,5 @@ org.alert_offhours: "Key “{{.Key}}” ({{.Holder}}) spent {{.Spent}} outside w
 org.alert_new_ip: "Key “{{.Key}}” ({{.Holder}}) was used from an address it had not been used from in the last 30 days: {{.Ips}}."
 org.alert_more: "…and {{.Count}} more."
 org.alert_footer: "No request was blocked. If a key is in the wrong hands, freeze or rotate it on the organization keys page."
+org.alert_list: "See all alerts: {{.Link}}"
+org.alert_list_html: "<a href='{{.Link}}'>See all alerts</a>"

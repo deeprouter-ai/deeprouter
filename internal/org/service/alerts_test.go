@@ -92,8 +92,13 @@ func TestDigestsFor_TheAdminsHearEverythingAndAHolderTheirOwnWarnings(t *testing
 		require.Len(t, digests, 4, "one digest each, and none that says nothing")
 
 		// Each digest carries what a notification needs, and names the holder.
+		// It also says whether its recipient can open the alert list — the
+		// owner and the admin can, a holder told about their own key may not
+		// — which decides whether the notification links to it (P9).
 		for _, digest := range digests {
 			assert.NotEmpty(t, digest.Recipient.Email)
+			runs := digest.Recipient.Id == org.owner.Id || digest.Recipient.Id == c.actors[kindAdmin].UserId
+			assert.Equal(t, runs, digest.SeesList, "user %d", digest.Recipient.Id)
 		}
 		assert.Equal(t, 80, digests[0].Alerts[0].Level)
 		assert.Equal(t, "staff-of-Acme", digests[0].Alerts[0].Holder)

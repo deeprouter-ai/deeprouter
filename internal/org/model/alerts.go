@@ -46,6 +46,10 @@ type AlertDetail struct {
 	// monthly limit.
 	Used  int `json:"used,omitempty"`
 	Limit int `json:"limit,omitempty"`
+	// Needed marks a quota warning raised because the gateway refused a
+	// request (PRD D45): what that request had to have in hand, in quota
+	// units, which was more than the key had left.
+	Needed int `json:"needed,omitempty"`
 	// Spent and DailyAverage belong to spike and offhours, in quota units:
 	// what the key spent in the last 24 hours — outside working hours only,
 	// for offhours — and what it spent per day over the 7 days before.

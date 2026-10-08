@@ -336,6 +336,7 @@ org.alert_settings_invalid: "告警設定超出了範圍：提醒檔位是 1 到
 org.alert_title: "企業金鑰有 {{.Count}} 則新提醒"
 org.alert_quota: "金鑰「{{.Key}}」（{{.Holder}}）的額度已用 {{.Percent}}%：共 {{.Limit}}，已用 {{.Used}}。"
 org.alert_quota_spent: "金鑰「{{.Key}}」（{{.Holder}}）的額度 {{.Limit}} 已經用完，不能再呼叫。企業管理員可以為它增加額度。"
+org.alert_quota_refused: "金鑰「{{.Key}}」（{{.Holder}}）的額度只剩 {{.Left}}，不夠完成一次請求（這次需要預留 {{.Needed}}），請求已被拒絕。企業管理員可以為它增加額度。"
 org.alert_monthly: "金鑰「{{.Key}}」（{{.Holder}}）本月已發出 {{.Used}} 次請求，月限額是 {{.Limit}} 次（{{.Percent}}%）。"
 org.alert_monthly_spent: "金鑰「{{.Key}}」（{{.Holder}}）本月的 {{.Limit}} 次請求已經用完，下個月之前不能再呼叫。企業管理員可以調高月限額。"
 org.alert_spike: "金鑰「{{.Key}}」（{{.Holder}}）最近 24 小時花了 {{.Spent}}，此前一週平均每天 {{.Average}}。"
@@ -343,3 +344,5 @@ org.alert_offhours: "金鑰「{{.Key}}」（{{.Holder}}）最近 24 小時在非
 org.alert_new_ip: "金鑰「{{.Key}}」（{{.Holder}}）出現了過去 30 天沒用過的 IP：{{.Ips}}。"
 org.alert_more: "……另有 {{.Count}} 則。"
 org.alert_footer: "沒有任何請求被攔截。如果金鑰落到了不該用它的人手裡，請到「企業金鑰」頁凍結它或更換金鑰值。"
+org.alert_list: "查看全部提醒：{{.Link}}"
+org.alert_list_html: "<a href='{{.Link}}'>查看全部提醒</a>"

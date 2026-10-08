@@ -111,7 +111,7 @@ func TestRemoveMember_TakesTheirKeysBackAndDeletesTheAccount(t *testing.T) {
 		requireNoKeyValueInAudit(t, db, f.org.id, first.Key, second.Key, reloadKey(t, db, first.Id).Key, reloadKey(t, db, second.Id).Key)
 
 		// The audit log still names them, as actor and as holder.
-		logs, _, err := ListAuditLogs(db, f.owner, 0, 100)
+		logs, _, err := ListAuditLogs(db, f.owner, AuditFilter{}, 0, 100)
 		require.NoError(t, err)
 		require.NotEmpty(t, logs)
 		_, err = RemoveMember(db, f.owner, leaver.UserId)

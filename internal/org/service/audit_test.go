@@ -172,7 +172,7 @@ func TestListAuditLogs(t *testing.T) {
 		require.NoError(t, RenameDepartment(db, owner, first.Id, "Uno"))
 
 		// Newest first, with the page asked for and the total of all pages.
-		page, total, err := ListAuditLogs(db, owner, 0, 2)
+		page, total, err := ListAuditLogs(db, owner, AuditFilter{}, 0, 2)
 		require.NoError(t, err)
 		require.EqualValues(t, 3, total)
 		require.Len(t, page, 2)
@@ -196,18 +196,18 @@ func TestListAuditLogs(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, string(encoded), `"detail":{"before":{"name":"One"},"after":{"name":"Uno"}}`)
 
-		rest, total, err := ListAuditLogs(db, owner, 2, 2)
+		rest, total, err := ListAuditLogs(db, owner, AuditFilter{}, 2, 2)
 		require.NoError(t, err)
 		require.EqualValues(t, 3, total)
 		require.Len(t, rest, 1)
 		require.Equal(t, first.Id, rest[0].TargetId)
-		beyond, _, err := ListAuditLogs(db, owner, 10, 2)
+		beyond, _, err := ListAuditLogs(db, owner, AuditFilter{}, 10, 2)
 		require.NoError(t, err)
 		require.Empty(t, beyond)
 
 		// An account deleted since still has a name in the log.
 		require.NoError(t, db.Delete(&platformmodel.User{}, admin.Id).Error)
-		page, _, err = ListAuditLogs(db, owner, 0, 10)
+		page, _, err = ListAuditLogs(db, owner, AuditFilter{}, 0, 10)
 		require.NoError(t, err)
 		require.Equal(t, "Ada Admin", page[1].Actor)
 	})
@@ -231,7 +231,7 @@ func TestListAuditLogs_TakesAuditReadAcrossTheWholeOrganization(t *testing.T) {
 			"auditor":  auditor.Id,
 		} {
 			reader := actorFor(t, db, seedMemberIn(t, db, acme, kind, roleID, defaultDepartment(t, db, acme.id).Id).Id)
-			records, total, err := ListAuditLogs(db, reader, 0, 10)
+			records, total, err := ListAuditLogs(db, reader, AuditFilter{}, 0, 10)
 			require.NoError(t, err, kind)
 			require.EqualValues(t, 2, total, kind)
 			require.Len(t, records, 2, kind)
@@ -247,10 +247,162 @@ func TestListAuditLogs_TakesAuditReadAcrossTheWholeOrganization(t *testing.T) {
 			"forged": seedRole(t, db, acme.id, "Forged", orgmodel.ScopeDept, "audit.read").Id,
 		} {
 			reader := actorFor(t, db, seedMemberIn(t, db, acme, kind, roleID, sales.Id).Id)
-			records, total, err := ListAuditLogs(db, reader, 0, 10)
+			records, total, err := ListAuditLogs(db, reader, AuditFilter{}, 0, 10)
 			require.ErrorIs(t, err, ErrForbidden, kind)
 			require.Empty(t, records, kind)
 			require.Zero(t, total, kind)
 		}
+	})
+}
+
+// Enterprise Org P9: the audit block of the reports page finds records by who
+// did it, by the kind of thing it was done to and by when — and says how many
+// there are of those, not of all.
+func TestListAuditLogs_NarrowsByActorTargetAndPeriod(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		acme := seedOrg(t, db, "Acme")
+		owner := actorFor(t, db, acme.owner.Id)
+		ada := seedMember(t, db, acme, "ada", orgmodel.RoleAdmin)
+		require.NoError(t, db.Model(&platformmodel.User{}).Where("id = ?", ada.Id).Update("display_name", "Ada Lovelace").Error)
+		// A name made of what LIKE gives a meaning to.
+		odd := seedMember(t, db, acme, "odd-one", orgmodel.RoleAdmin)
+		require.NoError(t, db.Model(&platformmodel.User{}).Where("id = ?", odd.Id).Update("display_name", "50%_off").Error)
+
+		// Four records, ten seconds apart, the oldest first.
+		const base = int64(1790000000)
+		made := 0
+		at := func() int {
+			made++
+			record := lastAudit(t, db, acme.id)
+			require.NoError(t, db.Model(&orgmodel.OrgAuditLog{}).Where("id = ?", record.Id).Update("created_time", base+int64(made)*10).Error)
+			return record.Id
+		}
+		department, err := CreateDepartment(db, owner, "One")
+		require.NoError(t, err)
+		byOwner := at()
+		_, err = CreateRole(db, actorFor(t, db, ada.Id), RoleInput{Name: "Desk", Scope: orgmodel.ScopeOrg, Permissions: []string{"key.read"}})
+		require.NoError(t, err)
+		roleByAda := at()
+		_, err = CreateServiceAccount(db, actorFor(t, db, ada.Id), "CI", 0)
+		require.NoError(t, err)
+		memberByAda := at()
+		require.NoError(t, RenameDepartment(db, actorFor(t, db, odd.Id), department.Id, "Uno"))
+		byOdd := at()
+
+		// Another company, whose owner is an Ada too and has done something.
+		other := seedOrg(t, db, "Other")
+		require.NoError(t, db.Model(&platformmodel.User{}).Where("id = ?", other.owner.Id).Update("display_name", "Ada Elsewhere").Error)
+		_, err = CreateDepartment(db, actorFor(t, db, other.owner.Id), "Theirs")
+		require.NoError(t, err)
+
+		found := func(filter AuditFilter) []int {
+			records, total, err := ListAuditLogs(db, owner, filter, 0, 10)
+			require.NoError(t, err)
+			require.EqualValues(t, len(records), total, "the total counts what the filter lets through")
+			ids := make([]int, 0, len(records))
+			for _, record := range records {
+				ids = append(ids, record.Id)
+			}
+			return ids
+		}
+		everything := []int{byOdd, memberByAda, roleByAda, byOwner}
+		require.Equal(t, everything, found(AuditFilter{}), "newest first")
+
+		// By who did it: part of the display name or of the username, in any
+		// case, with the spaces around it dropped.
+		byAda := []int{memberByAda, roleByAda}
+		for _, name := range []string{"ada", "ADA", "Lovelace", "a l", "  ada  "} {
+			require.Equal(t, byAda, found(AuditFilter{Actor: name}), name)
+		}
+		require.Equal(t, []int{byOwner}, found(AuditFilter{Actor: "owner-of-acme"}), "someone who never set a display name is found by username")
+		require.Empty(t, found(AuditFilter{Actor: "nobody by this name"}))
+		// % and _ are characters of a name here, not wildcards.
+		require.Equal(t, []int{byOdd}, found(AuditFilter{Actor: "%"}))
+		require.Equal(t, []int{byOdd}, found(AuditFilter{Actor: "_"}))
+		require.Equal(t, []int{byOdd}, found(AuditFilter{Actor: "50%_o"}))
+		require.Empty(t, found(AuditFilter{Actor: "!"}))
+
+		// By what it was done to.
+		require.Equal(t, []int{byOdd, byOwner}, found(AuditFilter{TargetType: orgmodel.AuditTargetDepartment}))
+		require.Equal(t, []int{roleByAda}, found(AuditFilter{TargetType: orgmodel.AuditTargetRole}))
+		require.Equal(t, []int{memberByAda}, found(AuditFilter{TargetType: orgmodel.AuditTargetMember}))
+		require.Empty(t, found(AuditFilter{TargetType: orgmodel.AuditTargetKey}))
+
+		// By when, both ends included, either left open.
+		require.Equal(t, byAda, found(AuditFilter{Start: base + 20, End: base + 30}))
+		require.Equal(t, []int{byOdd}, found(AuditFilter{Start: base + 31}))
+		require.Equal(t, []int{byOwner}, found(AuditFilter{End: base + 10}))
+		require.Empty(t, found(AuditFilter{Start: base + 11, End: base + 19}))
+
+		// All three at once.
+		require.Equal(t, []int{memberByAda}, found(AuditFilter{Actor: "ada", TargetType: orgmodel.AuditTargetMember, Start: base, End: base + 100}))
+		require.Empty(t, found(AuditFilter{Actor: "ada", TargetType: orgmodel.AuditTargetMember, End: base + 29}))
+
+		// A page of a narrowed list still knows how long the list is.
+		page, total, err := ListAuditLogs(db, owner, AuditFilter{Actor: "ada"}, 1, 1)
+		require.NoError(t, err)
+		require.EqualValues(t, 2, total)
+		require.Len(t, page, 1)
+		require.Equal(t, roleByAda, page[0].Id)
+
+		// What a member did stays findable by their name after they are removed.
+		_, err = RemoveMember(db, owner, ada.Id)
+		require.NoError(t, err)
+		require.Equal(t, byAda, found(AuditFilter{Actor: "lovelace"}))
+	})
+}
+
+// A record about a member carries what changed, not who they are. The list
+// names every record's target all the same: a member as they are called today
+// — removed or not — and anything else by the name the record itself kept.
+func TestListAuditLogs_NamesWhatEachRecordIsAbout(t *testing.T) {
+	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
+		acme := seedOrg(t, db, "Acme")
+		owner := actorFor(t, db, acme.owner.Id)
+		sales := departmentNamed(t, db, acme.id, "Sales")
+		mia := seedMemberIn(t, db, acme, "mia", presetRoleID(t, db, orgmodel.RoleStaff), sales.Id)
+		targetOf := func(action string) string {
+			t.Helper()
+			records, _, err := ListAuditLogs(db, owner, AuditFilter{}, 0, 100)
+			require.NoError(t, err)
+			for _, record := range records {
+				if record.Action == action {
+					return record.Target
+				}
+			}
+			t.Fatalf("no %s record", action)
+			return ""
+		}
+
+		research, err := CreateDepartment(db, owner, "Research")
+		require.NoError(t, err)
+		require.Equal(t, "Research", targetOf(orgmodel.AuditDepartmentCreate))
+		require.NoError(t, RenameDepartment(db, owner, research.Id, "Labs"))
+		require.Equal(t, "Labs", targetOf(orgmodel.AuditDepartmentRename), "the name it has after the change")
+		require.NoError(t, DeleteDepartment(db, owner, research.Id))
+		require.Equal(t, "Labs", targetOf(orgmodel.AuditDepartmentDelete), "the name it had, once it is gone")
+
+		_, err = CreateKey(db, owner, KeyInput{Name: "Sales tools", HolderId: mia.Id}, fixedModels(testCatalogue))
+		require.NoError(t, err)
+		require.Equal(t, "Sales tools", targetOf(orgmodel.AuditKeyCreate))
+
+		_, err = CreateInvite(db, owner, presetRoleID(t, db, orgmodel.RoleStaff), sales.Id)
+		require.NoError(t, err)
+		require.Empty(t, targetOf(orgmodel.AuditMemberInvite), "an invite link has no name")
+
+		var key platformmodel.Token
+		require.NoError(t, db.Where("org_id = ? AND name = ?", acme.id, "Sales tools").First(&key).Error)
+		require.NoError(t, HandleAlert(db, owner, seedAlert(t, db, key, orgmodel.AlertRuleSpike, 0).Id, orgmodel.AlertStateHandled))
+		require.Equal(t, "Sales tools", targetOf(orgmodel.AuditAlertHandle), "an alert is known by its key")
+
+		// The record of a role change holds two roles and no name at all.
+		require.NoError(t, UpdateMember(db, owner, mia.Id, MemberPatch{RoleId: intPtr(presetRoleID(t, db, orgmodel.RoleManager))}))
+		require.Equal(t, "mia", targetOf(orgmodel.AuditRoleAssign))
+		require.NoError(t, db.Model(&platformmodel.User{}).Where("id = ?", mia.Id).Update("display_name", "Mia Member").Error)
+		require.Equal(t, "Mia Member", targetOf(orgmodel.AuditRoleAssign), "as she is called today")
+		_, err = RemoveMember(db, owner, mia.Id)
+		require.NoError(t, err)
+		require.Equal(t, "Mia Member", targetOf(orgmodel.AuditRoleAssign), "and still after she was removed")
+		require.Equal(t, "Mia Member", targetOf(orgmodel.AuditMemberRemove))
 	})
 }
