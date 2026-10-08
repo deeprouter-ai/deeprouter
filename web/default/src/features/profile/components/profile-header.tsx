@@ -16,16 +16,19 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, BarChart3, WalletCards } from 'lucide-react'
+import { useState } from 'react'
+import { Activity, BarChart3, Pencil, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatCompactNumber, formatQuota } from '@/lib/format'
 import { getRoleLabel } from '@/lib/roles'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/status-badge'
 import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { getUserInitials, getDisplayName } from '../lib'
 import type { UserProfile } from '../types'
+import { DisplayNameDialog } from './dialogs/display-name-dialog'
 
 // ============================================================================
 // Profile Header Component
@@ -34,13 +37,20 @@ import type { UserProfile } from '../types'
 interface ProfileHeaderProps {
   profile: UserProfile | null
   loading: boolean
+  /** Called once the user changed their display name, to read the profile back. */
+  onProfileUpdate?: () => void
 }
 
-export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
+export function ProfileHeader({
+  profile,
+  loading,
+  onProfileUpdate,
+}: ProfileHeaderProps) {
   const { t } = useTranslation()
   // DeepRouter Enterprise Org: a member's keys spend the company wallet, so
   // the balance on their own account is left out of what they are shown.
   const spendsOwnBalance = useWalletView() === 'own'
+  const [renaming, setRenaming] = useState(false)
 
   if (loading) {
     return (
@@ -121,6 +131,18 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
               <h1 className='truncate text-xl font-semibold tracking-tight sm:text-2xl'>
                 {displayName}
               </h1>
+              {/* DeepRouter (Enterprise Org D48): the name is the user's own
+                  to change. */}
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                className='text-muted-foreground size-7 shrink-0'
+                aria-label={t('Change display name')}
+                onClick={() => setRenaming(true)}
+              >
+                <Pencil aria-hidden='true' className='size-3.5' />
+              </Button>
               <StatusBadge
                 label={roleLabel}
                 variant='neutral'
@@ -173,6 +195,13 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
           ))}
         </div>
       </div>
+      <DisplayNameDialog
+        open={renaming}
+        onOpenChange={setRenaming}
+        current={displayName}
+        username={profile.username}
+        onRenamed={() => onProfileUpdate?.()}
+      />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
@@ -25,6 +26,10 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
+
+// maxDisplayNameLength is how long a display name may be, in characters: the
+// same bound the User struct's validation puts on it.
+const maxDisplayNameLength = 20
 
 type LoginRequest struct {
 	Username string `json:"username"`
@@ -824,6 +829,26 @@ func UpdateSelf(c *gin.Context) {
 			return
 		}
 
+		common.ApiSuccessI18n(c, i18n.MsgUpdateSuccess, nil)
+		return
+	}
+
+	// DeepRouter (Enterprise Org D48): a display name on its own takes no
+	// password. It is no credential — it is what the member list, the reports
+	// and the alerts call the person — and the path below asks for the current
+	// password because it also changes the username and the password.
+	if name, ok := requestData["display_name"]; ok && len(requestData) == 1 {
+		displayName, isString := name.(string)
+		displayName = strings.TrimSpace(displayName)
+		if !isString || displayName == "" || utf8.RuneCountInString(displayName) > maxDisplayNameLength {
+			common.ApiErrorI18n(c, i18n.MsgUserDisplayNameInvalid)
+			return
+		}
+		renamed := model.User{Id: c.GetInt("id"), DisplayName: displayName}
+		if err := renamed.Update(false); err != nil {
+			common.ApiErrorI18n(c, i18n.MsgUpdateFailed)
+			return
+		}
 		common.ApiSuccessI18n(c, i18n.MsgUpdateSuccess, nil)
 		return
 	}

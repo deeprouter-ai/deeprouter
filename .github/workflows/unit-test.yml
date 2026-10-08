@@ -74,7 +74,7 @@ jobs:
           # 180s, not 60s: the TestOrg sign-up tests hash real passwords, and
           # each bcrypt hash costs about 0.6s under the race detector. The
           # line took 18s on a developer machine when this was raised.
-          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestOrg' -count=1 -race -timeout 180s
+          go test ./controller/ -run 'TestMiniMaxVideo|TestMediaKey|TestSeedance|TestSeedream|TestChannelTestModality|TestChannelTestImageModels|TestModelRatio|TestGetModelRatio|TestKidsMode|TestListModels|TestGetRouterCatalog|TestChannelTypeToBrand|TryCrossModelFallback|IsChannelExhaustion|TestAdmin|TestSkillIDParam|TestVersionIDParam|TestDownloadMarketplaceSkill|TestAddTokenReturnsCreatedKey|TestKeyPurpose|TestUpdateSelf|TestOrg' -count=1 -race -timeout 180s
           go test ./middleware/ -run 'TestAirbotixPolicy|TestInternalToken|TestResolveAutoModel' -count=1 -race -timeout 60s
           # Pricing consistency: default ratio/price coverage for cache-ratio models
           # and the Doubao/Seedance + MiniMax/Hailuo video ModelLists (价格未配置
