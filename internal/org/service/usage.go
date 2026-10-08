@@ -116,44 +116,17 @@ type UsageReport struct {
 // user sat in at that moment, so moving someone never moves what they spent.
 func ReportUsage(db *gorm.DB, logDB *gorm.DB, actor *Actor, query UsageQuery) (*UsageReport, error) {
 	column, known := usageColumns[query.GroupBy]
-	if !known || query.Start < 0 || (query.End != 0 && query.End < query.Start) {
+	if !known {
 		return nil, ErrInvalidUsageQuery
 	}
-	usage := logDB.Model(&platformmodel.Log{}).Where("org_id = ? AND type IN ?", actor.OrgId,
-		[]int{platformmodel.LogTypeConsume, platformmodel.LogTypeRefund})
-	if query.Start > 0 {
-		usage = usage.Where("created_at >= ?", query.Start)
+	reach, err := usageWithin(logDB, actor, query)
+	if err != nil {
+		return nil, err
 	}
-	if query.End > 0 {
-		usage = usage.Where("created_at <= ?", query.End)
-	}
-	if query.DepartmentId != 0 {
-		if err := actor.allow("usage.read", orgmodel.Target{DepartmentId: query.DepartmentId}); err != nil {
-			return nil, err
-		}
-		usage = usage.Where("department_id = ?", query.DepartmentId)
-	}
-
-	report := &UsageReport{GroupBy: query.GroupBy, Scope: orgmodel.ScopeOrg, Departments: []UsageDepartment{}}
-	everywhere, managed := orgmodel.Reach(actor.Subject, "usage.read")
-	switch {
-	case everywhere:
-	case len(managed) > 0:
-		report.Scope = orgmodel.ScopeDept
-		if query.DepartmentId == 0 {
-			usage = usage.Where("department_id IN ?", managed)
-		}
-	default:
-		// No report is theirs to read. What they used themselves every member
-		// may see, whatever their role (PRD §2).
-		if err := actor.allow("usage.read", orgmodel.Target{UserId: actor.UserId}); err != nil {
-			return nil, err
-		}
-		report.Scope = orgmodel.ScopeSelf
-		usage = usage.Where("user_id = ?", actor.UserId)
-	}
+	usage := reach.lines
+	report := &UsageReport{GroupBy: query.GroupBy, Scope: reach.scope, Departments: []UsageDepartment{}}
 	if report.Scope != orgmodel.ScopeSelf {
-		departments, err := usageDepartments(db, actor.OrgId, everywhere, managed)
+		departments, err := usageDepartments(db, actor.OrgId, reach.everywhere, reach.managed)
 		if err != nil {
 			return nil, err
 		}
@@ -168,9 +141,7 @@ func ReportUsage(db *gorm.DB, logDB *gorm.DB, actor *Actor, query UsageQuery) (*
 	case UsageByKey:
 		selected, grouped = column+" AS group_id, user_id AS used_by", column+", user_id"
 	}
-	selected += fmt.Sprintf(", SUM(CASE WHEN type = %d THEN 1 ELSE 0 END) AS requests"+
-		", COALESCE(SUM(CASE WHEN type = %d THEN -quota ELSE quota END), 0) AS quota",
-		platformmodel.LogTypeConsume, platformmodel.LogTypeRefund)
+	selected += fmt.Sprintf(", SUM(CASE WHEN type = %d THEN 1 ELSE 0 END) AS requests, ", platformmodel.LogTypeConsume) + usageSpentSQL
 	var sums []struct {
 		GroupId   int
 		GroupName string
@@ -214,6 +185,71 @@ func ReportUsage(db *gorm.DB, logDB *gorm.DB, actor *Actor, query UsageQuery) (*
 		return nil, err
 	}
 	return report, nil
+}
+
+// usageSpentSQL sums what usage log lines cost as "quota": what was paid, with
+// what was given back for failed tasks taken off. The report and the trend
+// both measure spending with it, so the two always add up to the same.
+var usageSpentSQL = fmt.Sprintf("COALESCE(SUM(CASE WHEN type = %d THEN -quota ELSE quota END), 0) AS quota", platformmodel.LogTypeRefund)
+
+// usageReach is the usage of an organization a caller may read.
+type usageReach struct {
+	// lines are the usage log lines of the period asked for that are the
+	// caller's to see.
+	lines *gorm.DB
+	// scope says how much of the organization that is: a Scope… value.
+	scope string
+	// everywhere and managed are what the caller's role reaches: the whole
+	// organization, or these departments.
+	everywhere bool
+	managed    []int
+}
+
+// usageWithin narrows the usage log to what a query covers and the caller may
+// read: everything for a role that reads usage across the organization, what
+// was spent in the departments they manage for a department-scoped one, and
+// what they used themselves for everyone else. Naming a department outside
+// that is refused with ErrForbidden. The report and the trend both read
+// through here, so a rule about who sees what is written once.
+func usageWithin(logDB *gorm.DB, actor *Actor, query UsageQuery) (*usageReach, error) {
+	if query.Start < 0 || (query.End != 0 && query.End < query.Start) {
+		return nil, ErrInvalidUsageQuery
+	}
+	usage := logDB.Model(&platformmodel.Log{}).Where("org_id = ? AND type IN ?", actor.OrgId,
+		[]int{platformmodel.LogTypeConsume, platformmodel.LogTypeRefund})
+	if query.Start > 0 {
+		usage = usage.Where("created_at >= ?", query.Start)
+	}
+	if query.End > 0 {
+		usage = usage.Where("created_at <= ?", query.End)
+	}
+	if query.DepartmentId != 0 {
+		if err := actor.allow("usage.read", orgmodel.Target{DepartmentId: query.DepartmentId}); err != nil {
+			return nil, err
+		}
+		usage = usage.Where("department_id = ?", query.DepartmentId)
+	}
+
+	reach := &usageReach{scope: orgmodel.ScopeOrg}
+	reach.everywhere, reach.managed = orgmodel.Reach(actor.Subject, "usage.read")
+	switch {
+	case reach.everywhere:
+	case len(reach.managed) > 0:
+		reach.scope = orgmodel.ScopeDept
+		if query.DepartmentId == 0 {
+			usage = usage.Where("department_id IN ?", reach.managed)
+		}
+	default:
+		// No report is theirs to read. What they used themselves every member
+		// may see, whatever their role (PRD §2).
+		if err := actor.allow("usage.read", orgmodel.Target{UserId: actor.UserId}); err != nil {
+			return nil, err
+		}
+		reach.scope = orgmodel.ScopeSelf
+		usage = usage.Where("user_id = ?", actor.UserId)
+	}
+	reach.lines = usage
+	return reach, nil
 }
 
 // keyUsage is what one member spent with one key.

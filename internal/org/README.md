@@ -10,7 +10,7 @@ changing the code.
 | Package | Holds | May import the platform `model` package? |
 |---|---|---|
 | `model/` | The seven org tables and the migration; the permission vocabulary — primitives, inherent powers, preset roles, role packs, audit actions — and the permission engine `Can`; the alert rules and the settings they run on | **No** — `model/main.go` imports it to migrate, so the reverse is a cycle |
-| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log, warnings and alerts, the usage report | Yes |
+| `service/` | Logic that also touches `users` / `tokens`: organizations, departments, members, service accounts, invites, custom roles, organization keys, the audit log, warnings and alerts, the usage report and its trend | Yes |
 | `orgtest/` | Throwaway databases for tests, one per engine | **No** — tests in both packages above use it |
 
 Handlers live in `controller/org.go`, `controller/org_keys.go`,
@@ -88,6 +88,7 @@ What each endpoint asks for:
 | `POST /invites`, `GET /invites`, `DELETE /invites/:id` | `member.invite` reaching the invite's department — see below |
 | `GET /audit-logs` | `audit.read` across the whole organization; `?actor=`, `?target_type=`, `?start_timestamp=` and `?end_timestamp=` narrow it |
 | `GET /usage?group_by=` | being a member — `usage.read` decides how much is answered: everything, what was spent in the departments the role reaches, or only what the caller used themselves. `&department_id=` takes `usage.read` over that department |
+| `GET /usage/trend?group_by=&bucket=&timezone=` | exactly what `GET /usage` takes, for the same usage: the report's reach, the report's 403 for a department outside it |
 | `GET /keys` | `key.read`; a `dept`-scoped role is sent the keys held in its departments only |
 | `GET /key-templates` | `key.read` anywhere |
 | `GET /key-holders` | `key.create` anywhere; answers the members a key can be made out to, each with their role only where the caller may read that member (D34) |
@@ -638,6 +639,50 @@ department of that moment (see "The company wallet").
   a role holding nothing but `usage.read` needs no other endpoint to fill the
   filter.
 
+### The trend
+
+`TrendUsage` is the same usage drawn over time (PRD D46): what was spent in
+each day, week, month or year of the period, as one series per department or
+per model. It is not drawn by member or by key.
+
+- **It reads through the report's reach, and measures with the report's
+  sum.** Who sees what — and the refusal of a department out of reach — is
+  `usageWithin`, which `ReportUsage` calls too; what a line cost is
+  `usageSpentSQL`, refunds taken off. So a rule about scope is written once,
+  and a trend adds up to what the report says for the same question
+  (`total`). Staff have no chart on the page; asked directly, the endpoint
+  answers them as the report does, with their own usage.
+- **A day is the viewer's day.** The log keeps Unix seconds, the page sends
+  the IANA name of the browser's zone (`timezone`), and a zone that is
+  missing, unknown or `Local` is invalid parameters — it would mean the
+  server's calendar, which is nobody's. A period asked for from the viewer's
+  midnight therefore falls on whole buckets.
+- **The database sums by day, with arithmetic every dialect has.** The day a
+  line falls in is `(created_at + offset) - (created_at + offset) % 86400`,
+  the seconds moved by the zone's offset less their remainder by a day — no
+  `date_trunc`, no `strftime`. The offset is written into the statement, not
+  bound, so that the grouped expression is the selected one to PostgreSQL.
+- **A zone's offset changes, so the period is cut where it does.**
+  `zoneStretches` splits it at every change of the zone's clocks and each
+  part is summed with its own offset: one query for Shanghai, two for a
+  month that holds Sydney's first Sunday of October. The 23-hour day comes
+  out as one day.
+- **Weeks, months and years are folded out of days here**, on the calendar:
+  a week starts on Monday, a month on its first, a year on 1 January. A
+  bucket is named by its first day, as `2026-10-05`.
+- **The buckets start at the first usage of the period and run to its end**
+  — to now, when the period is open or ends later — with every bucket in
+  between, the empty ones too: a line that fell to nothing has to be seen
+  falling. So their number is bounded by how long the organization has been
+  spending, whatever dates are asked for.
+- **Eight series, and one for the rest** (`trendSeriesShown`). The biggest
+  spenders of the period get a series each, sorted like the report's rows;
+  everything else is summed into one marked `other`, so the series still add
+  up. A department is called what it is called today, a dissolved one too.
+- **A point can be negative.** A refund is its own line, stamped when it was
+  given: money paid on Monday and given back on Tuesday is a point up and a
+  point down, and the total is right.
+
 ### The page
 
 "Reports & alerts" (`/org/reports`, `web/default/src/features/org/reports.tsx`)
@@ -654,6 +699,14 @@ address (`?section=alerts`), which is what a notification links to.
   usage logs page, as before: the usage endpoint still answers them — with
   their own usage, which is what "staff see only their own" rests on — but
   the page gives them no usage tab.
+- **The chart sits above the table** (`components/usage-trend.tsx`), when the
+  report is grouped by department or by model and has rows. It asks
+  `GET /usage/trend` for the period and the department the report is showing,
+  with the browser's zone, and offers the four buckets. It is drawn with the
+  console's own chart library (VChart, as on the dashboard): lines take the
+  theme's five chart colours, go round them once more dashed, and the series
+  of the rest is muted. Money on the axis and in the tooltip is the report's
+  `formatSpend`. Refreshing the report asks for both again.
 - **Marking an alert and the settings form are the owner's and the admins'**
   (`canManageOrg`), like everything else an inherent power covers. The form
   checks every field itself, because the backend refuses a bad request with
@@ -712,8 +765,11 @@ address (`?section=alerts`), which is what a notification links to.
   four endpoints.
 - Usage reports: one endpoint, four groupings, a period, and a department to
   narrow to; money and requests, no token counts (PRD D44).
-- The console's "Reports & alerts" page: the usage report, the alert list
-  with its marks and its settings form, and the audit log.
+- The usage trend: a second endpoint over the same lines and the same reach
+  — spend by department or by model, in days, weeks, months or years of the
+  viewer's calendar (PRD D46).
+- The console's "Reports & alerts" page: the usage report with its chart, the
+  alert list with its marks and its settings form, and the audit log.
 
 ### How a refusal travels
 
@@ -773,12 +829,10 @@ is missing from a locale file.
   member's username and email stay taken — so there is no way to bring the
   same account back, and none to move an existing personal account into an
   organization. Not in v1.
-- **A report over time, a chart, an export.** `ReportUsage` groups by one
-  column and answers totals for a period; the page shows a table. The chart —
-  spend by department and by model over days, weeks, months or years — is the
-  next card of the PRD (P10): a second query over the same lines, bucketed by
-  `created_at`. A CSV for the finance role would be another handler over the
-  same query.
+- **An export, a trend by member or key, a drill-down.** The report answers
+  totals for a period and the trend draws departments and models over time
+  (P10); neither is exported. A CSV for the finance role would be another
+  handler over the same query. Pressing a point of the chart does nothing.
 - **Usage from before the stamp.** Lines written before P7 carry no
   organization and are in no report; none exist in production.
 - **A summary table.** Reports read the usage log directly, through the

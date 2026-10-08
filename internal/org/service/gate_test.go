@@ -437,6 +437,20 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			_, err := ReportUsage(db, db, actor, UsageQuery{GroupBy: UsageByMember, DepartmentId: c.product.Id})
 			return err
 		}},
+		// The trend is the report drawn over time, and is answered to the same
+		// members (P10).
+		{name: "read the usage trend", openTo: strings.Join(allKinds, " "), run: func(actor *Actor) error {
+			_, err := TrendUsage(db, db, actor, trendIn(0), time.Now())
+			return err
+		}},
+		{name: "read the trend of Sales", openTo: usageReaders + " " + kindManager, run: func(actor *Actor) error {
+			_, err := TrendUsage(db, db, actor, trendIn(c.sales.Id), time.Now())
+			return err
+		}},
+		{name: "read the trend of Product", openTo: usageReaders, run: func(actor *Actor) error {
+			_, err := TrendUsage(db, db, actor, trendIn(c.product.Id), time.Now())
+			return err
+		}},
 
 		// --- alert.read: every member is answered as far as the alerts are theirs
 		// to see — a role that reads alerts where it reaches, everyone else the
@@ -462,6 +476,15 @@ func managementActions(t *testing.T, db *gorm.DB, c cast) []managementAction {
 			_, err = UpdateAlertSettings(db, actor, settings)
 			return err
 		}},
+	}
+}
+
+// trendIn asks for a usage trend by model, of one department or — with zero —
+// of all the caller may see.
+func trendIn(departmentID int) UsageTrendQuery {
+	return UsageTrendQuery{
+		UsageQuery: UsageQuery{GroupBy: UsageByModel, DepartmentId: departmentID},
+		Bucket:     TrendByDay, Timezone: "UTC",
 	}
 }
 
@@ -491,7 +514,7 @@ func TestManagement_EachActionIsOpenToExactlyWhoThePRDSays(t *testing.T) {
 	forEachDialect(t, func(t *testing.T, db *gorm.DB) {
 		c := newCast(t, db, "Acme")
 		actions := managementActions(t, db, c)
-		require.Len(t, actions, 58, "a new management action belongs in managementActions")
+		require.Len(t, actions, 61, "a new management action belongs in managementActions")
 		require.Len(t, c.actors, len(allKinds))
 
 		for _, action := range actions {

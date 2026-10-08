@@ -228,6 +228,101 @@ func TestOrgUsage_ThroughTheRealGateway(t *testing.T) {
 			assert.Equal(t, "common.invalid_params", message, query)
 		}
 
+		// --- Enterprise Org P10: the same usage, drawn over time -------------------------
+		// Acceptance: owner/admin 可查看用量随时间变化的折线图，按部门或模型分线，粒度可选
+		// 日 / 周 / 月 / 年 … 以金额计; 趋势图的可见范围与报表一致 … 越权查询返回 403.
+		type trendPage struct {
+			GroupBy string   `json:"group_by"`
+			Bucket  string   `json:"bucket"`
+			Scope   string   `json:"scope"`
+			Buckets []string `json:"buckets"`
+			Total   int      `json:"total"`
+			Series  []struct {
+				Id     int    `json:"id"`
+				Name   string `json:"name"`
+				Other  bool   `json:"other"`
+				Quota  int    `json:"quota"`
+				Points []int  `json:"points"`
+			} `json:"series"`
+		}
+		const inShanghai = "&timezone=Asia%2FShanghai"
+		shanghai, err := time.LoadLocation("Asia/Shanghai")
+		require.NoError(t, err)
+		trend := func(reader browser, query string) trendPage {
+			t.Helper()
+			var page trendPage
+			reader.ok(t, http.MethodGet, "/api/org/usage/trend?"+query+inShanghai, nil, &page)
+			// Every line adds up to what it says, and the lines to the total.
+			drawn := 0
+			for _, series := range page.Series {
+				require.Len(t, series.Points, len(page.Buckets), series.Name)
+				sum := 0
+				for _, point := range series.Points {
+					sum += point
+				}
+				assert.Equal(t, series.Quota, sum, series.Name)
+				drawn += series.Quota
+			}
+			assert.Equal(t, page.Total, drawn)
+			return page
+		}
+		spentBy := func(page trendPage) map[string]int {
+			spent := map[string]int{}
+			for _, series := range page.Series {
+				spent[series.Name] = series.Quota
+			}
+			return spent
+		}
+		// All of it was spent today, on the viewer's calendar.
+		today := time.Now().In(shanghai).Format(time.DateOnly)
+		overTime := trend(owner, "group_by=department&bucket=day")
+		assert.Equal(t, "department", overTime.GroupBy)
+		assert.Equal(t, "day", overTime.Bucket)
+		assert.Equal(t, orgmodel.ScopeOrg, overTime.Scope)
+		assert.Equal(t, everything.Quota, overTime.Total, "what the report says for the same question")
+		assert.Equal(t, map[string]int{"Sales": 2 * cost, "Product": 2 * cost, "General": cost}, spentBy(overTime))
+		require.NotEmpty(t, overTime.Buckets)
+		assert.Contains(t, []string{today, time.Now().In(shanghai).Format(time.DateOnly)}, overTime.Buckets[len(overTime.Buckets)-1])
+		assert.Equal(t, map[string]int{"gpt-4o-mini": 5 * cost}, spentBy(trend(owner, "group_by=model&bucket=day")))
+		for _, bucket := range []string{"week", "month", "year"} {
+			wider := trend(owner, "group_by=model&bucket="+bucket)
+			assert.Equal(t, bucket, wider.Bucket)
+			assert.Equal(t, everything.Quota, wider.Total, bucket)
+			assert.Len(t, wider.Buckets, 1, bucket)
+		}
+		// The period and the department filter are the report's.
+		assert.Empty(t, trend(owner, "group_by=model&bucket=day&end_timestamp="+id(int(now-60))).Series)
+		assert.Equal(t, 2*cost, trend(owner, "group_by=model&bucket=day&department_id="+id(departmentID["Product"])).Total)
+		// A read-only member sees the whole company; the manager of Sales what
+		// was spent in Sales, and is refused any other department.
+		assert.Equal(t, everything.Quota, trend(auditor, "group_by=department&bucket=day").Total)
+		managersTrend := trend(manager, "group_by=department&bucket=day")
+		assert.Equal(t, orgmodel.ScopeDept, managersTrend.Scope)
+		assert.Equal(t, map[string]int{"Sales": 2 * cost}, spentBy(managersTrend))
+		assert.Equal(t, 2*cost, trend(manager, "group_by=model&bucket=day&department_id="+id(departmentID["Sales"])).Total)
+		for _, groupBy := range []string{"department", "model"} {
+			manager.refused(t, http.MethodGet, "/api/org/usage/trend?bucket=day&group_by="+groupBy+"&department_id="+id(departmentID["Product"])+inShanghai, nil)
+		}
+		// Staff have no chart on the page; asked directly, the route answers
+		// them as the report does — with their own usage, and no department.
+		sellersTrend := trend(seller, "group_by=department&bucket=day")
+		assert.Equal(t, orgmodel.ScopeSelf, sellersTrend.Scope)
+		assert.Equal(t, map[string]int{"Sales": 2 * cost, "Product": cost}, spentBy(sellersTrend))
+		for _, department := range []string{"Sales", "Product", "General"} {
+			seller.refused(t, http.MethodGet, "/api/org/usage/trend?bucket=day&group_by=model&department_id="+id(departmentID[department])+inShanghai, nil)
+		}
+		status, _, message, _ = personal.call(t, http.MethodGet, "/api/org/usage/trend?group_by=model&bucket=day"+inShanghai, nil)
+		assert.Equal(t, http.StatusForbidden, status)
+		assert.Equal(t, "org.not_member", message)
+		for _, query := range []string{"", "group_by=model&bucket=day", "group_by=model&timezone=UTC", "group_by=member&bucket=day&timezone=UTC",
+			"group_by=model&bucket=hour&timezone=UTC", "group_by=model&bucket=day&timezone=Nowhere%2FAt_All",
+			"group_by=model&bucket=day&timezone=UTC&department_id=sales", "group_by=model&bucket=day&timezone=UTC&start_timestamp=200&end_timestamp=100"} {
+			status, success, message, _ := owner.call(t, http.MethodGet, "/api/org/usage/trend?"+query, nil)
+			assert.Equal(t, http.StatusOK, status, query)
+			assert.False(t, success, query)
+			assert.Equal(t, "common.invalid_params", message, query)
+		}
+
 		// --- the audit log, narrowed over the real route --------------------------------
 		type auditPage struct {
 			Total int `json:"total"`
