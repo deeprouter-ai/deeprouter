@@ -29,6 +29,9 @@ vi.mock('@/stores/auth-store', () => ({
     { getState: () => ({ auth: { user: { id: 1 } } }) }
   ),
 }))
+// The route brings the page along, and the page its chart. Nothing is drawn
+// here, and the real chart library looks for a canvas as soon as it loads.
+vi.mock('@visactor/react-vchart', () => ({ VChart: () => null }))
 
 /** A custom role that holds exactly the given primitives across the organization. */
 function customRole(role: string, permissions: string[]): OrgMembership {

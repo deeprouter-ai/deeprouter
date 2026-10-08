@@ -3,7 +3,14 @@
 import type { TFunction } from 'i18next'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import dayjs from '@/lib/dayjs'
-import type { OrgUsageGroupBy, OrgUsageReport, OrgUsageRow } from '../types'
+import type {
+  OrgUsageGroupBy,
+  OrgUsageReport,
+  OrgUsageRow,
+  OrgUsageTrend,
+  OrgUsageTrendBucket,
+  OrgUsageTrendGroupBy,
+} from '../types'
 
 /**
  * The four ways a usage report can be cut, in the order the page offers them:
@@ -131,7 +138,7 @@ export function usageGroupLabel(
 export function usageRowName(
   t: TFunction,
   groupBy: OrgUsageGroupBy,
-  row: OrgUsageRow
+  row: Pick<OrgUsageRow, 'name'>
 ): string {
   if (row.name) return row.name
   switch (groupBy) {
@@ -173,4 +180,117 @@ export function formatSpend(quota: number): string {
     digitsSmall: 4,
     abbreviate: false,
   })
+}
+
+/**
+ * The stretches of time a trend can be cut into, in the order the page offers
+ * them (PRD D46).
+ */
+export const USAGE_TREND_BUCKETS: OrgUsageTrendBucket[] = [
+  'day',
+  'week',
+  'month',
+  'year',
+]
+
+/**
+ * Whether a grouping is drawn over time: a trend has a line per department or
+ * per model, and none per member or per key.
+ */
+export function drawsTrend(
+  groupBy: OrgUsageGroupBy
+): groupBy is OrgUsageTrendGroupBy {
+  return groupBy === 'department' || groupBy === 'model'
+}
+
+/** Name of a way to cut time, as the choice the page offers. */
+export function trendBucketLabel(
+  t: TFunction,
+  bucket: OrgUsageTrendBucket
+): string {
+  switch (bucket) {
+    case 'day':
+      return t('By day')
+    case 'week':
+      return t('By week')
+    case 'month':
+      return t('By month')
+    case 'year':
+      return t('By year')
+  }
+}
+
+/**
+ * What a bucket is called on the time axis, from its first day as the backend
+ * names it (`2026-10-05`): the day, the week as its first and last day, the
+ * month or the year. Days and weeks carry the year only when asked to — when
+ * the trend runs over more than one, and `10-05` alone would not say which.
+ */
+export function trendBucketName(
+  bucket: OrgUsageTrendBucket,
+  firstDay: string,
+  withYear: boolean
+): string {
+  const day = dayjs(firstDay)
+  const dated = day.format(withYear ? 'YYYY-MM-DD' : 'MM-DD')
+  switch (bucket) {
+    case 'day':
+      return dated
+    case 'week':
+      return `${dated} – ${day.add(6, 'day').format('MM-DD')}`
+    case 'month':
+      return day.format('YYYY-MM')
+    case 'year':
+      return day.format('YYYY')
+  }
+}
+
+/** One point of a trend, as the chart takes it. */
+export type TrendPoint = {
+  /** Where on the time axis: the name of the bucket. */
+  bucket: string
+  /** Which line: the name of the series. */
+  series: string
+  /** What was spent, in quota units. It can be negative: a refund. */
+  quota: number
+}
+
+/** A trend laid out for the chart. */
+export type TrendChart = {
+  /** The names of the lines, in the order the backend sent them. */
+  series: string[]
+  /** Whether each of those lines is the one that stands for the rest. */
+  rest: boolean[]
+  /** Every point of every line, bucket by bucket. */
+  points: TrendPoint[]
+}
+
+/**
+ * Lays a trend out for the chart: names its buckets and its lines, and turns
+ * the lines into points. Two lines never share a name — a department deleted
+ * and created again would — because the chart tells lines apart by it.
+ */
+export function trendChart(t: TFunction, trend: OrgUsageTrend): TrendChart {
+  const years = new Set(trend.buckets.map((day) => day.slice(0, 4)))
+  const buckets = trend.buckets.map((day) =>
+    trendBucketName(trend.bucket, day, years.size > 1)
+  )
+  const taken = new Set<string>()
+  const series = trend.series.map((line) => {
+    const name = line.other ? t('Other') : usageRowName(t, trend.group_by, line)
+    const unique = taken.has(name) ? `${name} (#${line.id})` : name
+    taken.add(unique)
+    return unique
+  })
+  return {
+    series,
+    rest: trend.series.map((line) => line.other),
+    points: buckets.flatMap((bucket, at) =>
+      trend.series.map((line, i) => ({
+        bucket,
+        series: series[i],
+        quota: line.points[at] ?? 0,
+      }))
+    ),
+  }
 }

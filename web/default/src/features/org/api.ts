@@ -24,6 +24,9 @@ import type {
   OrgRoleInput,
   OrgUsageGroupBy,
   OrgUsageReport,
+  OrgUsageTrend,
+  OrgUsageTrendBucket,
+  OrgUsageTrendGroupBy,
 } from './types'
 
 export const orgQueryKeys = {
@@ -42,8 +45,12 @@ export const orgQueryKeys = {
   keyTemplates: () => [...orgQueryKeys.all, 'key-templates'] as const,
   keyModels: (holderId: number) =>
     [...orgQueryKeys.all, 'key-models', holderId] as const,
+  /** Everything read off the usage log: the report and the trend. */
+  usageAll: () => [...orgQueryKeys.all, 'usage'] as const,
   usage: (params: OrgUsageParams) =>
-    [...orgQueryKeys.all, 'usage', params] as const,
+    [...orgQueryKeys.usageAll(), params] as const,
+  usageTrend: (params: OrgUsageTrendParams) =>
+    [...orgQueryKeys.usageAll(), 'trend', params] as const,
   alerts: () => [...orgQueryKeys.all, 'alerts'] as const,
   alertList: (params: OrgAlertsParams) =>
     [...orgQueryKeys.alerts(), params] as const,
@@ -365,6 +372,29 @@ export async function fetchOrgUsage(
 ): Promise<OrgUsageReport> {
   const res = await api.get('/api/org/usage', { params })
   return res.data?.data as OrgUsageReport
+}
+
+/**
+ * What a usage trend is asked for: a usage report's period and department,
+ * the lines to draw, the stretch of time each point stands for, and the IANA
+ * name of the zone whose days those are — the viewer's.
+ */
+export type OrgUsageTrendParams = Omit<OrgUsageParams, 'group_by'> & {
+  group_by: OrgUsageTrendGroupBy
+  bucket: OrgUsageTrendBucket
+  timezone: string
+}
+
+/**
+ * What the organization spent over a period, bucket by bucket, with a series
+ * per department or per model — as much of it as the usage report shows the
+ * caller. Naming a department out of their reach is a 403.
+ */
+export async function fetchOrgUsageTrend(
+  params: OrgUsageTrendParams
+): Promise<OrgUsageTrend> {
+  const res = await api.get('/api/org/usage/trend', { params })
+  return res.data?.data as OrgUsageTrend
 }
 
 /** Which page of the alert list to fetch; `state: 'open'` leaves out the ones dealt with. */

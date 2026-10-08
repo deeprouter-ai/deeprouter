@@ -8,17 +8,27 @@ import {
 } from '@/stores/system-config-store'
 import { formatQuota } from '@/lib/format'
 import {
+  drawsTrend,
   formatSpend,
   periodBounds,
   periodIsValid,
   periodLabel,
+  trendBucketLabel,
+  trendBucketName,
+  trendChart,
   USAGE_GROUPINGS,
+  USAGE_TREND_BUCKETS,
   usageGoneLabel,
   usageGroupLabel,
   usageRowName,
   usageShare,
 } from '../lib/usage'
-import type { OrgUsageReport, OrgUsageRow } from '../types'
+import type {
+  OrgUsageReport,
+  OrgUsageRow,
+  OrgUsageTrend,
+  OrgUsageTrendSeries,
+} from '../types'
 
 // Enterprise Org P9 (meta-repo docs/enterprise-org-prd.md §6): what the usage
 // report asks the backend for and how it reads the answer. The period is the
@@ -245,5 +255,162 @@ describe('the figures of a report', () => {
     } finally {
       setConfig({ currency: { ...DEFAULT_CURRENCY_CONFIG } })
     }
+  })
+})
+
+// Enterprise Org P10 (PRD D46): the same usage drawn over time.
+
+/** A line of a trend with the given fields. */
+function lineOf(over: Partial<OrgUsageTrendSeries> = {}): OrgUsageTrendSeries {
+  return { id: 11, name: 'Sales', other: false, quota: 0, points: [], ...over }
+}
+
+/** A trend by department over the given buckets. */
+function trendOf(over: Partial<OrgUsageTrend> = {}): OrgUsageTrend {
+  return {
+    group_by: 'department',
+    bucket: 'day',
+    scope: 'org',
+    buckets: [],
+    total: 0,
+    series: [],
+    ...over,
+  }
+}
+
+describe('what a trend is drawn by', () => {
+  it('has a line per department or per model, and none per member or key', () => {
+    expect(USAGE_GROUPINGS.filter(drawsTrend)).toEqual(['department', 'model'])
+  })
+
+  it('cuts time into days, weeks, months and years, each with a name of its own', () => {
+    expect(USAGE_TREND_BUCKETS).toEqual(['day', 'week', 'month', 'year'])
+    expect(
+      USAGE_TREND_BUCKETS.map((bucket) => trendBucketLabel(t, bucket))
+    ).toEqual(['By day', 'By week', 'By month', 'By year'])
+  })
+})
+
+describe('what a bucket is called on the time axis', () => {
+  it('is the day, the week from its first day to its last, the month or the year', () => {
+    expect(trendBucketName('day', '2026-10-05', false)).toBe('10-05')
+    expect(trendBucketName('week', '2026-10-05', false)).toBe('10-05 – 10-11')
+    expect(trendBucketName('month', '2026-10-01', false)).toBe('2026-10')
+    expect(trendBucketName('year', '2026-01-01', false)).toBe('2026')
+  })
+
+  it('carries the year on days and weeks when it is asked to', () => {
+    expect(trendBucketName('day', '2026-12-31', true)).toBe('2026-12-31')
+    // The week of the new year ends in the next one.
+    expect(trendBucketName('week', '2026-12-28', true)).toBe(
+      '2026-12-28 – 01-03'
+    )
+    expect(trendBucketName('month', '2026-12-01', true)).toBe('2026-12')
+    expect(trendBucketName('year', '2027-01-01', true)).toBe('2027')
+  })
+
+  it('reads the day as the calendar date it names, in any time zone', () => {
+    // "2026-10-05" is the fifth for the viewer, not midnight UTC of it.
+    for (let day = 1; day <= 28; day++) {
+      const name = `2026-03-${String(day).padStart(2, '0')}`
+      expect(trendBucketName('day', name, true)).toBe(name)
+    }
+  })
+})
+
+describe('a trend laid out for the chart', () => {
+  it('gives every line a point in every bucket, bucket by bucket', () => {
+    const chart = trendChart(
+      t,
+      trendOf({
+        buckets: ['2026-10-05', '2026-10-06'],
+        series: [
+          lineOf({ name: 'Sales', points: [300, 100] }),
+          // Money given back on the second day.
+          lineOf({ id: 12, name: 'Product', points: [500, -40] }),
+        ],
+      })
+    )
+    expect(chart.series).toEqual(['Sales', 'Product'])
+    expect(chart.rest).toEqual([false, false])
+    expect(chart.points).toEqual([
+      { bucket: '10-05', series: 'Sales', quota: 300 },
+      { bucket: '10-05', series: 'Product', quota: 500 },
+      { bucket: '10-06', series: 'Sales', quota: 100 },
+      { bucket: '10-06', series: 'Product', quota: -40 },
+    ])
+  })
+
+  it('names buckets with their year only when the trend runs over more than one', () => {
+    const over = (buckets: string[]) =>
+      trendChart(
+        t,
+        trendOf({ buckets, series: [lineOf({ points: buckets.map(() => 1) })] })
+      ).points.map((point) => point.bucket)
+    expect(over(['2026-12-30', '2026-12-31'])).toEqual(['12-30', '12-31'])
+    expect(over(['2026-12-31', '2027-01-01'])).toEqual([
+      '2026-12-31',
+      '2027-01-01',
+    ])
+  })
+
+  it('has words for the line of the rest and for one the backend could not name', () => {
+    const chart = trendChart(
+      t,
+      trendOf({
+        buckets: ['2026-10-05'],
+        series: [
+          lineOf({ id: 0, name: '', points: [5] }),
+          lineOf({ id: 0, name: '', other: true, points: [2] }),
+        ],
+      })
+    )
+    expect(chart.series).toEqual(['No department', 'Other'])
+    expect(chart.rest).toEqual([false, true])
+    expect(
+      trendChart(
+        t,
+        trendOf({
+          group_by: 'model',
+          buckets: ['2026-10-05'],
+          series: [lineOf({ id: 0, name: '', points: [5] })],
+        })
+      ).series
+    ).toEqual(['Unknown model'])
+  })
+
+  it('never gives two lines one name', () => {
+    // A department that was deleted and created again; and one called what
+    // the line of the rest is called.
+    const chart = trendChart(
+      t,
+      trendOf({
+        buckets: ['2026-10-05'],
+        series: [
+          lineOf({ id: 11, name: 'Sales', points: [3] }),
+          lineOf({ id: 14, name: 'Sales', points: [2] }),
+          lineOf({ id: 15, name: 'Other', points: [1] }),
+          lineOf({ id: 0, name: '', other: true, points: [1] }),
+        ],
+      })
+    )
+    expect(chart.series).toEqual([
+      'Sales',
+      'Sales (#14)',
+      'Other',
+      'Other (#0)',
+    ])
+    expect(new Set(chart.points.map((point) => point.series)).size).toBe(4)
+  })
+
+  it('draws nothing where the backend sent no point', () => {
+    const chart = trendChart(
+      t,
+      trendOf({
+        buckets: ['2026-10-05', '2026-10-06'],
+        series: [lineOf({ points: [7] })],
+      })
+    )
+    expect(chart.points.map((point) => point.quota)).toEqual([7, 0])
   })
 })

@@ -1,7 +1,11 @@
 // Copyright (C) 2026 DeepRouter
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { BarChart3, Bot, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatNumber } from '@/lib/format'
@@ -22,6 +26,7 @@ import { EmptyState } from '@/components/empty-state'
 import { ErrorState } from '@/components/error-state'
 import { fetchOrgUsage, orgQueryKeys, type OrgUsageParams } from '../api'
 import {
+  drawsTrend,
   formatSpend,
   type OrgPeriod,
   periodBounds,
@@ -40,6 +45,7 @@ import type {
 } from '../types'
 import { OrgSelect } from './org-select'
 import { PeriodSelect } from './period-select'
+import { UsageTrend } from './usage-trend'
 
 /** How many rows a long report shows before it is asked for the rest. */
 const ROWS_SHOWN = 100
@@ -169,6 +175,7 @@ function UsageTable({ report, limit }: UsageTableProps) {
  */
 export function UsageReport({ membership }: { membership: OrgMembership }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   // A manager of one department would get a single row by department.
   const [groupBy, setGroupBy] = useState<OrgUsageGroupBy>(
     membership.role_scope === 'org' ? 'department' : 'member'
@@ -252,7 +259,12 @@ export function UsageReport({ membership }: { membership: OrgMembership }) {
             size='icon'
             aria-label={t('Refresh')}
             disabled={query.isFetching}
-            onClick={() => void query.refetch()}
+            // The report and the chart above it are asked for again together.
+            onClick={() =>
+              void queryClient.invalidateQueries({
+                queryKey: orgQueryKeys.usageAll(),
+              })
+            }
           >
             <RefreshCw
               aria-hidden='true'
@@ -295,6 +307,18 @@ export function UsageReport({ membership }: { membership: OrgMembership }) {
             />
           ) : (
             <>
+              {/* Departments and models are drawn over time as well. */}
+              {drawsTrend(groupBy) && (
+                <UsageTrend
+                  groupBy={groupBy}
+                  period={period}
+                  departmentId={
+                    chosenDepartmentId !== EVERY_DEPARTMENT
+                      ? chosenDepartmentId
+                      : undefined
+                  }
+                />
+              )}
               <UsageTable
                 report={report}
                 limit={showsAll ? report.rows.length : ROWS_SHOWN}

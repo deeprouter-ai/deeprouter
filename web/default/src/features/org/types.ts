@@ -272,6 +272,44 @@ export type OrgUsageReport = {
   rows: OrgUsageRow[]
 }
 
+/** What a usage trend draws its lines by: departments, or models. */
+export type OrgUsageTrendGroupBy = Extract<
+  OrgUsageGroupBy,
+  'department' | 'model'
+>
+
+/** The stretch of time each point of a usage trend stands for. */
+export type OrgUsageTrendBucket = 'day' | 'week' | 'month' | 'year'
+
+/** One line of a usage trend: what a department or a model spent over time. */
+export type OrgUsageTrendSeries = {
+  /** The department; 0 for a model, which has only a name. */
+  id: number
+  name: string
+  /** The line that stands for everything beyond the ones drawn. */
+  other: boolean
+  /** What it spent over the whole period, in quota units, refunds taken off. */
+  quota: number
+  /** What it spent in each bucket, in the order of the trend's `buckets`. */
+  points: number[]
+}
+
+/**
+ * What `GET /api/org/usage/trend` answers: the spending of a period over
+ * time, as far as the caller may see it. `buckets` names each stretch of time
+ * by its first day on the viewer's calendar, as `2026-10-05`, the oldest
+ * first; the series add up to `total`, which is what the usage report says
+ * for the same period.
+ */
+export type OrgUsageTrend = {
+  group_by: OrgUsageTrendGroupBy
+  bucket: OrgUsageTrendBucket
+  scope: OrgRoleScope
+  buckets: string[]
+  total: number
+  series: OrgUsageTrendSeries[]
+}
+
 /** One page of a list the backend pages: alerts, audit records. */
 export type OrgPage<T> = {
   page: number

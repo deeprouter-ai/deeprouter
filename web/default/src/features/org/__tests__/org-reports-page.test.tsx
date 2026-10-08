@@ -12,7 +12,9 @@ import {
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import dayjs from '@/lib/dayjs'
+import { viewerTimeZone } from '../lib/alerts'
 import type { OrgReportsSection } from '../lib/reports'
+import type { TrendPoint } from '../lib/usage'
 import { OrgReportsPage } from '../reports'
 import type {
   OrgAlert,
@@ -21,6 +23,7 @@ import type {
   OrgMembership,
   OrgUsageReport,
   OrgUsageRow,
+  OrgUsageTrend,
 } from '../types'
 import { membershipOf } from './fixtures'
 
@@ -33,6 +36,7 @@ import { membershipOf } from './fixtures'
 const api = vi.hoisted(() => ({
   fetchOrgMembership: vi.fn(),
   fetchOrgUsage: vi.fn(),
+  fetchOrgUsageTrend: vi.fn(),
   fetchOrgAlerts: vi.fn(),
   handleOrgAlert: vi.fn(),
   fetchOrgAlertSettings: vi.fn(),
@@ -40,12 +44,25 @@ const api = vi.hoisted(() => ({
   fetchOrgAuditLogs: vi.fn(),
 }))
 const mockToast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+/** What the chart was last given to draw; the real one needs a canvas. */
+const chart = vi.hoisted(() => ({
+  spec: null as Record<string, unknown> | null,
+}))
 
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   ...api,
 }))
 vi.mock('sonner', () => ({ toast: mockToast }))
+vi.mock('@visactor/react-vchart', () => ({
+  VChart: ({ spec }: { spec: Record<string, unknown> }) => {
+    chart.spec = spec
+    return <div data-testid='chart' />
+  },
+}))
+vi.mock('@/lib/use-chart-theme', () => ({
+  useChartTheme: () => ({ resolvedTheme: 'light', themeReady: true }),
+}))
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>
     selector({ auth: { user: { id: 1 } } }),
@@ -182,6 +199,65 @@ const REPORTS: Record<string, OrgUsageReport> = {
   member: byMember,
   key: byKey,
   model: byModel,
+}
+
+/** The same usage over three days: a line per department… */
+const trendByDepartment: OrgUsageTrend = {
+  group_by: 'department',
+  bucket: 'day',
+  scope: 'org',
+  buckets: ['2026-10-05', '2026-10-06', '2026-10-07'],
+  total: 5000000,
+  series: [
+    {
+      id: 11,
+      name: 'Sales',
+      other: false,
+      quota: 3000000,
+      points: [1000000, 500000, 1500000],
+    },
+    {
+      id: 12,
+      name: 'Product',
+      other: false,
+      quota: 1500000,
+      points: [0, 1500000, 0],
+    },
+    {
+      id: 10,
+      name: 'General',
+      other: false,
+      quota: 500000,
+      points: [500000, 0, 0],
+    },
+  ],
+}
+
+/** …and per model, with the small ones summed into one line. */
+const trendByModel: OrgUsageTrend = {
+  ...trendByDepartment,
+  group_by: 'model',
+  series: [
+    {
+      id: 0,
+      name: 'claude-sonnet-5',
+      other: false,
+      quota: 4000000,
+      points: [1500000, 2000000, 500000],
+    },
+    {
+      id: 0,
+      name: '',
+      other: true,
+      quota: 1000000,
+      points: [0, 0, 1000000],
+    },
+  ],
+}
+
+const TRENDS: Record<string, OrgUsageTrend> = {
+  department: trendByDepartment,
+  model: trendByModel,
 }
 
 /** An alert on sally's key, as `GET /api/org/alerts` lists one. */
@@ -344,10 +420,41 @@ function daysAgo(days: number): number {
   return dayjs().startOf('day').subtract(days, 'day').unix()
 }
 
+/** What the chart is drawing: its points, and its lines in order. */
+function drawn(): { points: TrendPoint[]; lines: string[] } {
+  const spec = chart.spec as {
+    data: { values: TrendPoint[] }[]
+    color?: { domain: string[] }
+  } | null
+  if (!spec) throw new Error('no chart was drawn')
+  const points = spec.data[0].values
+  return { points, lines: [...new Set(points.map((point) => point.series))] }
+}
+
+/** The choices of the chart's time unit, with the one that is on. */
+function timeUnits(): { names: string[]; on: string } {
+  const tabs = within(
+    screen.getByRole('tablist', { name: 'Time unit' })
+  ).getAllByRole('tab')
+  return {
+    names: tabs.map((tab) => tab.textContent ?? ''),
+    on:
+      tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')
+        ?.textContent ?? '',
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  chart.spec = null
   api.fetchOrgUsage.mockImplementation(
     async (params: { group_by: string }) => REPORTS[params.group_by]
+  )
+  api.fetchOrgUsageTrend.mockImplementation(
+    async (params: { group_by: string; bucket: string }) => ({
+      ...TRENDS[params.group_by],
+      bucket: params.bucket,
+    })
   )
   api.fetchOrgAlerts.mockResolvedValue(alertPage([spike, quotaWarning]))
   api.handleOrgAlert.mockResolvedValue({ success: true })
@@ -580,13 +687,16 @@ describe('the usage report', () => {
           start_timestamp: local(10),
         })
       )
-      // A last day before the first: the page says so and asks for nothing.
+      // A last day before the first: the page says so and asks for nothing,
+      // neither the report nor the chart above it.
       const asked = api.fetchOrgUsage.mock.calls.length
+      const drawnTimes = api.fetchOrgUsageTrend.mock.calls.length
       await pick(1, 5)
       expect(
         await within(dates).findByText('The last day is before the first.')
       ).toBeVisible()
       expect(api.fetchOrgUsage.mock.calls.length).toBe(asked)
+      expect(api.fetchOrgUsageTrend.mock.calls.length).toBe(drawnTimes)
 
       await pick(1, 12)
       await waitFor(() =>
@@ -682,6 +792,271 @@ describe('the usage report', () => {
     expect(screen.getAllByRole('row')).toHaveLength(131)
     expect(screen.getByText('member-130')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull()
+  })
+})
+
+// Enterprise Org P10 (PRD D46): the usage report drawn over time. Both
+// acceptance items of the card are answered by the backend — which lines, and
+// whose usage; these pin what the page asks it for and that it draws the answer.
+describe('the usage trend', () => {
+  it('draws the report over time above the table: by day, a line per department, in money', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    // The report's own question, cut by day on the viewer's calendar.
+    expect(lastCall(api.fetchOrgUsageTrend)).toEqual({
+      group_by: 'department',
+      bucket: 'day',
+      timezone: viewerTimeZone(),
+      start_timestamp: daysAgo(29),
+    })
+    expect(
+      screen.getByRole('heading', { name: 'Spend over time' })
+    ).toBeInTheDocument()
+    expect(timeUnits()).toEqual({
+      names: ['By day', 'By week', 'By month', 'By year'],
+      on: 'By day',
+    })
+    expect(
+      screen.getByRole('img', {
+        name: 'Spend over time, a line per department',
+      })
+    ).toBeInTheDocument()
+    // It comes before the table it is the other view of.
+    const table = screen.getByRole('table')
+    expect(
+      screen.getByTestId('chart').compareDocumentPosition(table) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+
+    // A line per department with a point per day, the biggest spender first.
+    expect(drawn().lines).toEqual(['Sales', 'Product', 'General'])
+    expect(drawn().points).toEqual([
+      { bucket: '10-05', series: 'Sales', quota: 1000000 },
+      { bucket: '10-05', series: 'Product', quota: 0 },
+      { bucket: '10-05', series: 'General', quota: 500000 },
+      { bucket: '10-06', series: 'Sales', quota: 500000 },
+      { bucket: '10-06', series: 'Product', quota: 1500000 },
+      { bucket: '10-06', series: 'General', quota: 0 },
+      { bucket: '10-07', series: 'Sales', quota: 1500000 },
+      { bucket: '10-07', series: 'Product', quota: 0 },
+      { bucket: '10-07', series: 'General', quota: 0 },
+    ])
+    // Time runs along the bottom, and what was spent is read in money — on
+    // the axis and when a point is pointed at — never shortened.
+    const spec = chart.spec as {
+      type: string
+      xField: string
+      yField: string
+      seriesField: string
+      axes: { label: { formatMethod?: (value: number) => string } }[]
+      tooltip: {
+        mark: { content: { value: (point: TrendPoint) => string }[] }
+        dimension: { content: { value: (point: TrendPoint) => string }[] }
+      }
+    }
+    expect(spec).toMatchObject({
+      type: 'line',
+      xField: 'bucket',
+      yField: 'quota',
+      seriesField: 'series',
+    })
+    expect(spec.axes[1].label.formatMethod?.(1500000)).toBe('$3')
+    const pointed = { bucket: '10-05', series: 'Sales', quota: 6172750000 }
+    expect(spec.tooltip.mark.content[0].value(pointed)).toBe('$12,345.5')
+    expect(spec.tooltip.dimension.content[0].value(pointed)).toBe('$12,345.5')
+  })
+
+  it('is drawn by model too, with the line of the rest named', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    await userEvent.click(screen.getByRole('tab', { name: 'Model' }))
+    await waitFor(() =>
+      expect(lastCall(api.fetchOrgUsageTrend)).toMatchObject({
+        group_by: 'model',
+        bucket: 'day',
+      })
+    )
+    await waitFor(() =>
+      expect(drawn().lines).toEqual(['claude-sonnet-5', 'Other'])
+    )
+    expect(
+      screen.getByRole('img', { name: 'Spend over time, a line per model' })
+    ).toBeInTheDocument()
+  })
+
+  it('is not drawn by member or by key', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    const asked = api.fetchOrgUsageTrend.mock.calls.length
+    for (const [grouping, row] of [
+      ['Member', 'CI Pipeline'],
+      ['Key', 'Claude Code'],
+    ]) {
+      await userEvent.click(screen.getByRole('tab', { name: grouping }))
+      await screen.findByText(row)
+      expect(screen.queryByTestId('chart'), grouping).toBeNull()
+      expect(
+        screen.queryByRole('heading', { name: 'Spend over time' }),
+        grouping
+      ).toBeNull()
+    }
+    expect(api.fetchOrgUsageTrend.mock.calls.length).toBe(asked)
+    // Back on departments it is there again.
+    await userEvent.click(screen.getByRole('tab', { name: 'Department' }))
+    await screen.findByTestId('chart')
+  })
+
+  it('starts a department-scoped viewer without one, on members, and draws theirs when asked', async () => {
+    api.fetchOrgUsage.mockImplementation(
+      async (params: { group_by: string }) => ({
+        ...REPORTS[params.group_by],
+        scope: 'dept',
+        departments: [{ id: 11, name: 'Sales' }],
+      })
+    )
+    await renderPage(membershipOf('manager'))
+    await screen.findByText('sally')
+    expect(screen.queryByTestId('chart')).toBeNull()
+    expect(api.fetchOrgUsageTrend).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('tab', { name: 'Model' }))
+    await screen.findByTestId('chart')
+    // What they are sent is the backend's to decide; the page names no
+    // department for them.
+    expect(lastCall(api.fetchOrgUsageTrend)).toEqual({
+      group_by: 'model',
+      bucket: 'day',
+      timezone: viewerTimeZone(),
+      start_timestamp: daysAgo(29),
+    })
+  })
+
+  it('cuts time by the unit that is chosen', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    for (const [name, bucket] of [
+      ['By week', 'week'],
+      ['By month', 'month'],
+      ['By year', 'year'],
+      ['By day', 'day'],
+    ]) {
+      await userEvent.click(screen.getByRole('tab', { name }))
+      await waitFor(() =>
+        expect(lastCall(api.fetchOrgUsageTrend)).toMatchObject({
+          group_by: 'department',
+          bucket,
+        })
+      )
+      expect(timeUnits().on).toBe(name)
+    }
+    // Choosing a unit is the chart's business: the report was not asked again.
+    expect(api.fetchOrgUsage).toHaveBeenCalledTimes(1)
+  })
+
+  it('names its buckets by the unit they are', async () => {
+    api.fetchOrgUsageTrend.mockImplementation(
+      async (params: { bucket: string }) => ({
+        ...trendByDepartment,
+        bucket: params.bucket,
+        buckets: ['2026-10-05'],
+        series: [{ ...trendByDepartment.series[0], points: [3000000] }],
+      })
+    )
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    expect(drawn().points.map((point) => point.bucket)).toEqual(['10-05'])
+    await userEvent.click(screen.getByRole('tab', { name: 'By week' }))
+    await waitFor(() =>
+      expect(drawn().points.map((point) => point.bucket)).toEqual([
+        '10-05 – 10-11',
+      ])
+    )
+  })
+
+  it('follows the period and the department of the report', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+
+    await choose('Period', 'Last calendar month')
+    const lastMonth = dayjs().startOf('month').subtract(1, 'month')
+    await waitFor(() =>
+      expect(lastCall(api.fetchOrgUsageTrend)).toEqual({
+        group_by: 'department',
+        bucket: 'day',
+        timezone: viewerTimeZone(),
+        start_timestamp: lastMonth.unix(),
+        end_timestamp: lastMonth.endOf('month').unix(),
+      })
+    )
+    await choose('Department', 'Product')
+    await waitFor(() =>
+      expect(lastCall(api.fetchOrgUsageTrend)).toMatchObject({
+        department_id: 12,
+        start_timestamp: lastMonth.unix(),
+      })
+    )
+    // Asked for the same things as the report, each time.
+    expect(lastCall(api.fetchOrgUsage)).toEqual({
+      group_by: 'department',
+      start_timestamp: lastMonth.unix(),
+      end_timestamp: lastMonth.endOf('month').unix(),
+      department_id: 12,
+    })
+    await choose('Department', 'All departments')
+    await waitFor(() =>
+      expect(lastCall(api.fetchOrgUsageTrend)).not.toHaveProperty(
+        'department_id'
+      )
+    )
+  })
+
+  it('is asked for again together with the report when that is refreshed', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    const reports = api.fetchOrgUsage.mock.calls.length
+    const trends = api.fetchOrgUsageTrend.mock.calls.length
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => {
+      expect(api.fetchOrgUsage.mock.calls.length).toBe(reports + 1)
+      expect(api.fetchOrgUsageTrend.mock.calls.length).toBe(trends + 1)
+    })
+  })
+
+  it('is left out when nothing was used', async () => {
+    api.fetchOrgUsage.mockResolvedValue({
+      ...byDepartment,
+      total: { requests: 0, quota: 0 },
+      rows: [],
+    })
+    await renderPage(membershipOf('owner'))
+    await screen.findByText('No usage in this period')
+    expect(
+      screen.queryByRole('heading', { name: 'Spend over time' })
+    ).toBeNull()
+    expect(api.fetchOrgUsageTrend).not.toHaveBeenCalled()
+  })
+
+  it('offers a retry of its own when it cannot be loaded, and leaves the table standing', async () => {
+    api.fetchOrgUsageTrend.mockRejectedValueOnce(new Error('503'))
+    await renderPage(membershipOf('owner'))
+    await screen.findByText('Could not load the trend.')
+    expect(screen.queryByTestId('chart')).toBeNull()
+    expect(rowText(rowOf('Sales'))).toContain('$6')
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }))
+    await screen.findByTestId('chart')
+    expect(screen.queryByText('Could not load the trend.')).toBeNull()
+  })
+
+  it('says so when the period turns out to hold no usage to draw', async () => {
+    api.fetchOrgUsageTrend.mockResolvedValue({
+      ...trendByDepartment,
+      buckets: [],
+      total: 0,
+      series: [],
+    })
+    await renderPage(membershipOf('owner'))
+    await screen.findByText('Sales')
+    await screen.findByText('No usage in this period')
+    expect(screen.queryByTestId('chart')).toBeNull()
   })
 })
 
