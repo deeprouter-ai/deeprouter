@@ -6,6 +6,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	orgmodel "github.com/QuantumNous/new-api/internal/org/model"
 	platformmodel "github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -44,6 +45,37 @@ func joinAllThreeWays(t *testing.T, db *gorm.DB) []int {
 	bot, err := CreateServiceAccount(db, owner, "CI", 0)
 	require.NoError(t, err)
 	return []int{acme.owner.Id, newcomer.Id, bot.Id}
+}
+
+// TestMemberGroup_ShipsSwitchedOff guards the default that makes deploying this
+// harmless. deeprouter's main deploys to production on merge, and with the
+// switch on by default that deploy would start moving every organization
+// account at once — before anyone has given the group its channels, so their
+// keys would answer 503. The option keys are pinned too: deploy/settings.env
+// and the operator guide name them, and a renamed field would silently stop
+// the switch from being read.
+func TestMemberGroup_ShipsSwitchedOff(t *testing.T) {
+	require.Equal(t, MemberGroupSetting{Group: "enterprise", Enabled: false}, memberGroupSetting)
+	require.Empty(t, memberGroupToAssign())
+
+	exported := config.GlobalConfig.ExportAllConfigs()
+	require.Equal(t, "enterprise", exported["org_setting.member_group"])
+	require.Equal(t, "false", exported["org_setting.member_group_enabled"])
+}
+
+// TestMemberGroup_TheOptionKeysReachTheSetting is the path an operator takes:
+// the options table is loaded into the registered setting by the same call the
+// gateway makes at start-up and on every sync.
+func TestMemberGroup_TheOptionKeysReachTheSetting(t *testing.T) {
+	saved := memberGroupSetting
+	t.Cleanup(func() { memberGroupSetting = saved })
+
+	require.NoError(t, config.GlobalConfig.LoadFromDB(map[string]string{
+		"org_setting.member_group":         "vip",
+		"org_setting.member_group_enabled": "true",
+	}))
+	require.Equal(t, MemberGroupSetting{Group: "vip", Enabled: true}, GetMemberGroupSetting())
+	require.Equal(t, "vip", memberGroupToAssign())
 }
 
 func TestMemberGroup_SwitchedOffTheEntryPointsLeaveDefault(t *testing.T) {
