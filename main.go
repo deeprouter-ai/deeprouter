@@ -123,6 +123,10 @@ func main() {
 	// DeepRouter Enterprise Org: warnings and anomaly alerts (service/org_alerts.go)
 	service.StartOrgAlertTask()
 
+	// DeepRouter Enterprise Org: move organization accounts into the member
+	// group once that setting is on (service/org_member_group.go)
+	service.StartOrgMemberGroupTask()
+
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
 		a := relay.GetTaskAdaptor(platform)
