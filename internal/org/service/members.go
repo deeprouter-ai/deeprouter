@@ -423,10 +423,13 @@ func CreateServiceAccount(db *gorm.DB, actor *Actor, rawName string, departmentI
 		// binding and no access token: there is nothing to sign in with.
 		// Usernames are unique across the whole platform, so the name the
 		// company chose goes into display_name and the username is generated.
+		// Group is the platform group from org_setting.member_group; when
+		// that is off it is "", and GORM leaves the column to its default.
 		account := platformmodel.User{
 			Username:     "svc-" + strings.ToLower(common.GetRandomString(12)),
 			DisplayName:  name,
 			AffCode:      common.GetRandomString(16),
+			Group:        memberGroupToAssign(),
 			OrgId:        actor.OrgId,
 			OrgRoleId:    staffRoleID,
 			DepartmentId: resolvedDepartmentID,

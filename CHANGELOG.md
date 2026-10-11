@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-11
+
+- **企业组织的账号可以放进单独的平台分组**（PRD：meta-repo `docs/enterprise-org-prd.md` P11、D49；没有新的表或列）：
+  - **原来**：建组织的人、受邀注册的成员、服务账号，平台分组（`users.group`）一律是 `default`。组织 Key 不带分组、走持有人的分组，所以企业员工和普通用户走同一批渠道、同一个倍率，"特殊可用分组规则"也管不到他们。
+  - **现在**：两项新的平台设置——`org_setting.member_group`（默认 `enterprise`）和 `org_setting.member_group_enabled`（默认 **关**）。打开后，三条进组织的路径（`CreateForOwnerTx`、`JoinByInviteTx`、`CreateServiceAccount`）都会把账号写进这个分组；后台任务（`service/org_member_group.go`，主节点，启动时一次、之后每 5 分钟）把已经在组织里、还在 `default` 的账号移过去，并清掉用户缓存。
+  - **默认关，所以这次部署不改变任何行为。** 打开前，`enterprise` 分组要先挂上和 `default` 一样的渠道，否则成员的 Key 会因为没有渠道报 503。
+  - 只动还在 `default` 的组织账号：管理员手动设成别的分组的、个人账号（`org_id = 0`）、已被移出组织的，都不动。分组名为空、不在分组倍率表里、或者就是 `default` 时，什么都不做。
+  - 设置没有页面：用 `PUT /api/option/`，或在 meta-repo 的 `deploy/settings.env` 里写 `org_setting.member_group_enabled=true` 后运行 `./deploy/seed-settings.sh`。
+  - 不在启动时迁移：配置没有变更回调，组织迁移又在读设置之前跑，所以存量由定时任务对齐，它同时兜住任何漏掉的账号。
+
 ## 2026-10-08
 
 - **用户可以自己改显示名**（PRD：meta-repo `docs/enterprise-org-prd.md` D48；并进 P3）：

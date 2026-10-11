@@ -285,16 +285,17 @@ func JoinByInviteTx(tx *gorm.DB, userID int, code string, ip string) error {
 	if err != nil {
 		return err
 	}
-	// 🔴 Only the org columns are written — never users.role. The org_id = 0
-	// guard keeps an account that already belongs somewhere where it is
-	// (PRD D20: one person, one organization).
+	// 🔴 Only the org columns are written — never users.role — plus the
+	// platform group when org_setting.member_group is switched on
+	// (member_group.go). The org_id = 0 guard keeps an account that already
+	// belongs somewhere where it is (PRD D20: one person, one organization).
 	result := tx.Model(&platformmodel.User{}).
 		Where("id = ? AND org_id = ?", userID, 0).
-		Updates(map[string]any{
+		Updates(withMemberGroup(map[string]any{
 			"org_id":        invite.OrgId,
 			"role_id":       invite.RoleId,
 			"department_id": invite.DepartmentId,
-		})
+		}))
 	if result.Error != nil {
 		return result.Error
 	}
