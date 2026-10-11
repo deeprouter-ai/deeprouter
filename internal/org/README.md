@@ -283,6 +283,45 @@ serves it like any other key; what is different is who may touch it.
 - **Unfreezing is `key.freeze` too**, recorded as `key.unfreeze`. It refuses a
   key that is past its expiry or has no quota left: change that first.
 
+## The member group
+
+An organization decides who pays and who may do what; it does not decide
+which channels its members' requests reach. That is the platform group,
+`users.group`, and an organization key carries no group of its own — it
+follows its holder's (`controller/org_keys.go`). So without this, every
+member sits in `default` with personal users, and a special-usable-group rule
+written for `enterprise` never reaches them (meta-repo PRD D49).
+
+Two platform settings, registered as `org_setting` in `member_group.go`:
+
+| Option key | Default | |
+|---|---|---|
+| `org_setting.member_group` | `enterprise` | the group organization accounts go into |
+| `org_setting.member_group_enabled` | `false` | nothing moves until a platform admin turns this on |
+
+Switched on, it acts in two places:
+
+- **The three ways in** — `CreateForOwnerTx`, `JoinByInviteTx`,
+  `CreateServiceAccount` — write the group with the org columns
+  (`withMemberGroup`, `memberGroupToAssign`). This is the one column outside
+  the org ones this package writes on joining; `users.role` is still never
+  touched (rule 1).
+- **The accounts already inside** are moved by `ApplyMemberGroup`, which
+  `service/org_member_group.go` runs on the master node at start-up and every
+  5 minutes. There is no single moment to migrate at — the config manager has
+  no change hook, and `model.Migrate` runs before options load — and a
+  repeated pass also catches anything an entry point ever misses.
+
+It only moves organization accounts still in `default`: one an admin put in
+another group by hand stays there, personal accounts (`org_id = 0`) and
+removed members are never touched (rule 2). An empty name, a name not in the
+group ratios, or `default` itself means no move at all — an account in a group
+with no ratio would be priced and routed against nothing.
+
+⚠️ Before switching it on, the target group needs the same channels as
+`default`: an organization key was created against the models its holder's
+group could reach, and a model with no channel in the new group answers 503.
+
 ## Leaving the organization
 
 There is one way out: `RemoveMember`, for a person and for a service account

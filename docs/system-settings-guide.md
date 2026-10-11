@@ -158,6 +158,15 @@
 ```
 含义：VIP 享 8 折、企业 6 折；充值倍率略低于使用倍率以鼓励充值。
 
+**企业组织成员所在分组**（没有页面，2026-10-11 起）：企业组织的账号默认和普通用户一样在 `default`。两项设置让它们进一个单独的分组：
+
+| 选项键 | 默认值 | 作用 |
+|---|---|---|
+| `org_setting.member_group` | `enterprise` | 组织账号要进的分组，必须是上面分组倍率里有的名字 |
+| `org_setting.member_group_enabled` | `false` | 打开后，新进组织的账号直接进该分组；已经在组织里、还在 `default` 的，5 分钟内由后台任务移过去 |
+
+推荐：保持关闭，直到该分组挂好和 `default` 一样的渠道（否则成员的 Key 会报 503）。打开方式：`PUT /api/option/`（root），或在 `deploy/settings.env` 写 `org_setting.member_group_enabled=true` 后运行 `./deploy/seed-settings.sh`。移组后按该分组的倍率计价。
+
 ### 4.5 支付网关 Payment（/system-settings/billing/payment）
 **作用**：集成支付，支持 **易支付(Epay) / Stripe / Creem / Waffo / Airwallex**。
 **共享字段**：充值回调地址、最小充值、每美元价格 Price、支付方式列表、充值额度选项、充值折扣。
