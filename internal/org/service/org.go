@@ -74,12 +74,13 @@ func CreateForOwnerTx(tx *gorm.DB, userID int, rawName string, lang string) (*or
 	if err != nil {
 		return nil, err
 	}
-	// Only the org columns are written — never users.role. The org_id = 0
-	// guard is repeated here so that losing a race with another sign-up for
-	// the same user cannot move them between organizations.
+	// Only the org columns are written — never users.role — plus the platform
+	// group when org_setting.member_group is switched on (member_group.go).
+	// The org_id = 0 guard is repeated here so that losing a race with another
+	// sign-up for the same user cannot move them between organizations.
 	result := tx.Model(&platformmodel.User{}).
 		Where("id = ? AND org_id = ?", userID, 0).
-		Updates(map[string]any{"org_id": org.Id, "role_id": ownerRoleID, "department_id": defaultDepartmentID})
+		Updates(withMemberGroup(map[string]any{"org_id": org.Id, "role_id": ownerRoleID, "department_id": defaultDepartmentID}))
 	if result.Error != nil {
 		return nil, result.Error
 	}

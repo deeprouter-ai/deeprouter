@@ -50,3 +50,14 @@ func memberGroupToAssign() string {
 	}
 	return group
 }
+
+// withMemberGroup adds the platform group to the columns an entry point writes
+// when an account joins an organization, if one is to be assigned. The map is
+// returned so the call reads in place: Updates(withMemberGroup(map[...]{...})).
+// "group" is a reserved word; GORM quotes map keys in SET on every engine.
+func withMemberGroup(columns map[string]any) map[string]any {
+	if group := memberGroupToAssign(); group != "" {
+		columns["group"] = group
+	}
+	return columns
+}
