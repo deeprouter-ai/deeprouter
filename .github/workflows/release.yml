@@ -16,8 +16,27 @@ on:
 jobs:
   linux:
     name: Linux Release
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -51,8 +70,10 @@ jobs:
           go-version: '>=1.25.1'
       - name: Build Backend (amd64)
         run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-x86-64-linux-gnu
           go mod download
-          go build -ldflags "-s -w -X 'new-api/common.Version=$VERSION' -extldflags '-static'" -o new-api-$VERSION
+          CC=x86_64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X 'new-api/common.Version=$VERSION' -extldflags '-static'" -o new-api-$VERSION
       - name: Build Backend (arm64)
         run: |
           sudo apt-get update
@@ -73,8 +94,27 @@ jobs:
 
   macos:
     name: macOS Release
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_MACOS_RUNNER_LABELS) }}
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -126,11 +166,30 @@ jobs:
 
   windows:
     name: Windows Release
-    runs-on: windows-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     defaults:
       run:
         shell: bash
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -165,7 +224,9 @@ jobs:
       - name: Build Backend
         run: |
           go mod download
-          go build -ldflags "-s -w -X 'new-api/common.Version=$VERSION'" -o new-api-$VERSION.exe
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+          CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X 'new-api/common.Version=$VERSION'" -o new-api-$VERSION.exe
       - name: Generate checksums
         run: sha256sum new-api-*.exe > checksums-windows.txt
 

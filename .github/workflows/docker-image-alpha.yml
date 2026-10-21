@@ -23,12 +23,31 @@ jobs:
           - arch: arm64
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     permissions:
       packages: write
       contents: read
       id-token: write
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Check out (shallow)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -45,6 +64,8 @@ jobs:
 
       - name: Normalize GHCR repository
         run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
@@ -108,11 +129,30 @@ jobs:
   create_manifests:
     name: Create multi-arch manifests (Docker Hub + GHCR)
     needs: [build_single_arch]
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     permissions:
       packages: write
       contents: read
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Check out (shallow)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:

@@ -113,12 +113,31 @@ jobs:
           if-no-files-found: error
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     # A pkg failure must not block production deploys — the endpoint just
     # stays dark and the page falls back to the .sh.
     needs: [pkg]
     if: always()
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - uses: actions/checkout@v4
 
       - name: Stage the signed macOS installer into the build context
@@ -145,7 +164,7 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build \
+          docker build --platform linux/amd64 \
             -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
             -t "$REGISTRY/$ECR_REPOSITORY:latest" \
             .
@@ -168,7 +187,7 @@ jobs:
           # We only roll new-api, so supply BOTH image vars inline (a valid
           # smart-router ref is enough — it is never pulled/recreated here) and
           # pass --no-deps so only new-api is touched.
-          ROLL='set -e; cd /opt/deeprouter; REG=180294203030.dkr.ecr.ap-southeast-2.amazonaws.com; aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin $REG; export DEEPROUTER_IMAGE=$REG/deeprouter:latest; export SMART_ROUTER_IMAGE=$REG/smart-router:latest; docker compose -f docker-compose.prod.yml pull new-api; docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate new-api; docker image prune -af || true'
+          ROLL='set -e; cd /opt/deeprouter; REG=180294203030.dkr.ecr.ap-southeast-2.amazonaws.com; aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin $REG; export DEEPROUTER_IMAGE=$REG/deeprouter:latest; export SMART_ROUTER_IMAGE=$REG/smart-router:latest; docker compose -f docker-compose.prod.yml pull new-api; docker compose -f docker-compose.prod.yml up --no-build -d --no-deps --force-recreate new-api; docker image prune -af || true'
           CMD_ID=$(aws ssm send-command \
             --targets "Key=tag:Name,Values=$INSTANCE_TAG" \
             --document-name "AWS-RunShellScript" \

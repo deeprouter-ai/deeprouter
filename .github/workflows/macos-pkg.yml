@@ -28,8 +28,27 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - uses: actions/checkout@v4
 
       # Secrets are not readable inside `if:`, so the presence check happens in

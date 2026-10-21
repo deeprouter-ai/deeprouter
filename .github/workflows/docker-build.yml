@@ -25,7 +25,7 @@ jobs:
           - arch: arm64
             platform: linux/arm64
             runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     outputs:
       tag: ${{ steps.version.outputs.tag }}
 
@@ -35,6 +35,25 @@ jobs:
       id-token: write
 
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Check out
         uses: actions/checkout@v4
         with:
@@ -57,6 +76,8 @@ jobs:
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "${TAG}" > VERSION
           echo "Building tag: ${TAG} for ${{ matrix.arch }}"
+
+      - uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -106,10 +127,29 @@ jobs:
   create_manifests:
     name: Create multi-arch manifests
     needs: [build_single_arch]
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.SERVICE_CI_RUNNER_LABELS) }}
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
 
     steps:
+      - name: Require independent Mac CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_ACTIONS:-}" = true
+          case "${RUNNER_NAME:-}" in lightman-mac-studio-*) ;; *) echo 'Service builds require the existing independent Mac CI' >&2; exit 1 ;; esac
+          case "$(uname -s)" in
+            Darwin) test "$(sysctl -n hw.model)" = Mac13,1 ;;
+            Linux) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
+          case "${BUILDKIT_HOST:-}" in ''|unix://*) ;; *) echo 'Remote BuildKit is forbidden' >&2; exit 1 ;; esac
+          if command -v docker >/dev/null 2>&1; then
+            endpoint="${DOCKER_HOST:-}"
+            if [ -n "${DOCKER_CONTEXT:-}" ] || [ -z "$endpoint" ]; then
+              endpoint=$(docker context inspect ${DOCKER_CONTEXT:+"$DOCKER_CONTEXT"} --format '{{.Endpoints.docker.Host}}')
+            fi
+            case "$endpoint" in unix://*|tcp://docker:2376) ;; *) echo 'Production/remote Docker is forbidden' >&2; exit 1 ;; esac
+          fi
       - name: Set version
         run: echo "TAG=${{ needs.build_single_arch.outputs.tag }}" >> $GITHUB_ENV
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-21
+
+- Require independent Mac CI for service builds; preserve hosted desktop builds and deployment gates, and retire production source-build entrypoints. No deployment or release performed.
+
 ## 2026-10-08
 
 - **用户可以自己改显示名**（PRD：meta-repo `docs/enterprise-org-prd.md` D48；并进 P3）：
