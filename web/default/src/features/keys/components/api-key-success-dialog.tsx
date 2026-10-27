@@ -64,7 +64,7 @@ export function ApiKeySuccessDialog({
   const media = isMediaPurpose(purpose)
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <AlertDialogContent className='max-h-[85dvh] !max-w-md overflow-y-auto sm:!max-w-lg'>
+      <AlertDialogContent className='max-h-[calc(100dvh-2rem)] !max-w-md overflow-y-auto sm:!max-w-2xl'>
         <AlertDialogHeader>
           <AlertDialogTitle>{t('Your new API key is ready')}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -73,7 +73,10 @@ export function ApiKeySuccessDialog({
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className='space-y-3'>
+        {/* min-w-0: a grid item never shrinks below its content's min width,
+         * so a long one-line value would widen the whole dialog instead of
+         * truncating — cutting off the copy buttons behind a sideways scroll. */}
+        <div className='min-w-0 space-y-3'>
           <CopyField
             label={t('API key')}
             value={apiKey ?? ''}
@@ -93,14 +96,18 @@ export function ApiKeySuccessDialog({
             </>
           ) : (
             <>
-              <CopyField label={t('Base URL')} value={baseUrl} />
-              <CopyField
-                label={t('Model name')}
-                value={modelName}
-                hint={t(
-                  'Use this in your client. We route it to the right model based on this key.'
-                )}
-              />
+              {/* Side by side on wider screens so the dialog fits without
+               * scrolling; they are filled in together anyway. */}
+              <div className='grid gap-3 sm:grid-cols-2'>
+                <CopyField label={t('Base URL')} value={baseUrl} />
+                <CopyField
+                  label={t('Model name')}
+                  value={modelName}
+                  hint={t(
+                    'Use this in your client. We route it to the right model based on this key.'
+                  )}
+                />
+              </div>
               <KeyModelDiscovery apiKey={apiKey} />
               <div className='border-t pt-3'>
                 <p className='text-foreground text-xs font-medium'>
@@ -174,7 +181,7 @@ function CopyField({
     }
   }
   return (
-    <div className='space-y-1'>
+    <div className='min-w-0 space-y-1'>
       <div className='flex items-baseline justify-between'>
         <span className='text-foreground text-xs font-medium'>{label}</span>
         {warning && (
@@ -183,7 +190,7 @@ function CopyField({
           </span>
         )}
       </div>
-      <div className='border-border bg-muted/30 flex items-center gap-2 rounded-md border px-3 py-2'>
+      <div className='border-border bg-muted/30 flex items-center gap-2 rounded-md border px-3 py-1.5'>
         <code
           className={cn(
             'flex-1 truncate font-mono text-xs',
@@ -197,7 +204,7 @@ function CopyField({
           type='button'
           size='sm'
           variant='ghost'
-          className='h-7 px-2'
+          className='h-6 px-2'
           onClick={handleCopy}
           disabled={!value}
         >

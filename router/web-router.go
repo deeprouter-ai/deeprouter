@@ -40,7 +40,7 @@ func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
 			controller.RelayNotFound(c)
 			return
 		}
-		// DeepRouter: machine probes (/openapi.json, /mcp, /.well-known/...)
+		// DeepRouter: machine probes (/openapi.json, /.well-known/...)
 		// get a JSON 404 pointing at llms.txt, not the web app with a 200.
 		if discovery.IsAgentProbe(c.Request.URL.Path) {
 			discovery.NotFound(c)

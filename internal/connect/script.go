@@ -128,6 +128,25 @@ func powerShellValues(baseURL, apiKey string, tools []string) string {
 		psQuote(baseURL), psQuote(apiKey), strings.Join(quoted, ", "))
 }
 
+// RenderEnv is the machine-readable redeem payload (`?format=env`): bare
+// KEY='VALUE' lines, identical for every User-Agent. Its consumer is an AI
+// agent that was told exactly these names (the video page's paste-prompt),
+// not a shell — the per-shell split above renames the variables ($DrApiKey
+// on PowerShell), which is how a Windows agent fetching with irm ended up
+// holding the key under a name it was never told (measured 2026-10-04:
+// 38,422 chars, zero matches). No platform split here, ever.
+func RenderEnv(baseURL, apiKey string, tools []string) string {
+	return posixValues(normalizeBaseURL(baseURL), apiKey, tools) + "\n"
+}
+
+// RenderDeadTokenEnv is RenderDeadTokenScript for format=env consumers: one
+// machine-readable line instead of echo lines, still HTTP 200 (PowerShell's
+// irm throws the body away on a non-2xx). The recovery is always the same —
+// have the user copy a fresh prompt from the page.
+func RenderDeadTokenEnv() string {
+	return "DR_ERROR='token expired or already used; ask the user to copy a fresh prompt'\n"
+}
+
 // inject swaps the marker line for the generated assignments. A template that
 // somehow lost its marker would otherwise render as a script with no key and no
 // address, which fails in a confusing way; refusing outright is clearer.

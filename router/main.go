@@ -20,6 +20,8 @@ func SetRouter(router *gin.Engine, assets ThemeAssets) {
 	SetInternalRouter(router)
 	// Before the web router: /i/:token must not be swallowed by the SPA fallback.
 	SetConnectRouter(router)
+	// Before the web router too, for the same reason: /mcp for AI tools.
+	SetMCPRouter(router, assets)
 	frontendBaseUrl := os.Getenv("FRONTEND_BASE_URL")
 	if common.IsMasterNode && frontendBaseUrl != "" {
 		frontendBaseUrl = ""

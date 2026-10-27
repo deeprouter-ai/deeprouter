@@ -137,7 +137,7 @@ export function ApiKeysMutateDrawer({
   currentRow,
   side = 'right',
 }: ApiKeyMutateDrawerProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const isUpdate = !!currentRow
   const { triggerRefresh, setOpen: setApiKeysDialog } = useApiKeys()
   // Reseller-flavored fields (Group, Cross-group retry, Quantity batch
@@ -174,10 +174,16 @@ export function ApiKeysMutateDrawer({
     staleTime: 5 * 60 * 1000,
   })
 
-  // Simple-mode picker metadata (6 purpose cards + 4 price tiers).
+  // Simple-mode picker metadata (6 purpose cards + 4 price tiers). The backend
+  // localises label/desc/estimate, so the cache is keyed by the UI language
+  // AND the language is sent explicitly (2026-10-05). Keying alone was not
+  // enough: this drawer stays mounted while closed, so a switch refetches at
+  // once — before the switcher has written the new language back, and the
+  // backend reads that setting through its user cache — and the stale Chinese
+  // cards were then cached under the English key.
   const { data: purposesData, isLoading: purposesLoading } = useQuery({
-    queryKey: ['api-key-purposes'],
-    queryFn: getApiKeyPurposes,
+    queryKey: ['api-key-purposes', i18n.language],
+    queryFn: () => getApiKeyPurposes(i18n.language),
     staleTime: 10 * 60 * 1000,
   })
   const purposes = purposesData?.data?.purposes ?? []

@@ -255,9 +255,43 @@ const trendByModel: OrgUsageTrend = {
   ],
 }
 
+/** …one member's line, as their row opens it… */
+const trendOfSally: OrgUsageTrend = {
+  ...trendByDepartment,
+  group_by: 'member',
+  total: 3000000,
+  series: [
+    {
+      id: 3,
+      name: 'sally',
+      other: false,
+      quota: 3000000,
+      points: [1000000, 500000, 1500000],
+    },
+  ],
+}
+
+/** …and one key's. */
+const trendOfClaudeCode: OrgUsageTrend = {
+  ...trendOfSally,
+  group_by: 'key',
+  total: 4500000,
+  series: [
+    {
+      id: 100,
+      name: 'Claude Code',
+      other: false,
+      quota: 4500000,
+      points: [2000000, 1000000, 1500000],
+    },
+  ],
+}
+
 const TRENDS: Record<string, OrgUsageTrend> = {
   department: trendByDepartment,
   model: trendByModel,
+  member: trendOfSally,
+  key: trendOfClaudeCode,
 }
 
 /** An alert on sally's key, as `GET /api/org/alerts` lists one. */
@@ -884,9 +918,11 @@ describe('the usage trend', () => {
     ).toBeInTheDocument()
   })
 
-  it('is not drawn by member or by key', async () => {
+  it('is not drawn above the table by member or by key; each of their rows opens its own instead', async () => {
     await renderPage(membershipOf('owner'))
     await screen.findByTestId('chart')
+    // A department's row opens nothing: the chart above is theirs.
+    expect(screen.queryByRole('button', { name: 'View details' })).toBeNull()
     const asked = api.fetchOrgUsageTrend.mock.calls.length
     for (const [grouping, row] of [
       ['Member', 'CI Pipeline'],
@@ -899,11 +935,98 @@ describe('the usage trend', () => {
         screen.queryByRole('heading', { name: 'Spend over time' }),
         grouping
       ).toBeNull()
+      expect(
+        within(rowOf(row)).getByRole('button', { name: 'View details' }),
+        grouping
+      ).toBeInTheDocument()
     }
+    // Nothing was drawn until a row is opened.
     expect(api.fetchOrgUsageTrend.mock.calls.length).toBe(asked)
+    await userEvent.click(screen.getByRole('tab', { name: 'Model' }))
+    await screen.findByText('gpt-4o-mini')
+    expect(screen.queryByRole('button', { name: 'View details' })).toBeNull()
     // Back on departments it is there again.
     await userEvent.click(screen.getByRole('tab', { name: 'Department' }))
     await screen.findByTestId('chart')
+  })
+
+  // PRD D49: a member or a key is drawn one at a time, from its row.
+  it('opens the line of one member from their row, for the period and department the report shows', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByTestId('chart')
+    await choose('Department', 'Sales')
+    await userEvent.click(screen.getByRole('tab', { name: 'Member' }))
+    await screen.findByText('CI Pipeline')
+    const reports = api.fetchOrgUsage.mock.calls.length
+    chart.spec = null
+
+    await userEvent.click(
+      within(rowOf('sally')).getByRole('button', { name: 'View details' })
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'sally' })
+    expect(
+      within(dialog).getByText(
+        'What this member spent over the period the report shows.'
+      )
+    ).toBeInTheDocument()
+    await within(dialog).findByTestId('chart')
+    // The report's own question, about this one member.
+    expect(lastCall(api.fetchOrgUsageTrend)).toEqual({
+      group_by: 'member',
+      user_id: 3,
+      bucket: 'day',
+      timezone: viewerTimeZone(),
+      start_timestamp: daysAgo(29),
+      department_id: 11,
+    })
+    expect(drawn().lines).toEqual(['sally'])
+    expect(drawn().points.map((point) => point.quota)).toEqual([
+      1000000, 500000, 1500000,
+    ])
+    expect(
+      within(dialog).getByRole('img', { name: 'Spend over time' })
+    ).toBeInTheDocument()
+    // The time unit is the chart's own.
+    await userEvent.click(within(dialog).getByRole('tab', { name: 'By month' }))
+    await waitFor(() =>
+      expect(lastCall(api.fetchOrgUsageTrend)).toMatchObject({
+        group_by: 'member',
+        user_id: 3,
+        bucket: 'month',
+      })
+    )
+    // Closed, it is gone, and the report was never asked again.
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.queryByTestId('chart')).toBeNull()
+    expect(api.fetchOrgUsage).toHaveBeenCalledTimes(reports)
+  })
+
+  it('opens the line of one key from its row', async () => {
+    await renderPage(membershipOf('owner'))
+    await screen.findByText('Sales')
+    await userEvent.click(screen.getByRole('tab', { name: 'Key' }))
+    await screen.findByText('Old poster key')
+    chart.spec = null
+    await userEvent.click(
+      within(rowOf('Claude Code')).getByRole('button', { name: 'View details' })
+    )
+    const dialog = await screen.findByRole('dialog', { name: 'Claude Code' })
+    // Three keys can share a name; who used it tells them apart.
+    expect(
+      within(dialog).getByText(/What was spent with this key/)
+    ).toHaveTextContent(
+      'What was spent with this key over the period the report shows. Used by sally, bo'
+    )
+    await within(dialog).findByTestId('chart')
+    expect(lastCall(api.fetchOrgUsageTrend)).toEqual({
+      group_by: 'key',
+      token_id: 100,
+      bucket: 'day',
+      timezone: viewerTimeZone(),
+      start_timestamp: daysAgo(29),
+    })
+    expect(drawn().lines).toEqual(['Claude Code'])
   })
 
   it('starts a department-scoped viewer without one, on members, and draws theirs when asked', async () => {

@@ -125,11 +125,15 @@ export async function fetchTokenKeysBatch(ids: number[]): Promise<{
 // Falls back to a hardcoded mirror of setting/alias_setting/seed/aliases.yaml
 // when the backend hasn't shipped the endpoint yet (binary needs rebuild) or
 // returns an empty payload. Production servers will override.
-export async function getApiKeyPurposes(): Promise<
-  ApiResponse<ApiKeyPurposesResponse>
-> {
+export async function getApiKeyPurposes(
+  lang?: string
+): Promise<ApiResponse<ApiKeyPurposesResponse>> {
   try {
-    const res = await api.get('/api/user/self/api-key-purposes')
+    // `lang` is the page's UI language; the backend would otherwise use the
+    // saved user setting, which lags a language switch.
+    const res = await api.get('/api/user/self/api-key-purposes', {
+      params: lang ? { lang } : undefined,
+    })
     const body = res.data as ApiResponse<ApiKeyPurposesResponse>
     if (body?.success && body.data?.purposes?.length) return body
   } catch {
