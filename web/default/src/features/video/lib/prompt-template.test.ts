@@ -21,6 +21,7 @@ import { MODEL_PRESETS } from '@/features/models/lib/model-presets'
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
+  MCP_SETUP,
   VIDEO_MODELS,
   videoModelsForKey,
   friendlyVideoName,
@@ -108,6 +109,31 @@ describe('buildVideoPrompt (both languages)', () => {
     }
     expect(build('zh')).toContain('绝对路径')
     expect(build('en')).toContain('absolute path')
+  })
+
+  it('mcp step: registers the read-only MCP server once, after .env, never with a key in the text', () => {
+    // meta-repo docs/deeprouter-mcp-prd.md P2: the agent adds DeepRouter's
+    // MCP server itself. The command reads the key from .env, so the step
+    // must come after .env is written and before the memory step; the
+    // credential test above already holds the whole prompt free of sk- keys.
+    for (const language of LANGUAGES) {
+      const prompt = build(language)
+      expect(prompt.split(MCP_SETUP[language]).length - 1).toBe(1)
+      const step = prompt.indexOf(MCP_SETUP[language])
+      expect(step).toBeGreaterThan(prompt.indexOf('.gitignore'))
+      expect(step).toBeLessThan(
+        prompt.indexOf(language === 'zh' ? '【第 2 步' : '[Step 2')
+      )
+      expect(prompt).toContain(
+        'claude mcp add --transport http deeprouter https://deeprouter.co/mcp'
+      )
+      expect(prompt).toContain(
+        'codex mcp add deeprouter --url https://deeprouter.co/mcp --bearer-token-env-var DEEPROUTER_API_KEY'
+      )
+      // Removing the setup takes the server away too.
+      expect(prompt).toContain('claude mcp remove deeprouter')
+      expect(prompt).toContain('codex mcp remove deeprouter')
+    }
   })
 
   it('memory layer: writes rules into both tools’ memory files', () => {

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-10-27
+
+- **资源页列出 MCP 指南；问讯处认出「没设环境变量」这种情况**（PRD：meta-repo `docs/deeprouter-mcp-prd.md` D7、D8，@sam 拍板；任务卡 P2）：
+  - 「资源」页（`/resources`）多一组「Let your AI look things up」，里面是「MCP server」这份指南，点开是 `/resources/mcp`。清单条目加了 `noBaseUrl` 标记，密钥页「还是不懂？让你的AI助手来帮你」的「你的工具」下拉框跳过带标记的条目：那段话术是让 AI 教用户填接入地址的，MCP 不是这种工具（`features/docs/catalog.ts`、`api-keys-ask-ai-section.tsx`，新增一条测试）。
+  - 密钥页那条命令里写的是 `${ANTHROPIC_AUTH_TOKEN}`；没跑过一键配置、变量不存在时，Claude Code 会把这几个字原样当密钥送来，问讯处之前回「没有这把密钥，重新复制」，是误导。现在请求头的值是 `${…}` 这种形状时按 `no_key` 处理，回答里点名这个变量没设、让用户先跑一键配置或把变量换成密钥，公开目录照答（`internal/mcp/caller.go`、`tools.go`，新增一条端到端测试）。折叠栏里多一行「没跑过上面的一键配置？…」提前说；两份 MCP 指南的排查表各加一行。
+
+- **密钥页「一键配置」：选中企业 key 时，「还是不懂？没关系，让你的AI助手来帮你」跟「AI 应用与插件」一起隐藏**（PRD：meta-repo `docs/deeprouter-mcp-prd.md` D6，@sam 提出；任务卡 P2；`features/keys/components/api-keys-setup-card.tsx`）：之前只有应用按钮按 Enterprise Org D15 隐藏，教用户自己把 key 填进应用的那一块还在，可企业 key 的持有人根本看不到 key。现在两块用同一个显示条件（`presets.length > 0`），所以服务器一个应用预设都没配时，它也一起不显示。`org-key-readonly.test.tsx` 的两条用例补了断言。
+
+- **密钥页「一键配置」加一个折叠栏「想让 AI 自己查模型和用法？」，给出把 DeepRouter MCP 加进 Claude Code、Codex 的命令**（PRD：meta-repo `docs/deeprouter-mcp-prd.md` D5，Q4 由 @sam 拍板「加，但放进隐藏栏里」；任务卡 P2；`features/keys/components/api-keys-one-click-card.tsx`）：
+  - 放在「装好之后 —— 每个工具怎么打开」和「想撤销安装？」之间，默认收起；只给勾选了的 Claude Code、Codex 显示命令，两个都没勾就不出现。
+  - 命令里没有 key：Claude Code 是 `claude mcp add --scope user --transport http deeprouter <本站地址>/mcp --header 'Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}'`，单引号让 shell 不展开，由 Claude Code 每次连接时去读一键配置存下的 `ANTHROPIC_AUTH_TOKEN`，它的配置文件里只存变量名；Codex 是 `codex mcp add deeprouter --url <本站地址>/mcp --bearer-token-env-var DEEPROUTER_API_KEY`。这样这个区块「页面上从不出现 key」的规矩不变，页面拿不到值的企业 key 也能用。`--scope user` 让它在所有目录生效，不只是运行命令的那个目录。地址和「撤销」命令一样取本站自己的地址。
+  - 用 Claude Code 2.1.246 实测过：全局范围下它会把 `${ANTHROPIC_AUTH_TOKEN}` 换成环境变量的值（假 token + 本地回显服务验证）；变量没设时照样连上，但提示「Missing environment variables」；PowerShell 的单引号原样传进去；不带 `--scope` 的 `claude mcp remove deeprouter` 能删掉全局那条。Windows 的 cmd 不认单引号，所以 Windows 上多一行「不要用命令提示符」。
+  - 中英文案各 4 条；前端测试加 2 条（命令只写变量名、页面上没有 key、打开它不生成令牌；跟着勾选走）。
+
+- **新增 MCP 接入指南，`llms.txt` 加一节 MCP，「复制给 AI」的话术让 AI 自己把 MCP 加上**（PRD：meta-repo `docs/deeprouter-mcp-prd.md`；任务卡 P2）：
+  - 新指南 `web/default/public/docs/integrations/mcp.md` 与 `mcp.zh.md`（线上地址 `/docs/integrations/mcp.md`）：五个工具能回答什么，Claude Code、Codex CLI、Cursor 各怎么加，不带 key 时能做什么，排查表。带「Facts for AI assistants」块，所以 `get_connection_config` 传 `mcp` 也能答（指南总数 23 → 24）。Claude Code 用 `claude mcp add --transport http … --header "Authorization: Bearer …"`；Codex 只接受环境变量名，所以是 `codex mcp add … --bearer-token-env-var DEEPROUTER_API_KEY`，和 Codex 官方文档、一键配置存 key 的方式一致。两条命令都在本机隔离的配置目录里实际跑过：Claude Code 的健康检查显示已连上本地 `/mcp`，Codex 写进配置文件的正是指南里那三行。
+  - 没有加进 `/resources` 文档页的清单（`features/docs/catalog.ts`）：密钥页「还是不懂？让你的AI助手来帮你」的选择器也读那份清单，加进去会多出一个「MCP」选项，选它复制出的话把 MCP 当成要填接入地址的工具，地址也不对。密钥页的 MCP 入口按 D5 放在一键配置的折叠栏里；`/resources` 清单当天按 D7 加上了（见上一条），下拉框跳过它。
+  - `llms.txt` 在「拿到 key 先查」和「媒体」之间加一节「MCP server」：地址、五个工具、不带 key 时只答公开信息、指南链接。
+  - 「复制给 AI」话术（Simple 的图片、配音、聊天、写代码四个用途 + 视频）在第 1 步写完 `.env` 之后多一段：Claude Code、Codex 各一条添加命令，密钥从 `.env` 读进命令、不打印，失败就跳过；「移除这项配置」那句同时移除 MCP 服务。文字是一个共用常量（`MCP_SETUP`，在视频模板里），两套模板各引用一次。话术里照旧不出现 `sk-` 明文。
+
+- **新增 MCP 服务 `POST /mcp`：AI 工具自己查「这把 key 能用哪些模型、每个怎么调、这个工具该怎么配」**（PRD：meta-repo `docs/deeprouter-mcp-prd.md`；任务卡 P1；`internal/mcp`）：
+  - 五个工具，全部只读，没有一个会走到计费：`list_models`（这把 key 能用的模型，带用途、接口、一行价格；不带 key 时给公开价目）、`get_model`（一个模型的完整调用方式：地址、鉴权、必填参数、最小请求体，视频给「提交 → 轮询 → 下载」三步；价格；这把 key 能不能用）、`get_connection_config`（某个客户端该填什么，原样取自网关发布的接入指南里的「Facts for AI assistants」块，23 个客户端都在）、`check_key`（key 能不能用、不能用的原因、自己的额度和到期时间、白名单、谁付钱）、`get_started`（DeepRouter 是什么、各协议的地址、怎么拿 key）。
+  - 答案就是 API 自己的答案：key 交给 `middleware.TokenAuth` 本身去判，模型清单和价目是在一个不回给客户端的「影子」请求上下文里直接跑 `/v1/models` 和 `/api/pricing` 的处理函数得到的，所以 IP 白名单、分组、儿童模式、企业钱包这些规则和 `/v1/models` 完全一致，没有改任何上游文件。
+  - 坏 key 不回 401（MCP 客户端见 401 会去走我们没有的 OAuth），而是工具里给状态和一句人话：`no_key` / `invalid` / `disabled` / `expired` / `exhausted` / `refused`（附网关自己的拒绝原因）/ `error`。
+  - 报价是这把 key 实际要付的：倍率 × 2 美元每百万 token 或按次单价，再乘分组倍率（`default` 现在是 1.2）。在「模型」页被停用、但渠道还在服务的模型（价目表不收它，`/v1/models` 照列、照扣费），按中转计费用的价格设置报价，不说成「未配置价格」。按次计费的视频、图片只报基础价，并说明部分厂商会再乘时长、分辨率或张数——价目表里没有记录哪些会乘，不编每条多少钱。企业 key 不显示公司钱包余额（只有所有者和管理员能看）。
+  - 无状态、直接回 JSON：不依赖会话，经 Caddy 不怕缓冲；跨域沿用 relay 路由的 CORS；限流用全局 API 限流。
+  - `/mcp` 不再是「AI 探测路径」（`internal/discovery`），`/sse` 等照旧回 JSON 404。
+  - 新依赖：MCP 官方 Go SDK `github.com/modelcontextprotocol/go-sdk` v1.8.0（MIT 与 Apache-2.0，均可并入 AGPL）；顺带升级 `golang-jwt/jwt/v5` v5.3.0 → v5.3.1、`golang.org/x/sys` v0.38.0 → v0.41.0。
+  - 测试：`internal/mcp` 的端到端用例用 SDK 自己的客户端经 HTTP 连真实的鉴权和处理函数（SQLite，设 `TEST_POSTGRES_DSN` 时再跑 PostgreSQL）；`router/mcp_router_test.go` 按 `SetRouter` 的顺序注册并检查握手、405 和跨域预检，已接进两个 CI 工作流。
+
 ## 2026-10-08
 
 - **报表的「成员」「密钥」两页：每一行多了「查看详情」，点开是这个人 / 这把密钥的花费趋势图**（PRD：meta-repo `docs/enterprise-org-prd.md` D49；并进 P10）：

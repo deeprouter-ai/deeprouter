@@ -56,6 +56,22 @@ it is an install script whose variable names depend on your User-Agent). A
 retry. The link works once and expires after 30 minutes. Store the key in
 `.env` (git-ignored), never in code, logs or memory files.
 
+## MCP server: ask DeepRouter directly
+
+`https://deeprouter.co/mcp` is a read-only MCP server (Streamable HTTP). Send the key as
+`Authorization: Bearer sk-...` and call its tools instead of reading docs:
+
+- `list_models`: the models this key can use, with what each is for, its endpoint and price.
+- `get_model`: how to call one model - URL, auth header, required parameters, the video steps, the price.
+- `get_connection_config`: the exact settings for one client app or SDK, from its guide below.
+- `check_key`: whether the key works, and if not why; its limit, expiry and balance.
+- `get_started`: what DeepRouter is, the base URLs, how to get a key.
+
+Without a key it answers from the public catalog. It never generates anything or spends
+money: to do the work, call the API as described here.
+
+- [MCP setup](https://deeprouter.co/docs/integrations/mcp.md): Add it to Claude Code, Codex or Cursor.
+
 ## Media: video, image, voice
 
 All requests use `Authorization: Bearer sk-...` and the base `https://api.deeprouter.co`.

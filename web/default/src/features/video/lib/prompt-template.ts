@@ -94,6 +94,20 @@ export const VIDEO_MODELS: VideoModelOption[] = [
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS[0]
 
 /**
+ * The step that registers DeepRouter's read-only MCP server with the agent
+ * itself, so later it can ask which models the key holds, how to call them and
+ * what they cost instead of re-reading docs (meta-repo
+ * docs/deeprouter-mcp-prd.md, P2). Shared with the Simple prompts. Claude Code
+ * takes the key as a header; Codex only takes the name of an environment
+ * variable, which is how its own docs and one-click setup keep the key. Placed
+ * after the .env step because the command reads the key from there.
+ */
+export const MCP_SETUP: Record<PromptLanguage, string> = {
+  zh: '然后把 DeepRouter 的 MCP 服务加进你自己的配置（只读、不花钱，以后可以直接问它这把密钥能用哪些模型、怎么调、多少钱）：Claude Code 运行 claude mcp add --transport http deeprouter https://deeprouter.co/mcp --header "Authorization: Bearer <DR_API_KEY 的值>"；Codex 运行 codex mcp add deeprouter --url https://deeprouter.co/mcp --bearer-token-env-var DEEPROUTER_API_KEY（Codex 从启动它的环境里的 DEEPROUTER_API_KEY 读密钥）。密钥从 .env 读进命令，不要打印出来；这一步失败就跳过，不影响后面的步骤。',
+  en: 'Then add DeepRouter\'s MCP server to your own configuration (read-only, costs nothing; from then on you can ask it which models this key can use, how to call them and what they cost): Claude Code runs claude mcp add --transport http deeprouter https://deeprouter.co/mcp --header "Authorization: Bearer <value of DR_API_KEY>"; Codex runs codex mcp add deeprouter --url https://deeprouter.co/mcp --bearer-token-env-var DEEPROUTER_API_KEY (Codex reads the key from DEEPROUTER_API_KEY in the environment it starts in). Read the key from .env into the command without printing it; if this step fails, skip it, nothing after depends on it.',
+}
+
+/**
  * Cheapest first: the model a key's verification run uses when the caller
  * did not pick one. A first test clip should cost the least it can.
  */
@@ -236,6 +250,7 @@ ${scriptUrl}?format=env
 DEEPROUTER_BASE_URL=<DR_BASE_URL 的值>
 DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 并确认 .env 已在 .gitignore 里（没有就加上）。密钥明文不得出现在任何输出、日志或记忆文件中。
+${MCP_SETUP.zh}
 
 【第 2 步：写入项目记忆】
 把下面整段规则原样写进项目记忆文件——Claude Code 写 CLAUDE.md，Codex 写 AGENTS.md（不存在就创建，存在就追加）：
@@ -253,7 +268,7 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 本密钥可用的模型与大约花费（生成前先告诉用户本次预计花多少；不在此列的模型本密钥调不了，不要试）：
 ${modelList(models, 'zh')}
 默认用 ${model.id}。
-若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），并删除本段规则。
+若用户要求移除视频配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行（.env 仅含这两行时可整个删掉），移除 DeepRouter MCP 服务（claude mcp remove deeprouter 或 codex mcp remove deeprouter），并删除本段规则。
 
 【第 3 步：验证一次（可选，这一步会花钱）】
 先问用户要不要立刻生成一条测试视频来验证配置——参数用 ${model.testRun.zh}，把预计花费说清楚。用户同意才执行：按上面的流程，用模型 ${model.id}，提示词自拟（比如"海边日出，海浪拍打礁石"），完成后打开播放器或输出文件路径。用户不想花这笔钱就跳过，配置本身已经完成，不受影响。
@@ -279,6 +294,7 @@ Write the two values into a .env file at the project root:
 DEEPROUTER_BASE_URL=<value of DR_BASE_URL>
 DEEPROUTER_API_KEY=<value of DR_API_KEY>
 Make sure .env is listed in .gitignore (add it if missing). The key must never appear in plain text in any output, log, or memory file.
+${MCP_SETUP.en}
 
 [Step 2: Write the project memory]
 Write the following rules verbatim into the project memory file — CLAUDE.md for Claude Code, AGENTS.md for Codex (create it if missing, append if it exists):
@@ -296,7 +312,7 @@ When the user asks to generate a video, follow this flow. Read DEEPROUTER_BASE_U
 Models this key can use and their approximate cost (tell the user the expected cost before generating; anything not listed here this key cannot call, so do not try):
 ${modelList(models, 'en')}
 Default model: ${model.id}.
-If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), and delete this section of rules.
+If the user asks to remove the video setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env (delete the whole file if those are its only lines), remove the DeepRouter MCP server (claude mcp remove deeprouter or codex mcp remove deeprouter), and delete this section of rules.
 
 [Step 3: Verify once (optional — this step costs money)]
 First ask the user whether to generate one test clip now to verify the setup — parameters: ${model.testRun.en} — and spell out the expected cost. Only proceed if they agree: use the flow above with model ${model.id}, pick any prompt you like (e.g. "sunrise over the sea, waves hitting the rocks"), and when it finishes, open the player or print the file path. If they would rather not spend it, skip this step — the setup is already complete.

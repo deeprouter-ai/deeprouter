@@ -194,8 +194,12 @@ export function ApiKeysSetupCard() {
       />
       {/* Last, because it is the fallback: neither a deep link nor the script
           covers Chatbox / Cursor / Copilot / Zed, and what those users do is
-          ask whatever AI is in front of them (PRD §4.7 B2). */}
-      <ApiKeysAskAiSection />
+          ask whatever AI is in front of them (PRD §4.7 B2). It belongs with
+          the app buttons and shows and hides with them (@sam 2026-10-27,
+          meta-repo docs/deeprouter-mcp-prd.md D6): both get the key into an
+          app, here by the user typing it in — which the holder of an
+          organization key cannot, never seeing its value (D15). */}
+      {presets.length > 0 && <ApiKeysAskAiSection />}
     </div>
   )
 }

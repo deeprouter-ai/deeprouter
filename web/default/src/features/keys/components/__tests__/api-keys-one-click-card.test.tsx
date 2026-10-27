@@ -254,3 +254,83 @@ describe('ApiKeysOneClickSection — downloadable installers', () => {
     expect(toast.info).toHaveBeenCalled()
   })
 })
+
+// Coverage: MCP PRD D5 — adding DeepRouter's read-only MCP server, collapsed
+// under its own summary. The commands must name the variables setup saved and
+// never carry the key, so this block keeps its rule of no key on the page.
+describe('ApiKeysOneClickSection — the MCP step', () => {
+  const MCP_SUMMARY = 'Want your AI to look up models and how to use them?'
+  const CLAUDE_ADD =
+    "claude mcp add --scope user --transport http deeprouter https://deeprouter.example/mcp --header 'Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}'"
+  const CODEX_ADD =
+    'codex mcp add deeprouter --url https://deeprouter.example/mcp --bearer-token-env-var DEEPROUTER_API_KEY'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.setItem(
+      'status',
+      JSON.stringify({ server_address: 'https://deeprouter.example' })
+    )
+  })
+
+  afterEach(() => {
+    localStorage.removeItem('status')
+  })
+
+  it('names the saved variables, never the key, and mints nothing', async () => {
+    onPlatform('Win32')
+    const key = { ...KEY, key: 'live-key-must-not-show' } as ApiKey
+    const { container } = render(
+      <ApiKeysOneClickSection tools={TOOLS} apiKey={key} />
+    )
+
+    await userEvent.click(screen.getByText(MCP_SUMMARY))
+
+    expect(screen.getByText(CLAUDE_ADD)).toBeInTheDocument()
+    expect(screen.getByText(CODEX_ADD)).toBeInTheDocument()
+    // Spaced, so a screen reader or a copied selection keeps them apart.
+    expect(screen.getByText('To remove it:').textContent).toBe(
+      'To remove it: claude mcp remove deeprouter codex mcp remove deeprouter'
+    )
+    // The Claude Code line is quoted for PowerShell and POSIX shells, not cmd.
+    expect(
+      screen.getByText(
+        'On Windows, use PowerShell or Terminal — not Command Prompt (cmd).'
+      )
+    ).toBeInTheDocument()
+    // Said before it happens: without setup the variable does not exist.
+    expect(
+      screen.getByText(
+        'Skipped the setup above? Claude Code: put your key in place of ${ANTHROPIC_AUTH_TOKEN}. Codex: set the DEEPROUTER_API_KEY environment variable first.'
+      )
+    ).toBeInTheDocument()
+    expect(container.textContent).not.toContain('live-key-must-not-show')
+    expect(mockIssueConnectToken).not.toHaveBeenCalled()
+  })
+
+  it('follows the ticks and leaves out tools it has no command for', async () => {
+    onPlatform('Win32')
+    render(
+      <ApiKeysOneClickSection
+        tools={[...TOOLS, { id: 'gemini-cli', name: 'Gemini CLI' }]}
+        apiKey={KEY}
+      />
+    )
+
+    // A pattern, not the exact name: the checkbox's aria-label and its label's
+    // text add up, so its accessible name reads "Claude Code Claude Code".
+    await userEvent.click(screen.getByRole('checkbox', { name: /Claude Code/ }))
+    await userEvent.click(screen.getByText(MCP_SUMMARY))
+
+    expect(screen.getByText(CODEX_ADD)).toBeInTheDocument()
+    expect(screen.queryByText(CLAUDE_ADD)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'On Windows, use PowerShell or Terminal — not Command Prompt (cmd).'
+      )
+    ).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Codex/ }))
+    expect(screen.queryByText(MCP_SUMMARY)).not.toBeInTheDocument()
+  })
+})

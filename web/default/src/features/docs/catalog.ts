@@ -31,6 +31,12 @@ export interface DocEntry {
   title: string
   /** One-line hint shown on the index card. */
   blurb: string
+  /**
+   * Not a tool one points at a base URL, so the keys page's "ask your AI"
+   * picker leaves it out: the text that picker writes asks for an address
+   * to enter, which would be wrong for this one.
+   */
+  noBaseUrl?: boolean
 }
 
 export interface DocCategory {
@@ -51,6 +57,13 @@ export const DOC_CATEGORIES: DocCategory[] = [
       { slug: 'codex', title: 'Codex CLI', blurb: 'Add a DeepRouter model provider in config.toml.' },
       { slug: 'gemini-cli', title: 'Gemini CLI', blurb: 'Point Google’s CLI at the DeepRouter Gemini endpoint.' },
       { slug: 'opencode', title: 'OpenCode', blurb: 'A custom OpenAI-compatible provider in opencode.json.' },
+    ],
+  },
+  {
+    id: 'mcp',
+    title: 'Let your AI look things up',
+    entries: [
+      { slug: 'mcp', title: 'MCP server', blurb: 'Add DeepRouter’s read-only MCP server to Claude Code, Codex or Cursor; your AI can then ask it what your key can use, how to call it and what it costs.', noBaseUrl: true },
     ],
   },
   {
