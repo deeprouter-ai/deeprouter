@@ -50,7 +50,7 @@ type UsageQuery struct {
 	// Zero is every department the caller may see.
 	DepartmentId int
 	// UserId and TokenId narrow it to what one member, or one key, spent — of
-	// the lines the caller may see (PRD D49). Zero is everyone, every key.
+	// the lines the caller may see (PRD D50). Zero is everyone, every key.
 	UserId  int
 	TokenId int
 }

@@ -315,7 +315,7 @@ func TestOrgUsage_ThroughTheRealGateway(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, status)
 		assert.Equal(t, "org.not_member", message)
 
-		// --- PRD D49: one member's or one key's row of the report, drawn over time ------
+		// --- PRD D50: one member's or one key's row of the report, drawn over time ------
 		assert.Equal(t, map[string]int{"seller": 3 * cost}, spentBy(trend(owner, "group_by=member&bucket=day&user_id="+id(seller.userID))),
 			"the seller's row, wherever they sat")
 		assert.Equal(t, map[string]int{"Sales tools": 3 * cost}, spentBy(trend(owner, "group_by=key&bucket=day&token_id="+id(sellersKey.Id))))

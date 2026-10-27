@@ -88,7 +88,7 @@ What each endpoint asks for:
 | `POST /invites`, `GET /invites`, `DELETE /invites/:id` | `member.invite` reaching the invite's department — see below |
 | `GET /audit-logs` | `audit.read` across the whole organization; `?actor=`, `?target_type=`, `?start_timestamp=` and `?end_timestamp=` narrow it |
 | `GET /usage?group_by=` | being a member — `usage.read` decides how much is answered: everything, what was spent in the departments the role reaches, or only what the caller used themselves. `&department_id=` takes `usage.read` over that department |
-| `GET /usage/trend?group_by=&bucket=&timezone=` | exactly what `GET /usage` takes, for the same usage: the report's reach, the report's 403 for a department outside it. Both take `&user_id=` / `&token_id=` to narrow to one member or one key (D49) |
+| `GET /usage/trend?group_by=&bucket=&timezone=` | exactly what `GET /usage` takes, for the same usage: the report's reach, the report's 403 for a department outside it. Both take `&user_id=` / `&token_id=` to narrow to one member or one key (D50) |
 | `GET /keys` | `key.read`; a `dept`-scoped role is sent the keys held in its departments only |
 | `GET /key-templates` | `key.read` anywhere |
 | `GET /key-holders` | `key.create` anywhere; answers the members a key can be made out to, each with their role only where the caller may read that member (D34) |
@@ -632,7 +632,7 @@ department of that moment (see "The company wallet").
   out. A period that ends before it starts, or a grouping that is none of the
   four, is `ErrInvalidUsageQuery` — invalid parameters, not a 403.
 - **Naming a member or a key (`user_id`, `token_id`) only narrows the lines
-  the caller may see** (PRD D49) — no 403, unlike a department. The row the
+  the caller may see** (PRD D50) — no 403, unlike a department. The row the
   page opens was summed from exactly those lines, so a manager asking about a
   member who moved departments gets the part spent in theirs, and about a
   member never in them an empty answer: no row of theirs ever named that
@@ -651,7 +651,7 @@ department of that moment (see "The company wallet").
 each day, week, month or year of the period, as one series per department,
 model, member or key. The page draws it by department or by model above the
 table, and by member or by key one at a time — narrowed to that one, from its
-row (D49) — since a line per member would be too many to read.
+row (D50) — since a line per member would be too many to read.
 
 - **It reads through the report's reach, and measures with the report's
   sum.** Who sees what — and the refusal of a department out of reach — is

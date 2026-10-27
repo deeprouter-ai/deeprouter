@@ -310,7 +310,7 @@ func TestTrendUsage_RefusesADepartmentOutOfReach(t *testing.T) {
 	})
 }
 
-// PRD D49: a row of the report by member or by key opens as a trend of its own
+// PRD D50: a row of the report by member or by key opens as a trend of its own
 // — the lines that row was summed from, drawn over time, so it adds up to the
 // row. With no member or key named, every row is a line, as by department.
 func TestTrendUsage_DrawsOneMemberOrOneKeyFromItsRow(t *testing.T) {

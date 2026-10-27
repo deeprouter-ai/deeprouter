@@ -12,7 +12,7 @@ import (
 
 // Enterprise Org P10 (meta-repo docs/enterprise-org-prd.md §6, D46): the usage
 // trend — the usage report's spending drawn over time, one line per department
-// or per model; or, narrowed to one member or one key, that one's line (D49).
+// or per model; or, narrowed to one member or one key, that one's line (D50).
 // It is the same log lines, read through the same reach (usageWithin) and
 // measured the same way (usageSpentSQL), cut once more by time; so what a
 // trend adds up to is what the report says for that period.
