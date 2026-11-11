@@ -14,9 +14,23 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
+import z from 'zod'
 import { createFileRoute } from '@tanstack/react-router'
 import { MarketplacePage } from '@/features/marketplace'
+import { normalizeTagParam } from '@/features/marketplace/lib/tags'
+
+// tags: lets a skill-detail page's tag badge deep-link back here with that
+// tag preselected (Skill Marketplace V2 PRD §16). z.array over a possibly
+// single string: a URL with exactly one ?tags= value parses to a bare
+// string, not a one-element array, unless coerced.
+const marketplaceSearchSchema = z.object({
+  tags: z
+    .union([z.string(), z.array(z.string())])
+    .transform(normalizeTagParam)
+    .optional(),
+})
 
 export const Route = createFileRoute('/marketplace/')({
+  validateSearch: marketplaceSearchSchema,
   component: MarketplacePage,
 })

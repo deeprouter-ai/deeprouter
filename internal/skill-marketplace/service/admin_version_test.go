@@ -40,9 +40,7 @@ func versionSkillMDContent(t *testing.T, db *gorm.DB, versionID int64) string {
 func validManifestJSON(slug, version string) json.RawMessage {
 	return json.RawMessage(fmt.Sprintf(`{
 		"slug": %q,
-		"version": %q,
-		"requires_deeprouter_key": true,
-		"deeprouter_routing_endpoint": "https://deeprouter.co/v1/routing/chat/completions"
+		"version": %q
 	}`, slug, version))
 }
 
@@ -137,7 +135,7 @@ func TestUploadVersion_ManifestMissingRequiredField(t *testing.T) {
 	_, err := svc.UploadVersion(skillID, mktsvc.UploadVersionRequest{
 		Version:        "1.0.0",
 		SkillMDContent: "content",
-		ManifestJSON:   json.RawMessage(`{"slug": "test-slug", "version": "1.0.0"}`), // missing requires_deeprouter_key
+		ManifestJSON:   json.RawMessage(`{"slug": "test-slug"}`), // missing version
 	}, 1)
 
 	require.ErrorIs(t, err, mktsvc.ErrManifestInvalid)
@@ -269,7 +267,7 @@ func TestUpdateVersion_ManifestMissingRequiredFieldRejected(t *testing.T) {
 	skillID := insertSkill(t, db, "test-slug", "draft")
 	versionID := insertVersion(t, db, skillID, "1.0.0", "draft")
 
-	badManifest := json.RawMessage(`{"slug":"test-slug","version":"1.0.0"}`) // missing requires_deeprouter_key
+	badManifest := json.RawMessage(`{"slug":"test-slug"}`) // missing version
 	_, err := svc.UpdateVersion(skillID, versionID, mktsvc.UpdateVersionRequest{
 		ManifestJSON: &badManifest,
 	}, 1)

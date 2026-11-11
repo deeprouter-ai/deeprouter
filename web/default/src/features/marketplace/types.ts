@@ -27,7 +27,6 @@ export interface MarketplaceSkill {
   slug: string
   name: string
   description: string
-  category: string
   tags: string[]
   status: SkillStatus
   monetization_type: 'free' | 'paid'
@@ -49,7 +48,7 @@ export interface MarketplaceSkillDetail extends MarketplaceSkill {
 }
 
 export interface MarketplaceListParams {
-  category?: string
+  tags?: string[]
   q?: string
   page?: number
   limit?: number

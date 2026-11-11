@@ -20,9 +20,12 @@ import type { TFunction } from 'i18next'
 import type { StatusVariant } from '@/components/status-badge'
 import type { SkillStatus, SkillVersionStatus } from './types'
 
-// PRD §5.1 suggested initial category list — free text in the DB, this is
-// just the dropdown's suggestion list (Admin can still type a new value).
-export const SKILL_CATEGORIES = [
+// PRD §16.4 fixed label list — Skill Marketplace V2's multi-select tags
+// filter, carried over unchanged from the old single-select category list
+// (PRD §5.1). Free text in the DB; this is just the suggestion list (Admin
+// can still type a new value that won't appear in the filter UI, but stays
+// reachable via search — see marketplace/index.tsx).
+export const SKILL_LABELS = [
   'writing',
   'translation',
   'code',
@@ -56,8 +59,8 @@ export function getSkillStatusOptions(t: TFunction) {
   ]
 }
 
-export function getSkillCategoryOptions(t: TFunction) {
-  const labels: Record<(typeof SKILL_CATEGORIES)[number], string> = {
+export function getSkillLabelOptions(t: TFunction) {
+  const labels: Record<(typeof SKILL_LABELS)[number], string> = {
     writing: t('Writing'),
     translation: t('Translation'),
     code: t('Code'),
@@ -67,7 +70,7 @@ export function getSkillCategoryOptions(t: TFunction) {
     finance: t('Finance'),
     video: t('Video'),
   }
-  return SKILL_CATEGORIES.map((value) => ({ label: labels[value], value }))
+  return SKILL_LABELS.map((value) => ({ label: labels[value], value }))
 }
 
 export const SKILL_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/

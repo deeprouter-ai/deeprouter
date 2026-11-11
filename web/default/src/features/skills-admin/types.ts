@@ -29,7 +29,6 @@ export interface Skill {
   slug: string
   name: string
   description: string
-  category: string
   tags: string[]
   status: SkillStatus
   monetization_type: MonetizationType
@@ -81,7 +80,7 @@ export interface SkillAdminLog {
 
 export interface ListSkillsParams {
   status?: SkillStatus
-  category?: string
+  tags?: string[]
   q?: string
   page?: number
   page_size?: number
@@ -91,7 +90,6 @@ export interface CreateSkillRequest {
   slug: string
   name: string
   description: string
-  category: string
   tags?: string[]
   monetization_type: MonetizationType
   price_usd?: number
@@ -105,7 +103,6 @@ export interface UpdateSkillRequest {
   slug?: string
   name?: string
   description?: string
-  category?: string
   tags?: string[]
   monetization_type?: MonetizationType
   price_usd?: number

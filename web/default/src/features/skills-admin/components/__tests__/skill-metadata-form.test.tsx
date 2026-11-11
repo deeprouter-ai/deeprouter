@@ -47,7 +47,6 @@ function makeSkill(overrides: Partial<SkillSummary>): SkillSummary {
     slug: 'test-skill',
     name: 'Test Skill',
     description: 'A skill',
-    category: 'code',
     tags: ['code'],
     status: 'draft',
     monetization_type: 'free',

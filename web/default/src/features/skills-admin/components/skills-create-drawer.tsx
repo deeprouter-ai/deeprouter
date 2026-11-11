@@ -23,7 +23,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { ComboboxInput } from '@/components/ui/combobox-input'
 import {
   Form,
   FormControl,
@@ -46,7 +45,6 @@ import {
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { createSkill } from '../api'
-import { getSkillCategoryOptions } from '../constants'
 import {
   CREATE_SKILL_FORM_DEFAULT_VALUES,
   type CreateSkillFormValues,
@@ -68,7 +66,6 @@ export function SkillsCreateDrawer({
   const navigate = useNavigate()
   const { triggerRefresh } = useSkills()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const categoryOptions = getSkillCategoryOptions(t)
 
   const form = useForm<CreateSkillFormValues>({
     resolver: zodResolver(getCreateSkillFormSchema(t)),
@@ -86,7 +83,6 @@ export function SkillsCreateDrawer({
         slug: data.slug,
         name: data.name,
         description: data.description,
-        category: data.category,
         tags: parseTagsInput(data.tags),
         // A reference listing is free-only (backend also enforces this via
         // ErrReferenceMustBeFree) — the schema's refine already blocks
@@ -240,26 +236,6 @@ export function SkillsCreateDrawer({
                   <FormLabel>{t('Description')}</FormLabel>
                   <FormControl>
                     <Textarea {...field} rows={3} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name='category'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('Category')}</FormLabel>
-                  <FormControl>
-                    <ComboboxInput
-                      options={categoryOptions}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      allowCustomValue
-                      placeholder={t('Select or type a category')}
-                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

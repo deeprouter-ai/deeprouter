@@ -180,11 +180,6 @@ export function SkillVersionUploadDrawer({
                       className='font-mono text-xs'
                     />
                   </FormControl>
-                  <FormDescription>
-                    {t(
-                      'requires_deeprouter_key must stay true — activation is rejected otherwise.'
-                    )}
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

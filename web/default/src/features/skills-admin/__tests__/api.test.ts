@@ -62,7 +62,6 @@ describe('skills-admin api', () => {
       slug: 's',
       name: 'n',
       description: 'd',
-      category: 'c',
       monetization_type: 'free' as const,
     }
     await skillsApi.createSkill(body)

@@ -43,11 +43,11 @@ func NewAdminSkillService(db *gorm.DB) *AdminSkillService {
 // --- request / response types ---
 
 type ListSkillsRequest struct {
-	Status   string `form:"status"`
-	Category string `form:"category"`
-	Q        string `form:"q"`
-	Page     int    `form:"page,default=1"`
-	PageSize int    `form:"page_size,default=20"`
+	Status   string   `form:"status"`
+	Tags     []string `form:"tags"`
+	Q        string   `form:"q"`
+	Page     int      `form:"page,default=1"`
+	PageSize int      `form:"page_size,default=20"`
 }
 
 type SkillSummary struct {
@@ -64,7 +64,6 @@ type CreateSkillRequest struct {
 	Slug             string   `json:"slug"             binding:"required"`
 	Name             string   `json:"name"             binding:"required"`
 	Description      string   `json:"description"      binding:"required"`
-	Category         string   `json:"category"         binding:"required"`
 	Tags             []string `json:"tags"`
 	MonetizationType string   `json:"monetization_type"`
 	PriceUSD         float64  `json:"price_usd"`
@@ -78,7 +77,6 @@ type UpdateSkillRequest struct {
 	Slug             string   `json:"slug"`
 	Name             string   `json:"name"`
 	Description      string   `json:"description"`
-	Category         string   `json:"category"`
 	Tags             []string `json:"tags"`
 	MonetizationType string   `json:"monetization_type"`
 	PriceUSD         *float64 `json:"price_usd"`
@@ -116,8 +114,9 @@ func (s *AdminSkillService) ListSkills(req ListSkillsRequest) (*ListSkillsRespon
 	if req.Status != "" {
 		base = base.Where("sk.status = ?", req.Status)
 	}
-	if req.Category != "" {
-		base = base.Where("sk.category = ?", req.Category)
+	if len(req.Tags) > 0 {
+		cond, args := tagsOverlapWhere(s.db, "sk.tags", req.Tags)
+		base = base.Where(cond, args...)
 	}
 	if req.Q != "" {
 		// Plain LIKE (not ILIKE) — cross-DB compatible with the rest of the
@@ -173,10 +172,7 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		return nil, ErrInvalidSlugFormat
 	}
 
-	tags := req.Tags
-	if tags == nil {
-		tags = []string{}
-	}
+	tags := normalizeTags(req.Tags)
 	monetization := req.MonetizationType
 	if monetization == "" {
 		monetization = "free"
@@ -223,7 +219,6 @@ func (s *AdminSkillService) CreateSkill(req CreateSkillRequest, adminID int) (*m
 		Slug:             req.Slug,
 		Name:             req.Name,
 		Description:      req.Description,
-		Category:         req.Category,
 		Tags:             pq.StringArray(tags),
 		Status:           model.SkillStatusDraft,
 		MonetizationType: monetization,
@@ -276,12 +271,9 @@ func (s *AdminSkillService) UpdateSkill(id int64, req UpdateSkillRequest) (*mode
 	if req.Description != "" {
 		updates["description"] = req.Description
 	}
-	if req.Category != "" {
-		updates["category"] = req.Category
-	}
 	if req.Tags != nil {
 		// Same pq.StringArray requirement as on the model — see model.Skill.Tags.
-		updates["tags"] = pq.StringArray(req.Tags)
+		updates["tags"] = pq.StringArray(normalizeTags(req.Tags))
 	}
 	// Validate against the *effective* post-update state, not just whatever
 	// field this particular request happens to touch — a partial update that

@@ -34,7 +34,7 @@ func setupDownloadDB(t *testing.T) *gorm.DB {
 // version and returns (skillID, versionID).
 func seedPaidSkill(t *testing.T, db *gorm.DB, slug string, priceUSD float64) (int64, int64) {
 	t.Helper()
-	skillID := insertSkillRow(t, db, slug, "published", "code", false, 0, "2026-01-01 00:00:00")
+	skillID := insertSkillRow(t, db, slug, "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 	require.NoError(t, db.Exec(
 		`UPDATE skills SET monetization_type = 'paid', price_usd = ? WHERE id = ?`, priceUSD, skillID).Error)
 	versionID := insertVersion(t, db, skillID, "1.0.0", "active")
@@ -47,7 +47,7 @@ func seedPaidSkill(t *testing.T, db *gorm.DB, slug string, priceUSD float64) (in
 
 func seedFreeSkill(t *testing.T, db *gorm.DB, slug string) (int64, int64) {
 	t.Helper()
-	skillID := insertSkillRow(t, db, slug, "published", "code", false, 0, "2026-01-01 00:00:00")
+	skillID := insertSkillRow(t, db, slug, "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 	versionID := insertVersion(t, db, skillID, "1.0.0", "active")
 	require.NoError(t, db.Exec(
 		`UPDATE skill_versions SET package_zip = ? WHERE id = ?`, []byte("PK-fake-zip"), versionID).Error)
@@ -184,8 +184,8 @@ func TestDownload_UnpublishedOrUnknown_NotAvailable(t *testing.T) {
 	db := setupDownloadDB(t)
 	svc := newDownloadSvc(db)
 	seedUser(t, db, 42, 0)
-	insertSkillRow(t, db, "still-draft", "draft", "code", false, 0, "2026-01-01 00:00:00")
-	insertSkillRow(t, db, "gone", "deprecated", "code", false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "still-draft", "draft", []string{"code"}, false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "gone", "deprecated", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 
 	_, err := svc.Download(42, "still-draft")
 	assert.ErrorIs(t, err, mktsvc.ErrSkillNotAvailable)
@@ -212,7 +212,7 @@ func TestDownload_NoActiveVersion_PackageMissing(t *testing.T) {
 	db := setupDownloadDB(t)
 	svc := newDownloadSvc(db)
 	seedUser(t, db, 42, 0)
-	insertSkillRow(t, db, "no-version", "published", "code", false, 0, "2026-01-01 00:00:00")
+	insertSkillRow(t, db, "no-version", "published", []string{"code"}, false, 0, "2026-01-01 00:00:00")
 
 	_, err := svc.Download(42, "no-version")
 	assert.ErrorIs(t, err, mktsvc.ErrPackageMissing)
@@ -229,7 +229,7 @@ func TestDownload_ReferenceListing_Rejected(t *testing.T) {
 	db := setupDownloadDB(t)
 	svc := newDownloadSvc(db)
 	seedUser(t, db, 42, 0)
-	skillID := insertSkillRow(t, db, "ref-download", "published", "video", false, 0, "2026-01-01 00:00:00")
+	skillID := insertSkillRow(t, db, "ref-download", "published", []string{"video"}, false, 0, "2026-01-01 00:00:00")
 	require.NoError(t, db.Exec(
 		`UPDATE skills SET listing_type = 'reference', source_url = 'https://github.com/owner/repo' WHERE id = ?`,
 		skillID).Error)

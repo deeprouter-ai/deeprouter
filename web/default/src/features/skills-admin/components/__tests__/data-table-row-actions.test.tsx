@@ -74,7 +74,6 @@ function makeSkill(overrides: Partial<SkillSummary> = {}): SkillSummary {
     slug: 'row-skill',
     name: 'Row Skill',
     description: '',
-    category: 'code',
     tags: [],
     status: 'draft',
     monetization_type: 'free',

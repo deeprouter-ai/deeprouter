@@ -77,7 +77,6 @@ describe('SkillVersionUploadDrawer', () => {
       'manifest.json'
     ) as HTMLTextAreaElement
     expect(textarea.value).toContain('"slug": "code-review-expert"')
-    expect(textarea.value).toContain('"requires_deeprouter_key": true')
   })
 
   it("syncs manifest.json's version field as the admin types the version", async () => {
@@ -120,7 +119,6 @@ describe('SkillVersionUploadDrawer', () => {
         manifest_json: expect.objectContaining({
           slug: 'code-review-expert',
           version: '1.0.0',
-          requires_deeprouter_key: true,
         }),
       })
     )

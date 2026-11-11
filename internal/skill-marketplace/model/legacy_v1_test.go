@@ -175,7 +175,6 @@ func TestQuarantineLegacyV1Schema_MovesV1AsideAndBuildsV2(t *testing.T) {
 			Slug:             "post-quarantine-skill",
 			Name:             "Post Quarantine Skill",
 			Description:      "written on a database that used to hold V1",
-			Category:         "code",
 			Tags:             []string{"alpha", "beta"},
 			Status:           "draft",
 			MonetizationType: "free",

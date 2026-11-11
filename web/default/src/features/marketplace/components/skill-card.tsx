@@ -43,8 +43,12 @@ export function SkillCard({ skill }: { skill: MarketplaceSkill }) {
       <p className='text-muted-foreground mt-1 line-clamp-2 flex-1 text-sm'>
         {skill.description}
       </p>
-      <div className='mt-3 flex items-center gap-2'>
-        <Badge variant='secondary'>{skill.category}</Badge>
+      <div className='mt-3 flex flex-wrap items-center gap-2'>
+        {skill.tags.map((tag) => (
+          <Badge key={tag} variant='secondary'>
+            {tag}
+          </Badge>
+        ))}
         {/* PRD §13: a reference listing is always free — no badge for it. */}
         {skill.listing_type !== 'reference' && (
           <Badge variant={free ? 'ghost' : 'outline'} className='tabular-nums'>

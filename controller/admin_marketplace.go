@@ -321,7 +321,7 @@ func AdminActivateVersion(c *gin.Context) {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "skill or version not found"})
-		case errors.Is(err, mktsvc.ErrProviderKeyDetected), errors.Is(err, mktsvc.ErrRuntimeDependencyMissing):
+		case errors.Is(err, mktsvc.ErrProviderKeyDetected):
 			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})

@@ -75,13 +75,15 @@ export function useSkillsColumns(): ColumnDef<SkillSummary>[] {
       filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     {
-      accessorKey: 'category',
-      meta: { label: t('Category'), mobileHidden: true },
+      accessorKey: 'tags',
+      meta: { label: t('Tags'), mobileHidden: true },
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Category')} />
+        <DataTableColumnHeader column={column} title={t('Tags')} />
       ),
       cell: ({ row }) => (
-        <span className='text-sm'>{row.getValue('category')}</span>
+        <span className='text-sm'>
+          {(row.getValue('tags') as string[]).join(', ')}
+        </span>
       ),
     },
     {

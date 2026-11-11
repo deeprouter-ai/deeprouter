@@ -20,7 +20,6 @@ type Skill struct {
 	Slug        string `gorm:"type:varchar(100);uniqueIndex;not null"   json:"slug"`
 	Name        string `gorm:"type:varchar(200);not null"               json:"name"`
 	Description string `gorm:"type:text;not null"                       json:"description"`
-	Category    string `gorm:"type:varchar(50);not null"                json:"category"`
 	// pq.StringArray, not []string: a bare Go slice reaches PG as a record
 	// (SQLSTATE 42804) and cannot be scanned back — creating a skill failed
 	// on every real PG database (found 2026-09-04 during P3 verification).

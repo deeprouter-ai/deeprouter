@@ -24,10 +24,10 @@ var ErrSkillNotAvailable = errors.New("skill not found")
 // --- request / response types ---
 
 type PublicListRequest struct {
-	Category string `form:"category"`
-	Q        string `form:"q"`
-	Page     int    `form:"page,default=1"`
-	Limit    int    `form:"limit,default=20"`
+	Tags  []string `form:"tags"`
+	Q     string   `form:"q"`
+	Page  int      `form:"page,default=1"`
+	Limit int      `form:"limit,default=20"`
 }
 
 type PublicSkillSummary struct {
@@ -75,14 +75,21 @@ func (s *PublicSkillService) ListPublishedSkills(req PublicListRequest) (*Public
 		Joins("LEFT JOIN skill_versions sv ON sv.id = sk.active_version_id").
 		Where("sk.status = ?", model.SkillStatusPublished)
 
-	if req.Category != "" {
-		base = base.Where("sk.category = ?", req.Category)
+	if len(req.Tags) > 0 {
+		cond, args := tagsOverlapWhere(s.db, "sk.tags", req.Tags)
+		base = base.Where(cond, args...)
 	}
 	if req.Q != "" {
 		// PRD asks for case-insensitive matching (it names ILIKE); LOWER/LIKE
-		// gives the same semantics and also runs on the SQLite test DB.
+		// gives the same semantics and also runs on the SQLite test DB. Tags
+		// are included so a tag outside the frontend's fixed filter list is
+		// still reachable by search instead of only by browsing "All".
 		pattern := "%" + req.Q + "%"
-		base = base.Where("LOWER(sk.name) LIKE LOWER(?) OR LOWER(sk.description) LIKE LOWER(?)", pattern, pattern)
+		tagCond, tagArg := tagsSearchWhere(s.db, "sk.tags", pattern)
+		base = base.Where(
+			"LOWER(sk.name) LIKE LOWER(?) OR LOWER(sk.description) LIKE LOWER(?) OR "+tagCond,
+			pattern, pattern, tagArg,
+		)
 	}
 
 	var total int64

@@ -48,7 +48,7 @@ func TestListUserSkills_ExcludesReferenceListings(t *testing.T) {
 	_, err := svc.Download(42, "hosted-one")
 	require.NoError(t, err)
 
-	refID := insertSkillRow(t, db, "ref-one", "published", "video", false, 0, "2026-01-01 00:00:00")
+	refID := insertSkillRow(t, db, "ref-one", "published", []string{"video"}, false, 0, "2026-01-01 00:00:00")
 	require.NoError(t, db.Exec(
 		`UPDATE skills SET listing_type = 'reference', source_url = 'https://github.com/owner/repo' WHERE id = ?`,
 		refID).Error)

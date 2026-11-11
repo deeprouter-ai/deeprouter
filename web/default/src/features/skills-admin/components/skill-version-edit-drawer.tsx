@@ -25,7 +25,6 @@ import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -167,11 +166,6 @@ export function SkillVersionEditDrawer({
                       className='font-mono text-xs'
                     />
                   </FormControl>
-                  <FormDescription>
-                    {t(
-                      'requires_deeprouter_key must stay true — activation is rejected otherwise.'
-                    )}
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
