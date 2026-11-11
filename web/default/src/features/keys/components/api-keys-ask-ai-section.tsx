@@ -83,10 +83,13 @@ export function ApiKeysAskAiSection() {
   const options = useMemo(
     () =>
       DOC_CATEGORIES.flatMap((category) =>
-        category.entries.map((entry) => ({
-          value: entry.slug,
-          label: entry.title,
-        }))
+        // The MCP guide is not a tool with an address to enter (catalog.ts).
+        category.entries
+          .filter((entry) => !entry.noBaseUrl)
+          .map((entry) => ({
+            value: entry.slug,
+            label: entry.title,
+          }))
       ),
     []
   )

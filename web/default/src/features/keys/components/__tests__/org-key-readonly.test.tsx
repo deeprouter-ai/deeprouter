@@ -58,7 +58,7 @@ vi.mock('../api-keys-one-click-card', () => ({
   ),
 }))
 vi.mock('../api-keys-ask-ai-section', () => ({
-  ApiKeysAskAiSection: () => null,
+  ApiKeysAskAiSection: () => <div data-testid='ask-ai' />,
 }))
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
@@ -208,6 +208,9 @@ describe('the setup box', () => {
       'from the company'
     )
     expect(screen.queryByRole('button', { name: /Cherry Studio/ })).toBeNull()
+    // "Ask your AI" goes with them: it walks the user through typing the key
+    // into an app, and this user never sees the key (@sam 2026-10-27).
+    expect(screen.queryByTestId('ask-ai')).toBeNull()
   })
 
   it('keeps the app buttons for a personal key', async () => {
@@ -218,6 +221,7 @@ describe('the setup box', () => {
     expect(
       screen.getByRole('button', { name: /Cherry Studio/ })
     ).toBeInTheDocument()
+    expect(screen.getByTestId('ask-ai')).toBeInTheDocument()
   })
 
   it('is not there at all for an organization key when no tool can be set up', async () => {

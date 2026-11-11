@@ -24,7 +24,8 @@ Append `.zh.md` instead of `.md` for the Chinese version of any guide.
 
 ## You were handed a key: find out what it can do
 
-A DeepRouter key looks like `sk-...` and works against `https://api.deeprouter.co`.
+A DeepRouter key looks like `sk-...` and works against `https://api.deeprouter.co`
+(`https://deeprouter.co` is the same gateway; a base URL on either host works).
 Different keys can call different models, so ask before you call anything:
 
     GET https://api.deeprouter.co/v1/models
@@ -48,9 +49,28 @@ that list; never guess support from the model name:
 It is for chat only — never send media requests to it.
 
 If the user pasted a one-time setup link (`https://api.deeprouter.co/i/<token>`),
-`GET` it once: the response is a shell script holding `DR_BASE_URL` and
-`DR_API_KEY`. The link works once and expires after 30 minutes. Store the key
-in `.env` (git-ignored), never in code, logs or memory files.
+`GET` it once with `?format=env` appended: the response is a few lines of
+`KEY='VALUE'` text holding `DR_BASE_URL` and `DR_API_KEY` (without the query
+it is an install script whose variable names depend on your User-Agent). A
+`DR_ERROR` line means the link is dead: ask the user for a fresh one, do not
+retry. The link works once and expires after 30 minutes. Store the key in
+`.env` (git-ignored), never in code, logs or memory files.
+
+## MCP server: ask DeepRouter directly
+
+`https://deeprouter.co/mcp` is a read-only MCP server (Streamable HTTP). Send the key as
+`Authorization: Bearer sk-...` and call its tools instead of reading docs:
+
+- `list_models`: the models this key can use, with what each is for, its endpoint and price.
+- `get_model`: how to call one model - URL, auth header, required parameters, the video steps, the price.
+- `get_connection_config`: the exact settings for one client app or SDK, from its guide below.
+- `check_key`: whether the key works, and if not why; its limit, expiry and balance.
+- `get_started`: what DeepRouter is, the base URLs, how to get a key.
+
+Without a key it answers from the public catalog. It never generates anything or spends
+money: to do the work, call the API as described here.
+
+- [MCP setup](https://deeprouter.co/docs/integrations/mcp.md): Add it to Claude Code, Codex or Cursor.
 
 ## Media: video, image, voice
 
@@ -61,8 +81,11 @@ Video is asynchronous — submitting is not success:
 
 1. `POST /v1/video/generations` with `{"model":"<id>","prompt":"..."}`
    (optional `duration` in seconds). The response `id` is the task id.
-2. Poll `GET /v1/video/generations/{id}` every ~10 s until `status` is
-   `completed` (or `failed` — report the error and stop).
+2. Poll `GET /v1/videos/{id}` every ~10 s until `status` is `completed`
+   (or `failed` — report `error.message` and stop); until then it reads
+   `unknown`, `queued` or `in_progress`. Poll this path, not
+   `/v1/video/generations/{id}`, which reports different values (`SUCCESS`,
+   `FAILURE`).
 3. Download `GET /v1/videos/{id}/content` and save it as an `.mp4`.
 
 Image: `POST /v1/images/generations` with `{"model":"<id>","prompt":"..."}`.

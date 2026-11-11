@@ -12,7 +12,7 @@ import (
 
 func TestIsAgentProbe(t *testing.T) {
 	for _, path := range []string{
-		"/openapi.json", "/openapi.yaml", "/swagger.json", "/mcp", "/mcp/", "/sse",
+		"/openapi.json", "/openapi.yaml", "/swagger.json", "/sse",
 		"/llms-full.txt", "/.well-known/ai-plugin.json", "/.well-known/mcp.json",
 		"/openapi.json?x=1",
 	} {
@@ -20,8 +20,9 @@ func TestIsAgentProbe(t *testing.T) {
 			t.Errorf("%s should be an agent probe", path)
 		}
 	}
-	// App pages and the real guide stay with the web app / static files.
-	for _, path := range []string{"/", "/simple", "/dashboard", "/keys", "/llms.txt", "/docs/integrations/codex.md", "/mcp-servers"} {
+	// App pages and the real guide stay with the web app / static files, and
+	// /mcp is the MCP endpoint itself (internal/mcp), not a missing document.
+	for _, path := range []string{"/", "/simple", "/dashboard", "/keys", "/llms.txt", "/docs/integrations/codex.md", "/mcp-servers", "/mcp", "/mcp/"} {
 		if IsAgentProbe(path) {
 			t.Errorf("%s must not be treated as a probe", path)
 		}

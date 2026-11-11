@@ -84,7 +84,11 @@ func Distribute() func(c *gin.Context) {
 			// Select a channel for the user
 			// check token model mapping
 			modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
-			if modelLimitEnable {
+			// DeepRouter: a by-ID video status fetch names no model and only
+			// reads the caller's own task, so the whitelist has nothing to
+			// match — checking it 403'd every model-limited key (every Simple
+			// video key) on its first poll. Submissions are still checked.
+			if modelLimitEnable && c.GetInt("relay_mode") != relayconstant.RelayModeVideoFetchByID {
 				s, ok := common.GetContextKey(c, constant.ContextKeyTokenModelLimit)
 				if !ok {
 					// token model limit is empty, all models are not allowed

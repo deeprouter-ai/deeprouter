@@ -3,6 +3,7 @@
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
+  MCP_SETUP,
   videoModelsForKey,
   type PromptLanguage,
 } from '@/features/video/lib/prompt-template'
@@ -150,6 +151,7 @@ ${scriptUrl}
 DEEPROUTER_BASE_URL=<DR_BASE_URL 的值>
 DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 并确认 .env 已在 .gitignore 里（没有就加上）。密钥明文不得出现在任何输出、日志或记忆文件中。
+${MCP_SETUP.zh}
 
 【第 2 步：写入项目记忆】
 把下面整段规则原样写进项目记忆文件——Claude Code 写 CLAUDE.md，Codex 写 AGENTS.md（不存在就创建，存在就追加）：
@@ -158,7 +160,7 @@ DEEPROUTER_API_KEY=<DR_API_KEY 的值>
 凭证从 .env 读取 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY，所有请求都带 Header「Authorization: Bearer {DEEPROUTER_API_KEY}」。完整接口说明：${GUIDE_INDEX}
 1. 先发现：GET {DEEPROUTER_BASE_URL}/v1/models，只使用返回列表里的模型；按每个模型的 supported_endpoint_types 选接口，不要凭模型名猜。
 ${r.method.zh}
-若用户要求移除这项配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行，并删除本段规则。
+若用户要求移除这项配置：删除 .env 中的 DEEPROUTER_BASE_URL 与 DEEPROUTER_API_KEY 两行，移除 DeepRouter MCP 服务（claude mcp remove deeprouter 或 codex mcp remove deeprouter），并删除本段规则。
 
 【第 3 步：立刻验证一次】
 ${r.verify.zh}
@@ -177,6 +179,7 @@ Write them into a .env file at the project root:
 DEEPROUTER_BASE_URL=<value of DR_BASE_URL>
 DEEPROUTER_API_KEY=<value of DR_API_KEY>
 Make sure .env is listed in .gitignore (add it if missing). The key must never appear in plain text in any output, log, or memory file.
+${MCP_SETUP.en}
 
 [Step 2: Write the project memory]
 Copy the rules below verbatim into the project memory file — CLAUDE.md for Claude Code, AGENTS.md for Codex (create it if missing, append if it exists):
@@ -185,7 +188,7 @@ Copy the rules below verbatim into the project memory file — CLAUDE.md for Cla
 Read DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY from .env; every request carries the header "Authorization: Bearer {DEEPROUTER_API_KEY}". Full API reference: ${GUIDE_INDEX}
 1. Discover first: GET {DEEPROUTER_BASE_URL}/v1/models and use only models it lists; choose the endpoint from each model's supported_endpoint_types — never guess from the model name.
 ${r.method.en}
-If the user asks to remove this setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env and delete this section.
+If the user asks to remove this setup: delete the DEEPROUTER_BASE_URL and DEEPROUTER_API_KEY lines from .env, remove the DeepRouter MCP server (claude mcp remove deeprouter or codex mcp remove deeprouter), and delete this section.
 
 [Step 3: Verify once, right now]
 ${r.verify.en}

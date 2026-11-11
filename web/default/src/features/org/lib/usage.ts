@@ -9,7 +9,6 @@ import type {
   OrgUsageRow,
   OrgUsageTrend,
   OrgUsageTrendBucket,
-  OrgUsageTrendGroupBy,
 } from '../types'
 
 /**
@@ -194,12 +193,11 @@ export const USAGE_TREND_BUCKETS: OrgUsageTrendBucket[] = [
 ]
 
 /**
- * Whether a grouping is drawn over time: a trend has a line per department or
- * per model, and none per member or per key.
+ * Whether a grouping is drawn over time above the table: a line per department
+ * or per model. Members and keys are drawn one at a time, from their row (PRD
+ * D49) — a line per member would be too many to read.
  */
-export function drawsTrend(
-  groupBy: OrgUsageGroupBy
-): groupBy is OrgUsageTrendGroupBy {
+export function drawsTrend(groupBy: OrgUsageGroupBy): boolean {
   return groupBy === 'department' || groupBy === 'model'
 }
 

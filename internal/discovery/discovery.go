@@ -1,7 +1,8 @@
 // Package discovery helps AI tools that hold a DeepRouter key but have never
 // heard of DeepRouter find its documentation. Agents probe well-known paths
-// (/openapi.json, /mcp, /.well-known/...) and read error messages; both now
-// point at the machine-readable guide instead of answering with the web app.
+// (/openapi.json, /.well-known/...) and read error messages; both now point at
+// the machine-readable guide instead of answering with the web app. /mcp is no
+// longer one of them: internal/mcp serves it.
 package discovery
 
 import (
@@ -22,7 +23,6 @@ var probePaths = map[string]bool{
 	"/openapi.yaml":  true,
 	"/openapi.yml":   true,
 	"/swagger.json":  true,
-	"/mcp":           true,
 	"/sse":           true,
 	"/llms-full.txt": true,
 }

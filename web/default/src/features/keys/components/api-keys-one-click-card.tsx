@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Download, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -330,6 +330,29 @@ export function ApiKeysOneClickSection({
   const uninstallWindows = `irm ${serverBase}/uninstall | iex`
   const uninstallPosix = `curl -fsSL ${serverBase}/uninstall | sh`
 
+  // Adding DeepRouter's read-only MCP server (meta-repo
+  // docs/deeprouter-mcp-prd.md D5), for the ticked tools that can take one.
+  // Neither command holds the key: each names the variable setup saved it in,
+  // and the tool reads that variable every time it connects, so this block
+  // still never shows a key. The single quotes stop the shell expanding
+  // `${…}` itself — Claude Code does, which makes one line work in PowerShell,
+  // bash and zsh alike; `--scope user` makes it work in every folder, not just
+  // the one the command was run in (both checked with Claude Code 2.1.246).
+  const mcpUrl = `${serverBase}/mcp`
+  const mcp: Record<string, { add: string; remove: string }> = {
+    'claude-code': {
+      add: `claude mcp add --scope user --transport http deeprouter ${mcpUrl} --header 'Authorization: Bearer \${ANTHROPIC_AUTH_TOKEN}'`,
+      remove: 'claude mcp remove deeprouter',
+    },
+    codex: {
+      add: `codex mcp add deeprouter --url ${mcpUrl} --bearer-token-env-var DEEPROUTER_API_KEY`,
+      remove: 'codex mcp remove deeprouter',
+    },
+  }
+  const mcpTools = tools.filter(
+    (tool) => selected.includes(tool.id) && tool.id in mcp
+  )
+
   // `ready` is false only for the install rows before their token has been
   // minted (the mint starts when the fallback opens); the undo rows carry no
   // token and are always ready.
@@ -634,6 +657,57 @@ export function ApiKeysOneClickSection({
                 '"New terminal first" means: close every terminal window, then open a fresh one. A terminal opened from inside an old one does not count.'
               )}
             </p>
+          </details>
+        )}
+
+        {/* An extra, not part of getting set up, so collapsed like its
+            neighbours (@sam 2026-10-27, MCP PRD D5). Only the cmd warning is
+            Windows-specific: the commands themselves are the same everywhere. */}
+        {mcpTools.length > 0 && (
+          <details className='mt-3'>
+            <summary className='cursor-pointer text-xs font-semibold'>
+              {t('Want your AI to look up models and how to use them?')}
+            </summary>
+            <div className='mt-2 space-y-2'>
+              <p className='text-muted-foreground text-[11px]'>
+                {t(
+                  'After setup, run the command for your tool in a new terminal to add DeepRouter’s MCP server. Your AI can then ask it which models this key can use, how to call them and what they cost. It only answers questions and never spends anything. The command contains no key: the tool reads it from the variable setup saved.'
+                )}
+              </p>
+              {mcpTools.map((tool) =>
+                commandRow(`mcp-${tool.id}`, tool.name, mcp[tool.id].add, true)
+              )}
+              {/* Without setup the variable does not exist and the client
+                  sends its name as the key; the server names it back (MCP
+                  PRD D8), but better said here, before it happens. */}
+              <p className='text-muted-foreground text-[11px]'>
+                {t(
+                  'Skipped the setup above? Claude Code: put your key in place of ${ANTHROPIC_AUTH_TOKEN}. Codex: set the DEEPROUTER_API_KEY environment variable first.'
+                )}
+              </p>
+              <p className='text-muted-foreground text-[11px]'>
+                {t('To remove it:')}
+                {mcpTools.map((tool) => (
+                  <Fragment key={tool.id}>
+                    {' '}
+                    <code className='bg-background border-border mr-1 rounded border px-1.5 py-0.5 font-mono text-[11px]'>
+                      {mcp[tool.id].remove}
+                    </code>
+                  </Fragment>
+                ))}
+              </p>
+              {isWindows &&
+                mcpTools.some((tool) => tool.id === 'claude-code') && (
+                  <p className='text-muted-foreground flex items-start gap-1.5 text-[11px]'>
+                    <TriangleAlert className='mt-px h-3 w-3 shrink-0' />
+                    <span>
+                      {t(
+                        'On Windows, use PowerShell or Terminal — not Command Prompt (cmd).'
+                      )}
+                    </span>
+                  </p>
+                )}
+            </div>
           </details>
         )}
 

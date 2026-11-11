@@ -272,18 +272,15 @@ export type OrgUsageReport = {
   rows: OrgUsageRow[]
 }
 
-/** What a usage trend draws its lines by: departments, or models. */
-export type OrgUsageTrendGroupBy = Extract<
-  OrgUsageGroupBy,
-  'department' | 'model'
->
-
 /** The stretch of time each point of a usage trend stands for. */
 export type OrgUsageTrendBucket = 'day' | 'week' | 'month' | 'year'
 
-/** One line of a usage trend: what a department or a model spent over time. */
+/**
+ * One line of a usage trend: what a department, a model, a member or a key
+ * spent over time.
+ */
 export type OrgUsageTrendSeries = {
-  /** The department; 0 for a model, which has only a name. */
+  /** The department, the member or the key; 0 for a model, which has only a name. */
   id: number
   name: string
   /** The line that stands for everything beyond the ones drawn. */
@@ -302,7 +299,7 @@ export type OrgUsageTrendSeries = {
  * for the same period.
  */
 export type OrgUsageTrend = {
-  group_by: OrgUsageTrendGroupBy
+  group_by: OrgUsageGroupBy
   bucket: OrgUsageTrendBucket
   scope: OrgRoleScope
   buckets: string[]

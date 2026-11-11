@@ -42,10 +42,11 @@ import type {
   OrgUsageFigures,
   OrgUsageGroupBy,
   OrgUsageReport,
+  OrgUsageRow,
 } from '../types'
 import { OrgSelect } from './org-select'
 import { PeriodSelect } from './period-select'
-import { UsageTrend } from './usage-trend'
+import { UsageTrend, UsageTrendDialog } from './usage-trend'
 
 /** How many rows a long report shows before it is asked for the rest. */
 const ROWS_SHOWN = 100
@@ -78,14 +79,16 @@ type UsageTableProps = {
   report: OrgUsageReport
   /** How many rows to show; the rest wait behind a button. */
   limit: number
+  /** Opens a row over time; members and keys are drawn that way (PRD D49). */
+  onOpen?: (row: OrgUsageRow) => void
 }
 
 /**
  * The rows of a report: who or what, the requests, the money (PRD D44: usage
  * is read as what it cost, never as tokens), and the share of the total each
- * row is.
+ * row is — and for a member or a key, the way to its own chart.
  */
-function UsageTable({ report, limit }: UsageTableProps) {
+function UsageTable({ report, limit, onOpen }: UsageTableProps) {
   const { t } = useTranslation()
   const groupBy = report.group_by
   return (
@@ -93,12 +96,16 @@ function UsageTable({ report, limit }: UsageTableProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className='px-3'>
+            {/* The name has a set width, so the figures sit beside it rather
+                than at the far edge of a wide screen; the last column, with
+                the button or nothing, takes whatever is left. */}
+            <TableHead className='w-80 px-3'>
               {usageGroupLabel(t, groupBy)}
             </TableHead>
-            <TableHead className='text-right'>{t('Requests')}</TableHead>
-            <TableHead className='text-right'>{t('Spend')}</TableHead>
+            <TableHead className='w-28 text-right'>{t('Requests')}</TableHead>
+            <TableHead className='w-32 text-right'>{t('Spend')}</TableHead>
             <TableHead className='w-40 px-3'>{t('Share of spend')}</TableHead>
+            <TableHead className='px-3' />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -106,7 +113,7 @@ function UsageTable({ report, limit }: UsageTableProps) {
             const share = usageShare(row, report)
             return (
               <TableRow key={`${row.id}:${row.name}`}>
-                <TableCell className='px-3'>
+                <TableCell className='px-3 whitespace-normal'>
                   <div className='flex flex-wrap items-center gap-2'>
                     <span className='font-medium'>
                       {usageRowName(t, groupBy, row)}
@@ -157,6 +164,17 @@ function UsageTable({ report, limit }: UsageTableProps) {
                     </span>
                   </div>
                 </TableCell>
+                <TableCell className='px-3'>
+                  {onOpen && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={() => onOpen(row)}
+                    >
+                      {t('View details')}
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             )
           })}
@@ -183,6 +201,8 @@ export function UsageReport({ membership }: { membership: OrgMembership }) {
   const [period, setPeriod] = useState<OrgPeriod>({ preset: 'last30' })
   const [chosenDepartmentId, setChosenDepartmentId] = useState(EVERY_DEPARTMENT)
   const [showsAll, setShowsAll] = useState(false)
+  // The member or key whose own chart is open (PRD D49).
+  const [opened, setOpened] = useState<OrgUsageRow | null>(null)
 
   const params: OrgUsageParams = {
     group_by: groupBy,
@@ -200,6 +220,8 @@ export function UsageReport({ membership }: { membership: OrgMembership }) {
   })
   const report = query.data
   const departments = report?.departments ?? []
+  const departmentId =
+    chosenDepartmentId !== EVERY_DEPARTMENT ? chosenDepartmentId : undefined
 
   return (
     <div className='grid gap-4'>
@@ -307,21 +329,26 @@ export function UsageReport({ membership }: { membership: OrgMembership }) {
             />
           ) : (
             <>
-              {/* Departments and models are drawn over time as well. */}
+              {/* Departments and models are drawn over time as well; members
+                  and keys one at a time, from their row. */}
               {drawsTrend(groupBy) && (
                 <UsageTrend
                   groupBy={groupBy}
                   period={period}
-                  departmentId={
-                    chosenDepartmentId !== EVERY_DEPARTMENT
-                      ? chosenDepartmentId
-                      : undefined
-                  }
+                  departmentId={departmentId}
                 />
               )}
               <UsageTable
                 report={report}
                 limit={showsAll ? report.rows.length : ROWS_SHOWN}
+                onOpen={drawsTrend(groupBy) ? undefined : setOpened}
+              />
+              <UsageTrendDialog
+                row={opened}
+                groupBy={groupBy}
+                period={period}
+                departmentId={departmentId}
+                onClose={() => setOpened(null)}
               />
               {!showsAll && report.rows.length > ROWS_SHOWN && (
                 <div className='flex flex-wrap items-center justify-between gap-2'>

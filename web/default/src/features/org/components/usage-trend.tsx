@@ -1,11 +1,18 @@
 // Copyright (C) 2026 DeepRouter
 // SPDX-License-Identifier: AGPL-3.0-or-later
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { VChart } from '@visactor/react-vchart'
 import { useTranslation } from 'react-i18next'
 import { useChartTheme } from '@/lib/use-chart-theme'
 import { VCHART_OPTION } from '@/lib/vchart'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ErrorState } from '@/components/error-state'
@@ -24,9 +31,14 @@ import {
   trendChart,
   type TrendPoint,
   usageGroupLabel,
+  usageRowName,
   USAGE_TREND_BUCKETS,
 } from '../lib/usage'
-import type { OrgUsageTrendBucket, OrgUsageTrendGroupBy } from '../types'
+import type {
+  OrgUsageGroupBy,
+  OrgUsageRow,
+  OrgUsageTrendBucket,
+} from '../types'
 
 /** The theme's chart colours, in the order lines take them. */
 const LINE_COLOURS = [
@@ -54,24 +66,35 @@ function themeColour(name: string): string {
 }
 
 type UsageTrendProps = {
-  /** What the lines are: one per department, or one per model. */
-  groupBy: OrgUsageTrendGroupBy
-  /** The period and the department of the report this is drawn above. */
+  /** What the lines are: one per department, model, member or key. */
+  groupBy: OrgUsageGroupBy
+  /** The period and the department of the report this is drawn for. */
   period: OrgPeriod
   departmentId?: number
+  /** The one member, or the one key, whose line alone is drawn (PRD D49). */
+  userId?: number
+  tokenId?: number
 }
 
 /**
  * The usage report drawn over time (Enterprise Org PRD D46): what was spent
  * in each day, week, month or year of the period, with a line per department
- * or per model. It asks for the period and the department the report is
- * showing, and — like the report — is sent exactly the part of the company
+ * or per model — or, opened from a row of the report, the line of that one
+ * member or key (D49). It asks for the period and the department the report
+ * is showing, and — like the report — is sent exactly the part of the company
  * the viewer may see. Days are the viewer's own days.
  */
-export function UsageTrend({ groupBy, period, departmentId }: UsageTrendProps) {
+export function UsageTrend({
+  groupBy,
+  period,
+  departmentId,
+  userId,
+  tokenId,
+}: UsageTrendProps) {
   const { t } = useTranslation()
   const { resolvedTheme, themeReady } = useChartTheme()
   const [bucket, setBucket] = useState<OrgUsageTrendBucket>('day')
+  const titleId = useId()
 
   const params: OrgUsageTrendParams = {
     group_by: groupBy,
@@ -79,6 +102,8 @@ export function UsageTrend({ groupBy, period, departmentId }: UsageTrendProps) {
     timezone: viewerTimeZone(),
     ...periodBounds(period, new Date()),
     ...(departmentId ? { department_id: departmentId } : {}),
+    ...(userId ? { user_id: userId } : {}),
+    ...(tokenId ? { token_id: tokenId } : {}),
   }
   const query = useQuery({
     queryKey: orgQueryKeys.usageTrend(params),
@@ -176,12 +201,9 @@ export function UsageTrend({ groupBy, period, departmentId }: UsageTrendProps) {
   }, [trend, t, themeReady])
 
   return (
-    <section
-      aria-labelledby='org-usage-trend-title'
-      className='bg-card rounded-xl border'
-    >
+    <section aria-labelledby={titleId} className='bg-card rounded-xl border'>
       <div className='flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3'>
-        <h3 id='org-usage-trend-title' className='text-sm font-semibold'>
+        <h3 id={titleId} className='text-sm font-semibold'>
           {t('Spend over time')}
         </h3>
         <Tabs
@@ -213,9 +235,14 @@ export function UsageTrend({ groupBy, period, departmentId }: UsageTrendProps) {
       ) : (
         <div
           role='img'
-          aria-label={t('Spend over time, a line per {{group}}', {
-            group: usageGroupLabel(t, groupBy).toLowerCase(),
-          })}
+          aria-label={
+            // One member's or one key's line is named by the dialog around it.
+            userId || tokenId
+              ? t('Spend over time')
+              : t('Spend over time, a line per {{group}}', {
+                  group: usageGroupLabel(t, groupBy).toLowerCase(),
+                })
+          }
           className='h-72 p-2 sm:h-80'
         >
           {spec && (
@@ -232,5 +259,67 @@ export function UsageTrend({ groupBy, period, departmentId }: UsageTrendProps) {
         </div>
       )}
     </section>
+  )
+}
+
+type UsageTrendDialogProps = {
+  /** The row of the report to draw over time; null keeps the dialog closed. */
+  row: OrgUsageRow | null
+  /** What the row is — a member or a key — and the report's period and department. */
+  groupBy: OrgUsageGroupBy
+  period: OrgPeriod
+  departmentId?: number
+  onClose: () => void
+}
+
+/**
+ * One row of the report drawn over time (Enterprise Org PRD D49): the line of
+ * that one member or key, in the period and department the report is showing,
+ * with the chart's own choice of time unit. The row's name is the title.
+ */
+export function UsageTrendDialog({
+  row,
+  groupBy,
+  period,
+  departmentId,
+  onClose,
+}: UsageTrendDialogProps) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={row !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className='sm:max-w-3xl'>
+        {row && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{usageRowName(t, groupBy, row)}</DialogTitle>
+              <DialogDescription>
+                {groupBy === 'key'
+                  ? t(
+                      'What was spent with this key over the period the report shows.'
+                    )
+                  : t(
+                      'What this member spent over the period the report shows.'
+                    )}
+                {/* Three keys called "Claude Code" are told apart by who used them. */}
+                {row.used_by.length > 0 &&
+                  ' ' +
+                    t('Used by {{names}}', {
+                      names: row.used_by
+                        .map((name) => name || t('Someone who has left'))
+                        .join(t(', ')),
+                    })}
+              </DialogDescription>
+            </DialogHeader>
+            <UsageTrend
+              groupBy={groupBy}
+              period={period}
+              departmentId={departmentId}
+              userId={groupBy === 'member' ? row.id : undefined}
+              tokenId={groupBy === 'key' ? row.id : undefined}
+            />
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

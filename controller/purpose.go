@@ -19,6 +19,14 @@ import (
 // by the frontend's Simple-mode picker. Authenticated user route.
 func GetApiKeyPurposes(c *gin.Context) {
 	lang := i18n.GetLangFromContext(c)
+	// The cards are rendered in the page's UI language, which the saved user
+	// setting lags: the language switcher flips the UI first and writes the
+	// setting afterwards, and GetLangFromContext reads it through the user
+	// cache. An explicit ?lang= from the page therefore wins (2026-10-05).
+	// The summaries only branch on a "zh" prefix, so any value is safe.
+	if explicit := c.Query("lang"); explicit != "" {
+		lang = explicit
+	}
 	purposes := alias_setting.GetPurposeSummary(lang)
 	candidates, catalogErr := mediaCandidatesForUser(c.GetInt("id"))
 	for i := range purposes {

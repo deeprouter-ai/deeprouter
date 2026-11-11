@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildVideoPrompt,
   DEFAULT_VIDEO_MODEL,
+  MCP_SETUP,
 } from '@/features/video/lib/prompt-template'
 import { buildPurposePrompt } from './prompt'
 import { SIMPLE_PURPOSES } from './purposes'
@@ -35,6 +36,9 @@ describe('buildPurposePrompt', () => {
         expect(text).toContain('supported_endpoint_types')
         expect(text).toContain('https://deeprouter.co/llms.txt')
         expect(text).toContain('DEEPROUTER_API_KEY')
+        // the agent registers DeepRouter's MCP server, and can take it away
+        expect(text).toContain(MCP_SETUP[language])
+        expect(text).toContain('claude mcp remove deeprouter')
         // the credential travels as a token URL, never as a literal key
         expect(text).not.toMatch(/sk-[A-Za-z0-9]{8,}/)
       }

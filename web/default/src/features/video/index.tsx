@@ -16,23 +16,24 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { SectionPageLayout } from '@/components/layout'
-import { getApiKeys, issueConnectToken } from '@/features/keys/api'
+import {
+  createApiKey,
+  getApiKeys,
+  issueConnectToken,
+} from '@/features/keys/api'
 import { API_KEY_STATUS } from '@/features/keys/constants'
+import {
+  getApiKeyFormDefaultValues,
+  transformFormDataToPayload,
+} from '@/features/keys/lib'
 import { keyPermitsModel } from '@/features/keys/lib/model-limits'
 import type { ApiKey } from '@/features/keys/types'
 import { useOrgMembership } from '@/features/org/hooks/use-org-membership'
@@ -46,8 +47,11 @@ import {
 /**
  * The「可以做视频」page (Video First Wave P2, PRD D6): a student copies one
  * block of text and pastes it into their AI tool, which configures itself and
- * produces a first clip. The student's only actions here are pick-a-model
- * (optional) and copy.
+ * offers a first clip (paid, so the prompt has the agent ask before spending).
+ * The student's only actions here are get-a-key (one click) and copy — model
+ * choice moved into the prompt itself: the default is the cheapest model, and
+ * switching is a sentence to the AI, not a page control (decided 2026-10-04,
+ * the card picker read as jargon to the actual audience).
  *
  * What travels in the copied text is a one-time token URL, never the key —
  * the same `internal/connect` machinery the key page's one-click block uses
@@ -69,8 +73,8 @@ import {
 export function VideoPage() {
   const { t, i18n } = useTranslation()
   // A member of an organization makes no key of their own (Enterprise Org PRD
-  // D16): with no key that fits, the page says whom to ask rather than where
-  // to create one.
+  // D16): the one-click key is not offered to them, and with no key that fits
+  // the page says whom to ask rather than where to create one.
   const isOrgMember = Boolean(useOrgMembership().data)
 
   const [keys, setKeys] = useState<ApiKey[]>([])
@@ -78,95 +82,95 @@ export function VideoPage() {
   const [keysLoaded, setKeysLoaded] = useState(false)
   const [scriptUrl, setScriptUrl] = useState('')
   const [issuing, setIssuing] = useState(false)
-  const [modelId, setModelId] = useState(DEFAULT_VIDEO_MODEL.id)
+  const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
+  const { status } = useStatus()
 
   // Only enabled keys are offered: a disabled one configures the project just
   // as happily and then answers 401 from inside the tool, with nothing here to
   // explain it. The list arrives newest-first.
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await getApiKeys({ p: 1, size: 100 })
-        if (cancelled) return
-        setKeys(
-          (res.data?.items ?? []).filter(
-            (k) => k.status === API_KEY_STATUS.ENABLED
-          )
+  const loadKeys = useCallback(async () => {
+    try {
+      const res = await getApiKeys({ p: 1, size: 100 })
+      setKeys(
+        (res.data?.items ?? []).filter(
+          (k) => k.status === API_KEY_STATUS.ENABLED
         )
-      } catch {
-        if (!cancelled) setKeys([])
-      } finally {
-        if (!cancelled) setKeysLoaded(true)
-      }
-    })()
-    return () => {
-      cancelled = true
+      )
+    } catch {
+      setKeys([])
+    } finally {
+      setKeysLoaded(true)
     }
   }, [])
 
-  const model =
-    VIDEO_MODELS.find((m) => m.id === modelId) ?? DEFAULT_VIDEO_MODEL
+  useEffect(() => {
+    void loadKeys()
+  }, [loadKeys])
 
-  // A key qualifies only if the gateway would let it call the model currently
-  // selected (AC-G): a chat-limited Simple key otherwise binds fine here and
-  // fails with a 403 buried inside the agent's flow on the first generation.
-  const capableKeys = useMemo(
-    () => keys.filter((k) => keyPermitsModel(k, model.id)),
-    [keys, model.id]
+  // A key qualifies if it can call AT LEAST ONE video model (AC-G). It used to
+  // require all three, which broke the moment the backend started granting only
+  // the models an account actually has enabled (internal/keypurpose): a key on
+  // an account without a MiniMax channel is perfectly usable, and demanding the
+  // full set hid it from this page entirely.
+  const videoKeys = useMemo(
+    () =>
+      keys.filter((k) => VIDEO_MODELS.some((m) => keyPermitsModel(k, m.id))),
+    [keys]
   )
 
   // The binding is derived, not reconciled in an effect: `selectedKeyId`
   // records the user's pick, and the effective key falls back to the newest
-  // capable one whenever that pick is absent or invalidated by a model
-  // switch. Switching back restores the user's original choice.
+  // video key whenever that pick is absent (e.g. just deleted elsewhere).
   const apiKey = useMemo(
-    () =>
-      capableKeys.find((k) => k.id === selectedKeyId) ?? capableKeys[0] ?? null,
-    [capableKeys, selectedKeyId]
+    () => videoKeys.find((k) => k.id === selectedKeyId) ?? videoKeys[0] ?? null,
+    [videoKeys, selectedKeyId]
   )
 
-  // All enabled keys stay visible — hiding the unusable ones would read as
-  // "my key is gone". They are disabled with the reason instead; `label` is
-  // what the closed trigger renders, and only capable keys can be selected.
-  const keyOptions = useMemo(
+  // What the prompt may teach: only models THIS key can call, cheapest first.
+  // The page still shows no picker — the first one is the default and the rest
+  // are the in-prompt menu the user switches to by talking to the AI.
+  const allowedModels = useMemo(
     () =>
-      keys.map((key) => {
-        const capable = keyPermitsModel(key, model.id)
-        return {
-          value: String(key.id),
-          name: key.name,
-          capable,
-          label: capable
-            ? key.name
-            : `${key.name} ${t("(can't run video models)")}`,
-        }
-      }),
-    [keys, model.id, t]
+      apiKey ? VIDEO_MODELS.filter((m) => keyPermitsModel(apiKey, m.id)) : [],
+    [apiKey]
   )
 
-  // Mint the one-time token once the key is known (same lifecycle as the
-  // one-click block: issue on load, let stale ones expire server-side).
-  // The tools list only matters to someone who *runs* the redeemed script;
-  // the prompt has the agent read two variables out of its text instead.
+  // Mint a one-time redeem link for the bound key. The tools list only
+  // matters to someone who *runs* the redeemed script; the prompt has the
+  // agent read two variables out of its env form instead.
+  const mintScriptUrl = useCallback(async (): Promise<string> => {
+    if (!apiKey) return ''
+    const res = await issueConnectToken(apiKey.id, ['claude-code'])
+    if (!res.success || !res.data) return ''
+    const base = res.data.base_url.replace(/\/+$/, '')
+    return `${base}${res.data.script_path}`
+  }, [apiKey])
+
+  // Mint ONE preview link when the page first has a key — not on every key
+  // switch. Minting is a CriticalRateLimit endpoint (20 / 20 min); binding it
+  // to row selection burned the whole budget in a few clicks (429, measured
+  // 2026-10-04). The preview token is not key-identifying anyway, and every
+  // copy re-mints for the key actually selected (handleCopy), so switching
+  // rows needs no server round-trip. `hadKey` flips true only once a preview
+  // link lands, so a failed or cancelled first attempt retries.
+  const hadKey = useRef(false)
   useEffect(() => {
     if (!apiKey) {
+      hadKey.current = false
       setScriptUrl('')
       return
     }
+    if (hadKey.current) return
     let cancelled = false
     setIssuing(true)
     void (async () => {
       try {
-        const res = await issueConnectToken(apiKey.id, ['claude-code'])
-        if (cancelled) return
-        if (!res.success || !res.data) {
-          setScriptUrl('')
-          return
+        const url = await mintScriptUrl()
+        if (!cancelled) {
+          setScriptUrl(url)
+          if (url) hadKey.current = true
         }
-        const base = res.data.base_url.replace(/\/+$/, '')
-        setScriptUrl(`${base}${res.data.script_path}`)
       } catch {
         if (!cancelled) setScriptUrl('')
       } finally {
@@ -176,7 +180,7 @@ export function VideoPage() {
     return () => {
       cancelled = true
     }
-  }, [apiKey])
+  }, [apiKey, mintScriptUrl])
 
   // The prompt follows the UI locale: an English-mode user must not be handed
   // a block of Chinese they cannot read (and vice versa).
@@ -184,18 +188,43 @@ export function VideoPage() {
     ? 'zh'
     : 'en'
 
+  // Render the paste-prompt for a given one-time link: the cheapest model this
+  // key may call is the default and the test run, the rest are the in-prompt
+  // menu. No key bound (empty list) falls back to the full static menu.
+  const renderPrompt = useCallback(
+    (url: string) =>
+      buildVideoPrompt({
+        scriptUrl: url,
+        model: allowedModels[0] ?? DEFAULT_VIDEO_MODEL,
+        models: allowedModels.length > 0 ? allowedModels : undefined,
+        language: promptLanguage,
+      }),
+    [allowedModels, promptLanguage]
+  )
+
   const prompt = useMemo(
-    () =>
-      scriptUrl
-        ? buildVideoPrompt({ scriptUrl, model, language: promptLanguage })
-        : '',
-    [scriptUrl, model, promptLanguage]
+    () => (scriptUrl ? renderPrompt(scriptUrl) : ''),
+    [scriptUrl, renderPrompt]
   )
 
   const handleCopy = async () => {
     if (!prompt) return
+    // Re-mint on every copy: the link in `prompt` is one-shot, so a previous
+    // paste (or any fetch of it) already killed it, and a page left open has
+    // outlived the 30-minute TTL. If minting fails, fall back to the shown
+    // prompt — its own step-1 text tells the agent how to recover.
+    let text = prompt
     try {
-      await navigator.clipboard.writeText(prompt)
+      const fresh = await mintScriptUrl()
+      if (fresh) {
+        setScriptUrl(fresh)
+        text = renderPrompt(fresh)
+      }
+    } catch {
+      // keep the currently displayed prompt
+    }
+    try {
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -203,56 +232,195 @@ export function VideoPage() {
     }
   }
 
+  // One-click create: a Simple key with the video purpose — the backend
+  // derives its whitelist from the purpose registry, which covers every
+  // video model (P5). Payload mirrors the keys drawer exactly.
+  const handleCreateKey = async () => {
+    setCreating(true)
+    try {
+      const payload = transformFormDataToPayload({
+        ...getApiKeyFormDefaultValues(
+          status?.default_use_auto_group === true,
+          'simple'
+        ),
+        simple_purpose: 'video',
+      })
+      if (videoKeys.length > 0) {
+        // Same suffix scheme as the drawer's batch create, so repeat clicks
+        // stay tellable apart on the keys page.
+        payload.name = `my-video-key-${Math.random().toString(36).slice(2, 8)}`
+      }
+      const result = await createApiKey(payload)
+      if (result.success) {
+        toast.success(t('Video key created'))
+        if (result.data?.id) setSelectedKeyId(result.data.id)
+        await loadKeys()
+      } else {
+        toast.error(result.message || t('Could not create the key'))
+      }
+    } catch {
+      toast.error(t('Could not create the key'))
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>{t('Make videos')}</SectionPageLayout.Title>
-      <SectionPageLayout.Description>
-        {t(
-          'Copy one block of text, paste it into your AI tool — it sets itself up and makes your first clip. After that, just say "生成视频".'
-        )}
-      </SectionPageLayout.Description>
       <SectionPageLayout.Content>
         <div className='space-y-6'>
-          {/* Step 1 — model menu. H3 and Seedance side by side, each with its
-              price and traits (AC-A: 并列为可选模型，标注各自单价与特点). */}
-          <section>
+          {/* Plain-language primer for people who have never held a key
+              (@sam, 2026-10-05). It is the page's only intro: the layout
+              drops the Description slot, so the one this page used to pass
+              was never rendered. "API Key" is named once, in parentheses,
+              per the jargon rule (CLAUDE.md §0). */}
+          <section className='bg-card rounded-[7px] border p-4'>
             <h3 className='text-sm font-semibold'>
-              {t('1. Pick a model — or keep the default')}
+              {t('New here? The short version')}
             </h3>
-            <div className='mt-3 grid gap-3 sm:grid-cols-3'>
-              {VIDEO_MODELS.map((m) => {
-                const selected = m.id === model.id
-                return (
-                  <button
-                    key={m.id}
-                    type='button'
-                    onClick={() => setModelId(m.id)}
-                    aria-pressed={selected}
-                    className={`bg-card rounded-[7px] border p-3 text-left transition-colors ${
-                      selected
-                        ? 'border-accent ring-ring/15 ring-[3px]'
-                        : 'border-border hover:border-[rgba(28,28,28,0.18)]'
-                    }`}
-                  >
-                    <span className='block text-sm font-semibold'>
-                      {m.name}
-                    </span>
-                    <span className='text-muted-foreground mt-1 block text-xs'>
-                      {t(m.traits)}
-                    </span>
-                    <span className='mt-2 block text-xs tabular-nums'>
-                      {t(m.price)}
-                    </span>
-                  </button>
-                )
-              })}
+            <div className='mt-3 grid gap-4 sm:grid-cols-3'>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('What is a key (API Key)?')}
+                </p>
+                <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                  {t(
+                    'A private string of characters that is yours alone — a pass and a payment card in one. Your AI tool shows it when it asks for a video, and the cost comes out of your balance.'
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('Why do I need one?')}
+                </p>
+                <p className='text-muted-foreground mt-1 text-xs leading-relaxed'>
+                  {t(
+                    "Your AI tool can't make videos on its own — it asks a video AI to do it for you. The key tells us who is asking and whose balance to charge. Keep it private, like a password."
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className='text-xs font-semibold'>
+                  {t('How do I make a video?')}
+                </p>
+                <ol className='text-muted-foreground mt-1 list-decimal space-y-0.5 ps-4 text-xs leading-relaxed'>
+                  <li>
+                    {isOrgMember
+                      ? t('Your organization hands you a video key (below).')
+                      : t(
+                          'Create a video key below (skip if you already have one).'
+                        )}
+                  </li>
+                  {/* "Project" means a folder to these tools, and it is where
+                      the setup lives — so the user has to know to make one,
+                      and to reopen the SAME one next time (@sam, 2026-10-05). */}
+                  <li>
+                    {t(
+                      'Make a new folder on your computer, e.g. "My videos" on your desktop. That folder is your "project" — the setup and every video you make live inside it.'
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      'Open that folder in Claude Code or Codex, paste the text you copy below, and press Enter — it sets itself up.'
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      'Next time, open the same folder in Claude Code or Codex and just ask, e.g. "make a video of a sunrise over the sea". The clip is saved in that folder.'
+                    )}
+                  </li>
+                </ol>
+              </div>
             </div>
-            {/* AC: the page states the approximate cost per generation. */}
-            <p className='text-muted-foreground mt-2 text-xs'>
-              {t(
-                'Each generation is charged from your balance at the price shown on the card.'
+          </section>
+
+          {/* Step 1 — the video key. One click mints a Simple video-purpose
+              key (backend derives a whitelist covering every video model);
+              below it, every existing video-capable key, keys-page style, so
+              which key the prompt configures is always said out loud. */}
+          <section>
+            <h3 className='text-sm font-semibold'>{t('1. Your video key')}</h3>
+            <div className='mt-3 space-y-3'>
+              {!isOrgMember && (
+                <Button
+                  type='button'
+                  onClick={handleCreateKey}
+                  disabled={creating || !keysLoaded}
+                  className='bg-accent text-accent-foreground hover:bg-accent/90'
+                >
+                  <Plus className='h-4 w-4' />
+                  {creating ? t('Creating...') : t('Create a video key')}
+                </Button>
               )}
-            </p>
+
+              {keysLoaded && videoKeys.length === 0 ? (
+                <p className='border-border text-muted-foreground rounded-[7px] border border-dashed px-4 py-6 text-sm'>
+                  {isOrgMember
+                    ? keys.length > 0
+                      ? t(
+                          'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+                        )
+                      : t(
+                          'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+                        )
+                    : t(
+                        'No video key yet — the button above makes one in a second.'
+                      )}
+                </p>
+              ) : (
+                videoKeys.length > 0 && (
+                  <div className='border-border bg-card rounded-[7px] border'>
+                    {videoKeys.map((k) => {
+                      const selected = apiKey?.id === k.id
+                      return (
+                        <button
+                          key={k.id}
+                          type='button'
+                          onClick={() => setSelectedKeyId(k.id)}
+                          aria-pressed={selected}
+                          className='border-border hover:bg-muted/40 flex w-full items-center justify-between gap-3 border-b px-4 py-2.5 text-left last:border-b-0'
+                        >
+                          <span className='truncate text-sm font-medium'>
+                            {k.name}
+                          </span>
+                          {/* Forward-looking wording on purpose: "in use"
+                              read as a live connection, as if clicking rows
+                              re-pointed projects configured earlier. This
+                              selection only shapes the NEXT copied text. */}
+                          {selected && (
+                            <span className='inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-sm font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'>
+                              <Check className='h-4 w-4' />
+                              {t('Selected')}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              )}
+
+              {videoKeys.length > 1 && (
+                <p className='text-muted-foreground text-xs'>
+                  {t(
+                    'Switching rows only changes future copies — a project you already set up keeps its key until you paste a new text there.'
+                  )}
+                </p>
+              )}
+
+              <p className='text-muted-foreground text-xs'>
+                {t(
+                  'A video key can call every video model. Each clip is billed by the model used — the AI quotes the price before generating.'
+                )}{' '}
+                <Link
+                  to='/keys'
+                  className='text-foreground underline underline-offset-2'
+                >
+                  {t('Manage keys')}
+                </Link>
+              </p>
+            </div>
           </section>
 
           {/* Step 2 — the paste-prompt. */}
@@ -263,96 +431,21 @@ export function VideoPage() {
               )}
             </h3>
 
-            {keysLoaded && !apiKey && isOrgMember ? (
+            {keysLoaded && !apiKey ? (
               <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
-                {keys.length > 0
+                {isOrgMember
                   ? t(
-                      'None of the keys assigned to you can run video models. Keys are handed out by your organization — ask an administrator for one.'
+                      'The text to copy appears here once you have a video key.'
                     )
                   : t(
-                      'No key has been assigned to you yet. Keys are handed out by your organization — ask an administrator for one.'
+                      'Create a video key above first — the text to copy appears here.'
                     )}
-              </p>
-            ) : keysLoaded && !apiKey ? (
-              <p className='border-border text-muted-foreground mt-3 rounded-[7px] border border-dashed px-4 py-6 text-sm'>
-                {keys.length > 0
-                  ? t(
-                      'None of your keys can run video models — create one with the "Video generation" purpose first:'
-                    )
-                  : t(
-                      'You need a key first — one click on the keys page:'
-                    )}{' '}
-                <Link
-                  to='/keys'
-                  className='text-foreground underline underline-offset-2'
-                >
-                  {t('API Keys')}
-                </Link>
               </p>
             ) : (
               <>
-                {/* Which key the copied text configures. With one key there is
-                    nothing to decide, so the name is simply stated; with
-                    several, leaving the pick implicit means the project's .env
-                    ends up holding whichever key happened to sort first and the
-                    page never said which. */}
-                {apiKey &&
-                  (keys.length > 1 ? (
-                    <div className='mt-3'>
-                      <label
-                        htmlFor='video-key'
-                        className='text-xs font-medium'
-                      >
-                        {t('Key to set up')}
-                      </label>
-                      {/* Not a native <select>: its popup is drawn by the OS
-                          and ignores the app's theme. */}
-                      <Select
-                        items={keyOptions}
-                        value={String(apiKey?.id ?? '')}
-                        onValueChange={(v) =>
-                          v !== null && setSelectedKeyId(Number(v))
-                        }
-                      >
-                        <SelectTrigger
-                          id='video-key'
-                          className='mt-1.5 w-full text-xs sm:max-w-sm'
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent alignItemWithTrigger={false}>
-                          <SelectGroup>
-                            {keyOptions.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value}
-                                disabled={!option.capable}
-                              >
-                                <span className='truncate'>{option.name}</span>
-                                {!option.capable && (
-                                  <span className='text-muted-foreground ml-1.5'>
-                                    {t("(can't run video models)")}
-                                  </span>
-                                )}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <p className='text-muted-foreground mt-3 text-xs'>
-                      {t('Key to set up')}:{' '}
-                      <span className='text-foreground font-semibold'>
-                        {apiKey.name}
-                      </span>
-                    </p>
-                  ))}
-
-                {/* No generic "limited key" warning here anymore: the picker
-                    only binds keys that CAN run the selected model (a video-
-                    purpose key is limited by design and perfectly fine), and
-                    incapable ones are disabled with the reason in place. */}
+                {/* No "limited key" warning and no picker here: only keys
+                    that can run every video model are listed at all, and the
+                    panel above says which one is in use. */}
                 <div className='border-border bg-card mt-3 rounded-[7px] border'>
                   <pre className='max-h-72 overflow-auto p-4 text-xs leading-5 whitespace-pre-wrap'>
                     {prompt || (issuing ? t('Preparing…') : '')}
@@ -360,7 +453,7 @@ export function VideoPage() {
                   <div className='border-border flex items-center justify-between gap-3 border-t px-4 py-3'>
                     <p className='text-muted-foreground text-xs'>
                       {t(
-                        'Valid for 30 minutes after you open this page — if it expires, refresh and copy again. Your key itself is not in this text.'
+                        'Every copy carries a fresh link — valid for 30 minutes, usable once. Your key itself is not in this text.'
                       )}
                     </p>
                     <Button
@@ -380,7 +473,7 @@ export function VideoPage() {
                 </div>
                 <p className='text-muted-foreground mt-2 text-xs'>
                   {t(
-                    'The first run makes a small test clip (cost shown in the text), so you can see it working right away.'
+                    'You only paste this once per project. At the end, the AI asks before making a small paid test clip — skipping it costs nothing.'
                   )}
                 </p>
               </>
