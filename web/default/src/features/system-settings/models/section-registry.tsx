@@ -24,6 +24,8 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { SmartRoutingSettingsCard } from './smart-routing-settings-card'
+import { SmartRoutingTestPanel } from './smart-routing-test-panel'
 
 function formatJsonForEditor(value: string, fallback: string) {
   const raw = (value ?? '').toString().trim()
@@ -143,6 +145,26 @@ const MODELS_SECTIONS = [
             settings['channel_affinity_setting.rules'],
         }}
       />
+    ),
+  },
+  {
+    id: 'smart-routing',
+    titleKey: 'Smart Routing',
+    descriptionKey: 'Configure how deeprouter-auto picks a model',
+    build: (settings: ModelSettings) => (
+      <div className='space-y-10'>
+        <SmartRoutingSettingsCard
+          defaultValues={{
+            smart_router_setting: {
+              jev_enabled:
+                settings['smart_router_setting.jev_enabled'] ?? false,
+              // Never comes back from the server; the card shows only whether one is saved.
+              jev_api_key: '',
+            },
+          }}
+        />
+        <SmartRoutingTestPanel />
+      </div>
     ),
   },
   {

@@ -69,7 +69,14 @@ This is intentional. Smart-router being slow or down must never bring the gatewa
 
 `middleware/smart_router.go` calls `smart_router_client.Default().Route(...)` for any incoming `/v1/chat/completions` request where `model == "deeprouter-auto"`. If a decision comes back, the model name on the request is rewritten before the relay code picks a channel; the chosen model is echoed back in the response header `X-DeepRouter-Routed-Model`.
 
+## Jev settings and the admin test (Smart Routing V2)
+
+- `jev_setting.go` registers the admin options `smart_router_setting.jev_enabled` (default off) and `smart_router_setting.jev_api_key`. `JevCatalogFields(kidsMode)` gives the router catalog both values, only for non-kids tenants with the switch on; `JevAPIKeyConfigured()` backs `GET /api/option/smart_router`, which says whether a key is saved and never returns it.
+- `explain.go` adds `Explain(ctx, tenantID, text)` for the settings page's "Try Jev" panel (`POST /api/option/smart_router/test`). It sends `explain: true` so smart-router also returns Jev's verdict and the matched rule. Unlike `Route` it returns errors, ignores the breaker and has its own 3-second timeout, so a test never changes how live traffic is routed. `Route` never sends `explain`.
+
 ## Tests
+
+`explain_test.go` covers the explain request and both reply shapes, error reporting, and that tests leave the breaker alone. `jev_setting_test.go` covers the toggle and key fields.
 
 `client_test.go` (116 LOC) covers:
 - Happy path (200 with valid Decision)

@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/internal/kids"
+	"github.com/QuantumNous/new-api/internal/smart_router_client"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -55,10 +56,16 @@ type CatalogModelInfo struct {
 }
 
 type CatalogResponse struct {
-	Version  time.Time          `json:"version"`
-	TenantID string             `json:"tenant_id"`
-	KidsMode bool               `json:"kids_mode"`
-	Models   []CatalogModelInfo `json:"models"`
+	Version  time.Time `json:"version"`
+	TenantID string    `json:"tenant_id"`
+	KidsMode bool      `json:"kids_mode"`
+	// JevEnabled tells smart-router it may ask Jev for this tenant (admin
+	// toggle; always false for kids_mode). smart-router reads absent as false.
+	JevEnabled bool `json:"jev_enabled"`
+	// JevAPIKey is the admin-saved TypeSafe key, sent only when JevEnabled.
+	// It must never be logged; smart-router logs only error bodies.
+	JevAPIKey string             `json:"jev_api_key,omitempty"`
+	Models    []CatalogModelInfo `json:"models"`
 }
 
 // GetRouterCatalog serves the model catalog that smart-router polls every 30s.
@@ -152,10 +159,13 @@ func GetRouterCatalog(c *gin.Context) {
 	}
 	sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
 
+	jevEnabled, jevKey := smart_router_client.JevCatalogFields(user.KidsMode)
 	c.JSON(http.StatusOK, CatalogResponse{
-		Version:  time.Now().UTC(),
-		TenantID: tenantIDStr,
-		KidsMode: user.KidsMode,
-		Models:   models,
+		Version:    time.Now().UTC(),
+		TenantID:   tenantIDStr,
+		KidsMode:   user.KidsMode,
+		JevEnabled: jevEnabled,
+		JevAPIKey:  jevKey,
+		Models:     models,
 	})
 }

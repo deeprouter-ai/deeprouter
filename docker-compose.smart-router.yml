@@ -40,7 +40,8 @@ services:
       - BATCH_UPDATE_ENABLED=true
       # Smart-router wiring — see internal/smart_router_client/client.go.
       - SMART_ROUTER_URL=http://smart-router:8001
-      - SMART_ROUTER_TIMEOUT_MS=200
+      # Same as production: room for smart-router's 500ms Jev call.
+      - SMART_ROUTER_TIMEOUT_MS=800
       # Shared secret used both by /internal/router-catalog auth and by
       # smart-router's catalog client. MUST be set in the host shell.
       - DEEPROUTER_INTERNAL_TOKEN=${DEEPROUTER_INTERNAL_TOKEN:?DEEPROUTER_INTERNAL_TOKEN required}

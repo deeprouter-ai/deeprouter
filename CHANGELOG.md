@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-16
+
+- **「智能路由」页加一个「测试 Jev」窗口：管理员输入一段请求，看 Jev 怎么判断、deeprouter-auto 会选哪个模型**（PRD：meta-repo `docs/smart-routing-v2-prd.md` D7，@sam 提出，用于演示；任务卡 Smart Routing V2 - P3）：
+  - 结果显示四行：Jev 判断的任务类型和难度（没用上时写原因，如开关关着、还没有密钥、超时）、选中的模型（规则想用的模型这个账号没有时会说明）、命中的规则、总用时和网关实际等待上限，超过上限时提示真实请求这次会用默认模型。不调用模型，只问一次 Jev；按当前已生效的设置、以管理员自己的账号走（`features/system-settings/models/smart-routing-test-panel.tsx`，新增 5 条组件测试；中英文案各 25 条）。
+  - 新接口 `POST /api/option/smart_router/test`（只有超级管理员能用，`controller/smart_router_setting.go`），向 smart-router 发一次带 `explain: true` 的 `/route` 请求；测试内容不存、不写日志。客户端新方法 `Explain` 单独计时（3 秒，够 smart-router 第一次拉目录加一次慢的 Jev）、不经过也不影响正常流量的熔断器；正常的 `Route` 永远不带 `explain`（`internal/smart_router_client/explain.go`，新增测试；`TestRunSmartRouterTest` 已加进两个 workflow 的 `-run` 名单）。
+
+- **TypeSafe 密钥改在后台页面填，不再是服务器环境变量**（PRD：meta-repo `docs/smart-routing-v2-prd.md` D6，@sam 拍板；任务卡 Smart Routing V2 - P3）：
+  - 「智能路由」分区加一个密码样式的输入框和「已保存密钥 / 还没有密钥」状态行，存为选项 `smart_router_setting.jev_api_key`；保存后页面不回显（设置列表接口本来就不返回 `api_key` 结尾的值），要换就再填一次，要停用点「清除密钥」。状态来自新接口 `GET /api/option/smart_router`（只回答有没有，不回密钥；`controller/smart_router_setting.go`，新增测试）。
+  - 路由目录接口随 `jev_enabled` 一起下发 `jev_api_key`，只发给开关开着且不是儿童账号的租户；为空时不发这个字段（`controller/internal_catalog.go`、`internal/smart_router_client/jev_setting.go`）。smart-router 从目录拿密钥，所以 `docker-compose.smart-router.yml` 不再透传 `TYPESAFE_API_KEY`。
+
+## 2026-11-15
+
+- **后台加「Smart Routing」开关：管理员决定 deeprouter-auto 要不要让 Jev 判断请求类型；网关等 smart-router 的时间改由一个环境变量统一管**（PRD：meta-repo `docs/smart-routing-v2-prd.md` D4，@sam 拍板；任务卡 Smart Routing V2 - P3）：
+  - 新增选项 `smart_router_setting.jev_enabled`，默认关，注册在 `internal/smart_router_client/jev_setting.go`（没动上游的 `setting/` 目录）。路由目录接口 `/internal/router-catalog` 多发一个 `jev_enabled` 字段 = 开关开着且不是儿童账号，smart-router 每 30 秒拉目录时读到，所以改开关 30 秒内生效、不用重启（`controller/internal_catalog.go`，新增字段名测试）。
+  - 「系统设置 → 模型」多一个「Smart Routing」分区，一个开关加两段说明：开了会怎样、每个请求约多 0.4 秒、儿童账号不用、会把用户提示的片段发给 TypeSafe、smart-router 没配密钥时开关不起作用。中英文案各 4 条（`features/system-settings/models/smart-routing-settings-card.tsx`，新增 3 条组件测试）。
+  - 分发中间件等 smart-router 的上限原来写死 150 毫秒，和客户端读的 `SMART_ROUTER_TIMEOUT_MS` 两者取小；smart-router 问 Jev 约要 400 毫秒，怎么配都等不到。现在中间件直接用客户端的超时，一个变量管整段等待；本地默认实际生效的仍是 100 毫秒，行为不变（`middleware/smart_router.go`、`internal/smart_router_client/client.go` 加 `Timeout()`，新增 2 条中间件测试）。
+  - 本地联调的 `docker-compose.smart-router.yml` 跟生产一样把等待放到 800 毫秒。
+
 ## 2026-10-27
 
 - **资源页列出 MCP 指南；问讯处认出「没设环境变量」这种情况**（PRD：meta-repo `docs/deeprouter-mcp-prd.md` D7、D8，@sam 拍板；任务卡 P2）：

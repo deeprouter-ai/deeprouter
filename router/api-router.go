@@ -193,6 +193,8 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
+			optionRoute.GET("/smart_router", controller.GetSmartRouterStatus) // Smart Routing V2: is a Jev key saved
+			optionRoute.POST("/smart_router/test", controller.RunSmartRouterTest) // Smart Routing V2: admin test panel (D7)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
 		}

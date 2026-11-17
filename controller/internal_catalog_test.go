@@ -4,8 +4,10 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/internal/kids"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
@@ -167,5 +169,34 @@ func TestGetModelRatio_KnownDefaults(t *testing.T) {
 			t.Errorf("%s: ratio %g → $%g/1M, expected $%g/1M (%s)",
 				tc.model, ratio, got, tc.wantPer1MUSD, tc.comment)
 		}
+	}
+}
+
+// TestGetRouterCatalog_JevEnabledFieldName pins the wire name smart-router
+// reads (internal/catalog/types.go there). A rename here would silently turn
+// Jev off for every tenant, because smart-router treats a missing field as off.
+func TestGetRouterCatalog_JevEnabledFieldName(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		data, err := common.Marshal(CatalogResponse{TenantID: "1", JevEnabled: enabled})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := `"jev_enabled":false`
+		if enabled {
+			want = `"jev_enabled":true`
+		}
+		if !strings.Contains(string(data), want) {
+			t.Errorf("catalog JSON %s lacks %s (false must be sent too, not omitted)", data, want)
+		}
+	}
+
+	// The key travels under jev_api_key and is left out entirely when empty.
+	withKey, _ := common.Marshal(CatalogResponse{TenantID: "1", JevEnabled: true, JevAPIKey: "k-1"})
+	if !strings.Contains(string(withKey), `"jev_api_key":"k-1"`) {
+		t.Errorf("catalog JSON %s lacks the key field", withKey)
+	}
+	without, _ := common.Marshal(CatalogResponse{TenantID: "1"})
+	if strings.Contains(string(without), "jev_api_key") {
+		t.Errorf("catalog JSON %s must omit jev_api_key when there is none", without)
 	}
 }
