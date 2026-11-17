@@ -18,7 +18,9 @@
 // Env config:
 //   - SMART_ROUTER_URL          smart-router base URL (e.g. http://localhost:8001)
 //     When empty, Route is a no-op (returns nil, nil).
-//   - SMART_ROUTER_TIMEOUT_MS   per-call timeout, default 100ms.
+//   - SMART_ROUTER_TIMEOUT_MS   per-call timeout, default 100ms. It is also
+//     how long the distributor waits for a decision (see Timeout), so one
+//     knob sets the whole wait.
 package smart_router_client
 
 import (
@@ -50,6 +52,8 @@ type RouteRequest struct {
 	Messages  []Message `json:"messages"`
 	RequestID string    `json:"request_id,omitempty"`
 	Stream    bool      `json:"stream,omitempty"`
+	// Explain asks smart-router to say how it decided; only the admin test panel sets it (see Explain).
+	Explain bool `json:"explain,omitempty"`
 }
 
 type Decision struct {
@@ -115,6 +119,14 @@ func Default() *Client {
 
 func (c *Client) Enabled() bool {
 	return c != nil && c.baseURL != ""
+}
+
+// Timeout is how long one Route call may take; callers bound their own wait with it.
+func (c *Client) Timeout() time.Duration {
+	if c == nil || c.http == nil {
+		return defaultTimeoutMs * time.Millisecond
+	}
+	return c.http.Timeout
 }
 
 // Route asks smart-router to pick a model for this request. Returns (nil, nil)

@@ -192,6 +192,8 @@ export function ModelMutateDrawer({
       'channel_affinity_setting.max_entries': 100000,
       'channel_affinity_setting.default_ttl_seconds': 3600,
       'channel_affinity_setting.rules': '[]',
+      'smart_router_setting.jev_enabled': false,
+      'smart_router_setting.jev_api_key': '',
       'model_deployment.ionet.api_key': '',
       'model_deployment.ionet.enabled': false,
     }

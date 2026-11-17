@@ -6,7 +6,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -27,8 +26,6 @@ const (
 	// disabled. Chosen for the cheapest-reasonable-quality balance — admins
 	// can override via SMART_ROUTER_DEFAULT_FALLBACK env (read at call time).
 	DefaultAutoFallbackModel = "gpt-4o-mini"
-
-	smartRouterCallTimeout = 150 * time.Millisecond
 )
 
 // chatRequestSnippet is a minimal subset of an incoming request used to
@@ -275,7 +272,10 @@ func resolveAutoModel(c *gin.Context, modelName string, client *smart_router_cli
 	case len(messages) == 0:
 		reason = "smart_router_no_messages"
 	default:
-		ctx, cancel := context.WithTimeout(c.Request.Context(), smartRouterCallTimeout)
+		// One knob (SMART_ROUTER_TIMEOUT_MS) bounds the whole wait. A fixed
+		// 150ms here used to cap it below what smart-router needs once it
+		// asks Jev (~400ms), whatever the env said.
+		ctx, cancel := context.WithTimeout(c.Request.Context(), client.Timeout())
 		defer cancel()
 		req := smart_router_client.RouteRequest{
 			TenantID:  tenantID,
