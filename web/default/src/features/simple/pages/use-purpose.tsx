@@ -154,8 +154,8 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
   const Icon = purpose.icon
 
   return (
-    <div className='animate-in slide-in-from-right-8 fade-in flex min-h-dvh flex-col duration-200'>
-      <header className='bg-background/95 sticky top-0 z-10 flex h-12 items-center px-2 backdrop-blur'>
+    <div className='animate-in slide-in-from-right-8 fade-in md:slide-in-from-right-0 mx-auto flex max-w-2xl flex-col duration-200'>
+      <header className='flex h-12 items-center px-2 md:px-0'>
         <Link
           to='/simple'
           className='text-accent dark:text-foreground inline-flex h-11 items-center gap-0.5 rounded-full pr-3 pl-1 text-[15px] font-medium active:opacity-60'
@@ -163,16 +163,13 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           <ChevronLeft className='size-6' />
           {t('Back')}
         </Link>
-        <h1 className='absolute left-1/2 -translate-x-1/2 text-[15px] font-semibold'>
-          {t(purpose.title)}
-        </h1>
       </header>
 
-      <main className='flex flex-1 flex-col items-center px-6 pt-10 text-center'>
+      <main className='flex flex-col items-center px-6 pt-7 text-center'>
         <span className='bg-accent/10 text-accent dark:bg-muted dark:text-foreground inline-flex size-20 items-center justify-center rounded-3xl'>
           <Icon className='size-10' />
         </span>
-        <h2 className='mt-5 text-2xl font-semibold'>{t(purpose.title)}</h2>
+        <h1 className='mt-5 text-2xl font-semibold'>{t(purpose.title)}</h1>
         <p className='text-muted-foreground mt-2 max-w-xs text-sm leading-relaxed'>
           {t(
             'Tap the button, then paste into Claude or Codex. Your AI sets itself up and runs a first test.'
@@ -243,7 +240,7 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           )}
         </p>
 
-        <div className='mt-10 w-full'>
+        <div className='mt-10 w-full max-w-md'>
           {phase.state === 'unassigned' ? (
             <div className='flex flex-col items-center gap-3'>
               <p className='max-w-xs text-sm leading-relaxed'>
@@ -319,10 +316,10 @@ export function SimpleUsePurpose({ purpose }: { purpose: SimplePurpose }) {
           </p>
         </div>
 
-        <section className='bg-card border-border mt-8 w-full rounded-2xl border p-4 text-left'>
-          <h3 className='text-[15px] font-semibold'>
+        <section className='bg-card border-border mt-8 w-full rounded-xl border p-4 text-left md:p-5'>
+          <h2 className='text-[15px] font-semibold'>
             {t('How to use it afterwards')}
-          </h3>
+          </h2>
           <ol className='mt-3 flex flex-col gap-3 text-sm'>
             <UsageStep n={1}>
               {t(

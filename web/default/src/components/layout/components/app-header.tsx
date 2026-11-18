@@ -26,6 +26,7 @@ import { NotificationDialog } from '@/components/notification-dialog'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { RoleBadge } from '@/components/role-badge'
 import { Search } from '@/components/search'
+import { ConsoleModeButton } from '@/features/simple/components/console-mode-button'
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import { type TopNavLink } from '../types'
 import { Header } from './header'
@@ -115,22 +116,25 @@ export function AppHeader({
   return (
     <>
       <Header>
-        <SystemBrand variant='inline' />
-        <RoleBadge />
+        <div className='max-sm:[&_span]:sr-only'>
+          <SystemBrand variant='inline' />
+        </div>
+        <RoleBadge className='hidden md:inline-flex' />
 
         {leftContent ? (
           <div className='ms-2 flex items-center'>{leftContent}</div>
         ) : null}
 
         {rightContent ?? (
-          <div className='ms-auto flex items-center gap-1 sm:gap-2'>
+          <div className='ms-auto flex items-center gap-1 max-[359px]:gap-0.5 sm:gap-2'>
             {showTopNav && (
               <div className='me-1 hidden lg:block'>
                 <TopNav links={links} />
               </div>
             )}
             <BalanceWidget className='hidden sm:inline-flex' />
-            {showSearch && <Search />}
+            <ConsoleModeButton target='simple' />
+            {showSearch && <Search compactOnNarrowScreens />}
             {showNotifications && (
               <NotificationButton
                 unreadCount={notifications.unreadCount}

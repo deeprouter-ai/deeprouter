@@ -9,13 +9,15 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 // console (Enterprise Org, meta-repo docs/enterprise-org-prd.md D42) — so a
 // visit is not stored as their choice.
 import type { ReactNode } from 'react'
-import { render } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SimpleShell } from '../components/simple-shell'
 
 const mocks = vi.hoisted(() => ({
   user: null as Record<string, unknown> | null,
   persistPersona: vi.fn(),
+  navigate: vi.fn(),
+  toastError: vi.fn(),
 }))
 
 vi.mock('@/stores/auth-store', () => ({
@@ -28,11 +30,16 @@ vi.mock('@/features/profile/lib/persist-persona', () => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('@/components/layout/components/system-brand', () => ({
+  SystemBrand: () => null,
+}))
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children }: { to?: string; children?: ReactNode }) => (
     <a href={to}>{children}</a>
   ),
   Outlet: () => null,
+  useNavigate: () => mocks.navigate,
   useRouterState: () => '/simple',
 }))
 
@@ -66,4 +73,43 @@ describe('landing in the Simple console', () => {
       expect(mocks.persistPersona).not.toHaveBeenCalled()
     }
   )
+})
+
+describe('switching from the Simple console header', () => {
+  it('waits for the saved preference before going to the dashboard', async () => {
+    let finishSave!: () => void
+    mocks.persistPersona.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        finishSave = () => resolve(null)
+      })
+    )
+    landAs('casual')
+    const button = screen.getByRole('button', {
+      name: 'Switch to professional mode',
+    })
+    fireEvent.click(button)
+    expect(button).toBeDisabled()
+    expect(mocks.persistPersona).toHaveBeenCalledExactlyOnceWith('dev')
+    expect(mocks.navigate).not.toHaveBeenCalled()
+
+    finishSave()
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith({ to: '/dashboard' })
+    )
+  })
+
+  it('keeps the Simple console open when saving fails and lets the user retry', async () => {
+    mocks.persistPersona.mockResolvedValueOnce('save failed')
+    landAs('casual')
+    const button = screen.getByRole('button', {
+      name: 'Switch to professional mode',
+    })
+    fireEvent.click(button)
+
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Could not switch. Please try again.'
+    )
+    expect(mocks.navigate).not.toHaveBeenCalled()
+  })
 })

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-18
+
+- 优化 DeepRouter 控制台的模式切换与桌面布局。两种模式的页头均可直接切换，Simple 在宽屏使用侧边导航与多列用途卡片，充值在桌面使用居中对话框，手机保留底栏与底部充值面板（meta-repo `docs/responsive-console-mode-switch-prd.md`）。
+
 ## 2026-10-27
 
 - **资源页列出 MCP 指南；问讯处认出「没设环境变量」这种情况**（PRD：meta-repo `docs/deeprouter-mcp-prd.md` D7、D8，@sam 拍板；任务卡 P2）：

@@ -18,9 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { User, Wallet, LogOut, Settings, Smartphone } from 'lucide-react'
+import { User, Wallet, LogOut, Settings, ArrowRightLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
 import { ROLE } from '@/lib/roles'
@@ -37,14 +36,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SignOutDialog } from '@/components/sign-out-dialog'
 import { useWalletView } from '@/features/org/hooks/use-wallet-view'
-import { persistPersona } from '@/features/profile/lib/persist-persona'
-import { SIMPLE_HOME } from '@/features/simple/lib/mode'
+import { useConsoleModeSwitch } from '@/features/simple/hooks/use-console-mode-switch'
 
 const avatarFallbackClassName = 'font-semibold text-white'
 
 export function ProfileDropdown() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { switchMode, switching } = useConsoleModeSwitch('simple')
   const [open, setOpen] = useDialogState()
   const user = useAuthStore((state) => state.auth.user)
   const { displayName, roleLabel } = useUserDisplay(user)
@@ -118,19 +117,8 @@ export function ProfileDropdown() {
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuItem
-            onClick={async () => {
-              const error = await persistPersona('casual').catch(
-                () => 'save failed'
-              )
-              if (error) {
-                toast.error(t('Could not switch. Please try again.'))
-                return
-              }
-              navigate({ to: SIMPLE_HOME })
-            }}
-          >
-            <Smartphone className='size-4' />
+          <DropdownMenuItem onClick={switchMode} disabled={switching}>
+            <ArrowRightLeft className='size-4' />
             {t('Switch to simple mode')}
           </DropdownMenuItem>
 

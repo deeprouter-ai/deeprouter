@@ -5,6 +5,7 @@ import { ArrowDownLeft, Loader2, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { getUserLogs } from '@/features/usage-logs/api'
 import { LOG_TYPE_ENUM } from '@/features/usage-logs/constants'
 import { usePullToRefresh } from '../hooks/use-pull-to-refresh'
@@ -22,6 +23,7 @@ type Row = {
 async function fetchRows(): Promise<Row[] | null> {
   try {
     const res = await getUserLogs({ p: 1, page_size: 50 })
+    if (!res.success) return null
     return ((res.data?.items ?? []) as unknown as Row[]).filter(
       (r) => r.type === LOG_TYPE_ENUM.CONSUME || r.type === LOG_TYPE_ENUM.TOPUP
     )
@@ -73,7 +75,7 @@ export function SimpleRecords() {
     }).format(new Date(seconds * 1000))
 
   return (
-    <div className='flex flex-col px-4 pt-4'>
+    <main className='flex max-w-3xl flex-col px-4 pt-4 md:px-0 md:pt-0'>
       <div
         className='flex items-center justify-center overflow-hidden'
         style={{ height: refreshing ? 28 : pull * 0.4 }}
@@ -88,14 +90,27 @@ export function SimpleRecords() {
         <div className='flex justify-center py-16'>
           <Loader2 className='text-muted-foreground size-6 animate-spin' />
         </div>
+      ) : rows.length === 0 && failed ? (
+        <div className='flex flex-col items-center gap-3 py-16 text-center'>
+          <p className='text-muted-foreground text-sm' role='alert'>
+            {t('Could not load your records.')}
+          </p>
+          <Button
+            variant='outline'
+            onClick={() => {
+              setRows(null)
+              void load()
+            }}
+          >
+            {t('Try again')}
+          </Button>
+        </div>
       ) : rows.length === 0 ? (
         <p className='text-muted-foreground py-16 text-center text-sm'>
-          {failed
-            ? t('Could not load your records. Pull down to try again.')
-            : t('Nothing yet. What you spend on AI will show up here.')}
+          {t('Nothing yet. What you spend on AI will show up here.')}
         </p>
       ) : (
-        <ul className='bg-card border-border divide-border divide-y overflow-hidden rounded-2xl border'>
+        <ul className='bg-card border-border divide-border divide-y overflow-hidden rounded-xl border'>
           {rows.map((row) => {
             const topup = row.type === LOG_TYPE_ENUM.TOPUP
             const purpose = findPurpose(
@@ -141,6 +156,6 @@ export function SimpleRecords() {
           })}
         </ul>
       )}
-    </div>
+    </main>
   )
 }

@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
 import { formatQuota } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { CompanyWalletNotice } from '@/features/org/components/company-wallet-notice'
 import { useWalletView } from '@/features/org/hooks/use-wallet-view'
 import { TopupSheet } from '../components/topup-sheet'
@@ -53,7 +55,7 @@ export function SimpleHome(props: { openTopup?: boolean }) {
   const walletView = useWalletView()
 
   return (
-    <div className='flex flex-col gap-3 px-4 pt-4'>
+    <main className='px-4 pt-4 md:px-0 md:pt-0'>
       <div
         className='text-muted-foreground flex items-center justify-center overflow-hidden text-xs transition-[height]'
         style={{ height: refreshing ? 28 : pull * 0.4 }}
@@ -68,72 +70,75 @@ export function SimpleHome(props: { openTopup?: boolean }) {
         ) : null}
       </div>
 
-      <header className='px-1'>
-        <p className='text-muted-foreground text-sm'>
+      <header className='mb-4 px-1 md:mb-6 md:px-0'>
+        <h1 className='text-xl font-semibold md:text-2xl'>
           {name ? t('Hi, {{name}}', { name }) : t('Hi there')}
-        </p>
+        </h1>
       </header>
 
-      {walletView === 'company' && <CompanyWalletNotice />}
-
-      {walletView === 'own' && (
-        <section className='bg-card border-border rounded-2xl border p-5'>
-          <p className='text-muted-foreground text-sm'>{t('Balance')}</p>
-          <div className='mt-1 flex items-end justify-between gap-3'>
-            <p className='text-4xl font-semibold tracking-tight tabular-nums'>
-              {formatQuota(user?.quota ?? 0)}
+      <div
+        className={cn(
+          'grid items-start gap-5 lg:gap-6',
+          walletView !== 'pending' &&
+            'lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)]'
+        )}
+      >
+        {walletView === 'company' && <CompanyWalletNotice />}
+        {walletView === 'own' && (
+          <section className='bg-card border-border rounded-xl border p-5'>
+            <p className='text-muted-foreground text-sm'>{t('Balance')}</p>
+            <div className='mt-1 flex flex-wrap items-end justify-between gap-3 lg:flex-col lg:items-start'>
+              <p className='text-3xl font-semibold tabular-nums'>
+                {formatQuota(user?.quota ?? 0)}
+              </p>
+              <Button type='button' onClick={() => setTopupOpen(true)}>
+                <Plus aria-hidden='true' />
+                {t('Add credit')}
+              </Button>
+            </div>
+            <p className='text-muted-foreground mt-2 text-sm'>
+              {clips
+                ? t('Enough for about {{count}} short video clips', {
+                    count: clips,
+                  })
+                : t('Add credit to start making things with AI')}
             </p>
-            <button
-              type='button'
-              onClick={() => setTopupOpen(true)}
-              className='bg-primary text-primary-foreground inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-sm font-semibold transition-transform active:scale-95'
-            >
-              <Plus className='size-4' />
-              {t('Add credit')}
-            </button>
-          </div>
-          <p className='text-muted-foreground mt-2 text-sm'>
-            {clips
-              ? t('Enough for about {{count}} short video clips', {
-                  count: clips,
-                })
-              : t('Add credit to start making things with AI')}
-          </p>
-        </section>
-      )}
+          </section>
+        )}
 
-      <section className='mt-3'>
-        <h2 className='px-1 pb-2 text-base font-semibold'>
-          {t('What do you want to do?')}
-        </h2>
-        <ul className='grid grid-cols-2 gap-3'>
-          {SIMPLE_PURPOSES.map((purpose) => {
-            const Icon = purpose.icon
-            return (
-              <li key={purpose.id}>
-                <Link
-                  to='/simple/use/$purpose'
-                  params={{ purpose: purpose.id }}
-                  className='bg-card border-border flex min-h-32 flex-col justify-between rounded-2xl border p-4 transition-transform active:scale-[0.97]'
-                >
-                  <span className='bg-accent/10 text-accent dark:bg-muted dark:text-foreground inline-flex size-11 items-center justify-center rounded-xl'>
-                    <Icon className='size-6' />
-                  </span>
-                  <span>
-                    <span className='flex items-center justify-between text-[15px] font-semibold'>
-                      {t(purpose.title)}
-                      <ChevronRight className='text-muted-foreground size-4' />
+        <section>
+          <h2 className='mb-3 px-1 text-base font-semibold md:px-0 md:text-lg'>
+            {t('What do you want to do?')}
+          </h2>
+          <ul className='grid grid-cols-2 gap-3 md:grid-cols-3'>
+            {SIMPLE_PURPOSES.map((purpose) => {
+              const Icon = purpose.icon
+              return (
+                <li key={purpose.id}>
+                  <Link
+                    to='/simple/use/$purpose'
+                    params={{ purpose: purpose.id }}
+                    className='bg-card border-border hover:border-foreground/25 focus-visible:ring-ring flex h-full min-h-32 flex-col justify-between gap-3 rounded-xl border p-4 transition-colors outline-none focus-visible:ring-2'
+                  >
+                    <span className='bg-accent/10 text-accent dark:bg-muted dark:text-foreground inline-flex size-11 items-center justify-center rounded-xl'>
+                      <Icon className='size-6' />
                     </span>
-                    <span className='text-muted-foreground mt-0.5 block text-xs leading-snug'>
-                      {t(purpose.blurb)}
+                    <span>
+                      <span className='flex items-center justify-between text-[15px] font-semibold'>
+                        {t(purpose.title)}
+                        <ChevronRight className='text-muted-foreground size-4' />
+                      </span>
+                      <span className='text-muted-foreground mt-0.5 block text-xs leading-snug'>
+                        {t(purpose.blurb)}
+                      </span>
                     </span>
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
-      </section>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      </div>
 
       {walletView === 'own' && (
         <TopupSheet
@@ -142,6 +147,6 @@ export function SimpleHome(props: { openTopup?: boolean }) {
           onBalanceChange={() => void refresh()}
         />
       )}
-    </div>
+    </main>
   )
 }
